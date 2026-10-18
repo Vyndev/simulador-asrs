@@ -54,7 +54,11 @@ class Simulacion:
         escalar_largo_secuencia_llenado = int(escalar_capacidad_total * cfg["escalar_nivel_ocupacion"])
 
         SA = GeneradorSecuencia(escalar_largo_secuencia_llenado, np.array([1, 1]), vector_prob_acum_sku).generarSecuencia()
-        S = GeneradorSecuencia(cfg["escalar_largo_secuencia"], cfg["vector_prob_acum_AR"], vector_prob_acum_sku).generarSecuencia()
+        if cfg.get("texto_origen_tareas") == "datos":
+            # Lista real: es la misma en todas las réplicas, solo cambia el llenado inicial
+            S = [(int(escalar_actividad), int(escalar_sku)) for escalar_actividad, escalar_sku in cfg["secuencia_real"]]
+        else:
+            S = GeneradorSecuencia(cfg["escalar_largo_secuencia"], cfg["vector_prob_acum_AR"], vector_prob_acum_sku).generarSecuencia()
 
         return SA, S
 

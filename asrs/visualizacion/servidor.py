@@ -11,7 +11,8 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from asrs.config import cargar_configuracion, config_a_json, config_desde_json
+from asrs.config import LIMITE_SKUS, LIMITE_TAREAS, cargar_configuracion, config_a_json, config_desde_json
+from asrs.generacion.datos_reales import leer_tareas, resumir_tareas
 from asrs.simulacion.estadistica import resumir
 from asrs.simulacion.simulacion import Simulacion
 from asrs.visualizacion.generador import generar_datos, leer_plantilla
@@ -179,6 +180,20 @@ def crear_manejador(estado):
                 except RuntimeError as error:
                     self._json(409, {"error": str(error)})
                 except (ValueError, KeyError) as error:
+                    self._json(400, {"error": str(error)})
+            elif ruta == '/api/tareas':
+                # Valida un archivo de tareas reales y devuelve su resumen, para mostrarlo antes de simular
+                try:
+                    escalar_largo = int(self.headers.get('Content-Length', '0'))
+                    if escalar_largo <= 0 or escalar_largo > LIMITE_CUERPO:
+                        raise ValueError('La solicitud está vacía o es demasiado grande.')
+                    solicitud = json.loads(self.rfile.read(escalar_largo).decode('utf-8'))
+                    matriz_tareas = leer_tareas(str(solicitud.get('texto', '')), LIMITE_TAREAS)
+                    resumen = resumir_tareas(matriz_tareas, float(solicitud.get('porcentaje', 100)))
+                    if resumen["skus"] > LIMITE_SKUS:
+                        raise ValueError(f'Datos reales: hay {resumen["skus"]} SKUs distintos, el máximo es {LIMITE_SKUS}.')
+                    self._json(200, resumen)
+                except (ValueError, KeyError, TypeError) as error:
                     self._json(400, {"error": str(error)})
             elif ruta.startswith('/api/cancelar/'):
                 trabajo = estado.buscar(ruta.rsplit('/', 1)[-1])

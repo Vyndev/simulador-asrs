@@ -1,6 +1,7 @@
 """Parámetros del modelo de simulación."""
 import numpy as np
 
+from asrs.generacion.datos_reales import leer_tareas, preparar_datos_reales
 from asrs.generacion.probabilidades import demanda_hausman
 
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
@@ -42,6 +43,12 @@ def cargar_configuracion():
         "vector_proporcion_skus_por_clase": np.array([0.2, 0.3, 0.5]), # Proporción de SKUs de cada clase, la clase 1 agrupa a los más demandados
 
         "vector_prob_acum_AR": np.array([0.5, 1]), # Vector de probabilidad acumulada, para el almacenamiento y recuperación
+
+        # Origen de la lista de tareas: 'generada' (con la demanda y la mezcla de arriba) o 'datos' (un CSV real con actividad y SKU de cada tarea)
+        # Con datos reales la cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla salen del archivo
+        "texto_origen_tareas": "generada",
+        "texto_tareas_csv": "", # Contenido del CSV, con una tarea por fila: actividad (A o R) y SKU
+        "escalar_porcentaje_historial": 100, # Con datos reales, porcentaje inicial de la lista con el que las políticas conocen la demanda (llenado y clases)
         "escalar_largo_secuencia": 1,  # Valor inicial, se ajustará en la inicialización
         "escalar_cantidad_replicas": 100, # la simulación se repetira según la cantidad de replicas
         "escalar_replicas_animadas": 3, # réplicas que se graban para la animación del visualizador
@@ -127,9 +134,28 @@ def config_desde_json(diccionario):
     config["vector_deceleracion_grua"] = np.array(_vector(datos["vector_deceleracion_grua"], 3, "Deceleración de la grúa", minimo=0, maximo=1000), dtype=float)
     config["escalar_tiempo_carga_descarga"] = _numero(datos["escalar_tiempo_carga_descarga"], "Tiempo de carga y descarga", minimo=0, maximo=3600)
 
+    origen = datos["texto_origen_tareas"]
+    if origen not in ("generada", "datos"):
+        raise ValueError("Origen de las tareas: debe ser 'generada' o 'datos'.")
+    config["texto_origen_tareas"] = origen
+    config["texto_tareas_csv"] = datos["texto_tareas_csv"] if isinstance(datos["texto_tareas_csv"], str) else ""
+    config["escalar_porcentaje_historial"] = _numero(datos["escalar_porcentaje_historial"], "Historial para planificar", minimo=0, minimo_estricto=True, maximo=100)
+
     # Demanda por SKU: curva de Hausman o una lista personalizada, siempre se normaliza para que sume 1
     personalizada = datos["vector_demanda_sku_personalizada"]
-    if personalizada is not None and personalizada != [] and personalizada != "":
+    if origen == "datos":
+        # Con datos reales todo sale del archivo: la lista de tareas, los SKUs y la demanda que conocen las políticas
+        matriz_tareas = leer_tareas(config["texto_tareas_csv"], LIMITE_TAREAS)
+        matriz_secuencia, vector_demanda, vector_etiquetas = preparar_datos_reales(matriz_tareas, config["escalar_porcentaje_historial"])
+        if len(vector_etiquetas) > LIMITE_SKUS:
+            raise ValueError(f"Datos reales: hay {len(vector_etiquetas)} SKUs distintos, el máximo es {LIMITE_SKUS}.")
+        config["escalar_numero_skus"] = len(vector_etiquetas)
+        config["escalar_sigma_hausman"] = _numero(datos["escalar_sigma_hausman"], "Sesgo de la demanda", minimo=0, minimo_estricto=True, maximo=1)
+        config["vector_demanda_sku_personalizada"] = None
+        config["vector_demanda_sku"] = vector_demanda
+        config["secuencia_real"] = matriz_secuencia
+        config["etiquetas_sku"] = vector_etiquetas
+    elif personalizada is not None and personalizada != [] and personalizada != "":
         if not isinstance(personalizada, (list, tuple)) or not 1 <= len(personalizada) <= LIMITE_SKUS:
             raise ValueError(f"Demanda de los SKUs: indica entre 1 y {LIMITE_SKUS} valores.")
         vector_demanda = np.array(_vector(personalizada, len(personalizada), "Demanda del SKU", minimo=0), dtype=float)
@@ -156,16 +182,21 @@ def config_desde_json(diccionario):
         raise ValueError(f"Clases de la política: hay {len(proporciones)} clases y solo {config['escalar_numero_skus']} SKUs.")
     config["vector_proporcion_skus_por_clase"] = np.array(proporciones, dtype=float) / sum(proporciones)
 
-    probabilidad = _vector(datos["vector_prob_acum_AR"], 2, "Mezcla de operaciones", minimo=0, maximo=1)
-    if probabilidad[1] != 1:
-        raise ValueError("Mezcla de operaciones: la probabilidad acumulada debe terminar en 1.")
-    config["vector_prob_acum_AR"] = np.array(probabilidad, dtype=float)
+    if origen == "datos":
+        # La mezcla de operaciones es la del archivo
+        escalar_almacenes = sum(1 for escalar_actividad, _ in config["secuencia_real"] if escalar_actividad == 0)
+        config["vector_prob_acum_AR"] = np.array([escalar_almacenes / len(config["secuencia_real"]), 1.0])
+    else:
+        probabilidad = _vector(datos["vector_prob_acum_AR"], 2, "Mezcla de operaciones", minimo=0, maximo=1)
+        if probabilidad[1] != 1:
+            raise ValueError("Mezcla de operaciones: la probabilidad acumulada debe terminar en 1.")
+        config["vector_prob_acum_AR"] = np.array(probabilidad, dtype=float)
 
     # Si no se indica la cantidad de tareas se usa el 10 % de la capacidad de la estantería
     largo = diccionario.get("escalar_largo_secuencia")
     if largo is None or largo == "":
         largo = max(1, round(escalar_celdas * 0.1))
-    config["escalar_largo_secuencia"] = _numero(largo, "Cantidad de tareas", entero=True, minimo=1, maximo=LIMITE_TAREAS)
+    config["escalar_largo_secuencia"] = len(config["secuencia_real"]) if origen == "datos" else _numero(largo, "Cantidad de tareas", entero=True, minimo=1, maximo=LIMITE_TAREAS)
 
     config["escalar_semilla"] = _numero(datos["escalar_semilla"], "Semilla", entero=True, minimo=0, maximo=2 ** 31 - 1)
     config["escalar_replicas_animadas"] = _numero(datos["escalar_replicas_animadas"], "Réplicas animadas", entero=True, minimo=1, maximo=LIMITE_REPLICAS_ANIMADAS)

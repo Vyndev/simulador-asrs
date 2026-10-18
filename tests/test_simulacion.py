@@ -159,6 +159,58 @@ class PruebasGeneradorTareas(unittest.TestCase):
         self.assertTrue(np.all(np.diff(sesgada) < 0))          # el SKU 1 es el más demandado
 
 
+class PruebasDatosReales(unittest.TestCase):
+    CSV = "actividad;sku\nA;X1\nA;X2\nR;X1\nA;X1\nR;X2\nA;Z9\nR;X1\n"
+
+    def test_lee_encabezado_separador_y_actividades(self):
+        from asrs.generacion.datos_reales import leer_tareas
+        tareas = leer_tareas(self.CSV)
+        self.assertEqual(tareas[:3], [(0, "X1"), (0, "X2"), (1, "X1")])
+        self.assertEqual(len(tareas), 7)
+        # sin encabezado, con coma y palabras completas
+        self.assertEqual(leer_tareas("entrada,P1\nsalida,P1"), [(0, "P1"), (1, "P1")])
+        # encabezado con las columnas en otro orden
+        self.assertEqual(leer_tareas("sku,tipo\nP1,R"), [(1, "P1")])
+
+    def test_errores_claros(self):
+        from asrs.generacion.datos_reales import leer_tareas
+        for texto in ("", "solo una columna", "actividad;sku\nQ;X1", "actividad;sku\nA;", "x;y;z\n1;2;3"):
+            with self.assertRaises(ValueError, msg=texto):
+                leer_tareas(texto)
+
+    def test_numera_los_skus_por_frecuencia_en_el_historial(self):
+        from asrs.generacion.datos_reales import leer_tareas, preparar_datos_reales
+        secuencia, demanda, etiquetas = preparar_datos_reales(leer_tareas(self.CSV), 100)
+        self.assertEqual(etiquetas, ["X1", "X2", "Z9"])                  # X1 aparece 4 veces, X2 2 y Z9 1
+        self.assertAlmostEqual(float(demanda.sum()), 1.0)
+        self.assertEqual(secuencia[0], (0, 1))
+        # con historial corto, Z9 (que solo aparece al final) no tiene demanda conocida y queda al final
+        secuencia, demanda, etiquetas = preparar_datos_reales(leer_tareas(self.CSV), 50)
+        self.assertEqual(etiquetas[-1], "Z9")
+        self.assertEqual(float(demanda[-1]), 0.0)
+
+    def test_la_simulacion_usa_la_lista_real(self):
+        from asrs.config import config_a_json, config_desde_json
+        datos = config_a_json(cargar_configuracion())
+        datos.update(texto_origen_tareas="datos", texto_tareas_csv=self.CSV, escalar_porcentaje_historial=50)
+        cfg = config_desde_json(datos)
+        self.assertEqual(cfg["escalar_largo_secuencia"], 7)
+        self.assertEqual(cfg["escalar_numero_skus"], 3)
+        random.seed(1)
+        _, tareas = Simulacion(cfg).generarSecuencias()
+        self.assertEqual(tareas, [tuple(t) for t in cfg["secuencia_real"]])
+        resultado = Simulacion.cargarReplica((cfg, 1))
+        self.assertEqual(len(resultado), len(cfg["vector_politicas_asignacion"]))
+
+    def test_datos_invalidos_se_rechazan_en_la_configuracion(self):
+        from asrs.config import config_a_json, config_desde_json
+        datos = config_a_json(cargar_configuracion())
+        with self.assertRaises(ValueError):
+            config_desde_json({**datos, "texto_origen_tareas": "datos", "texto_tareas_csv": ""})
+        with self.assertRaises(ValueError):
+            config_desde_json({**datos, "texto_origen_tareas": "otro"})
+
+
 class PruebasPoliticas(unittest.TestCase):
     def test_todas_las_politicas_registradas_se_construyen(self):
         simulacion = Simulacion()

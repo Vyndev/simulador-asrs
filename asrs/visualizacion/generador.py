@@ -82,6 +82,8 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         "clase_sku": [int(escalar) for escalar in agrupar_skus_en_clases(config["vector_demanda_sku"], config["vector_proporcion_skus_por_clase"])],
         # Posición de cada SKU en el ranking de rotación (0 = el más demandado), indexada por SKU - 1
         "rango_sku": [int(escalar) for escalar in _rango_por_demanda(config["vector_demanda_sku"])],
+        # Etiquetas originales de los SKUs (solo con datos reales): el SKU número i se muestra con su código
+        "etiquetas_sku": list(config.get("etiquetas_sku", [])) if config.get("texto_origen_tareas") == "datos" else [],
         "z_riel": float(instancia_simulacion.crearInstancias()[1].vector_posicion_resposo[2]),
         "replicas": vector_replicas,
     }

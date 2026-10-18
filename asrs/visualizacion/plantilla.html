@@ -80,6 +80,12 @@
   .tabla-clases { display: grid; grid-template-columns: 26px 78px minmax(0, 1fr); gap: 6px 8px; align-items: center; font-size: 13.5px; }
   .tabla-clases .enc { color: var(--suave); font-size: 12px; }
   .tabla-clases .pct { color: var(--suave); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  textarea { font: 12.5px/1.35 ui-monospace, Consolas, monospace; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 6px; padding: 6px 8px; width: 100%; resize: vertical; }
+  textarea.invalido { border-color: var(--omitida); }
+  .resumen-datos { font-size: 13px; color: var(--suave); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
+  .resumen-datos.ok { color: var(--texto); border-color: var(--almacenar); }
+  .resumen-datos.error { color: var(--omitida); border-color: var(--omitida); }
+  .seccion[hidden] { display: none; }
   .grafico-demanda { display: flex; align-items: flex-end; gap: 1px; height: 64px; padding: 4px; background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; }
   .grafico-demanda i { flex: 1; min-width: 1px; border-radius: 2px 2px 0 0; }
   .ficha { display: inline-flex; width: 22px; height: 22px; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #10151c; }
@@ -241,6 +247,7 @@ const DPR = Math.min(window.devicePixelRatio || 1, 2);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const PALETA_EXTRA = ['', '', '', '#34d399', '#f87171', '#22d3ee', '#fb923c', '#a3e635'];
 const colorGrupo = g => g <= 3 ? (css('--clase' + g) || '#888') : (PALETA_EXTRA[g - 1] || '#999');
+const nombreSku = n => { const e = DATOS && DATOS.etiquetas_sku && DATOS.etiquetas_sku[n - 1]; return 'SKU ' + (e ? e : n); };
 let CLASE_SKU = [];                                   // clase de cada SKU (solo para colorear), indexada por SKU - 1
 let RANGO_SKU = [];                                   // posición de cada SKU en el ranking de rotación (0 = el más demandado), indexada por SKU - 1
 // Rotación del SKU: degradado continuo de amarillo (más rotación) a violeta (menos rotación)
@@ -756,7 +763,7 @@ class Panel {
     this.elTipo.textContent = this.tipoTarea || 'EN ESPERA';
     this.elTipo.className = 'tipo ' + ({ ALMACENAR: 'almacenar', RECUPERAR: 'recuperar', OMITIDA: 'omitida', TERMINADO: 'fin' }[this.tipoTarea] || '');
     this.elChip.style.display = this.claseTarea ? 'inline-flex' : 'none';
-    this.elChip.textContent = 'SKU ' + this.claseTarea; this.elChip.style.background = this.claseTarea ? this.colorSku(this.claseTarea) : '';
+    this.elChip.textContent = nombreSku(this.claseTarea); this.elChip.style.background = this.claseTarea ? this.colorSku(this.claseTarea) : '';
     this.elAccion.textContent = this.textoAccion;
     this.pie.innerHTML = '<span>Tareas ' + hechas + '/' + totalTareas + '</span><span>' +
       (this.fin !== null ? 'Terminó en ' + fmt(this.fin) + ' s' : fmt(t) + ' s') + '</span>';
@@ -1026,8 +1033,10 @@ const PESTANAS = [
     ] }
   ] },
   { id: 'demanda', nombre: 'Demanda', secciones: [
-    { titulo: 'Productos (SKU)', especial: 'skus' },
-    { titulo: 'Lista de tareas', especial: 'tareas' }
+    { titulo: 'Origen de las tareas', especial: 'origen' },
+    { titulo: 'Datos reales', especial: 'datos', id: 'seccionDatos' },
+    { titulo: 'Productos (SKU)', especial: 'skus', id: 'seccionProductos' },
+    { titulo: 'Lista de tareas', especial: 'tareas', id: 'seccionTareas' }
   ] },
   { id: 'politicas', nombre: 'Políticas', secciones: [
     { titulo: 'Políticas a comparar', especial: 'politicas' },
@@ -1129,8 +1138,9 @@ function actualizarVistaPrevia() {
 function actualizarResumen() {
   const v = (clave, i) => { const x = entradas.find(e => e.c.clave === clave && e.c.indice === i); return x ? Number(x.inp.value) : NaN; };
   const f = v('vector_configuracion_estanteria', 0), c = v('vector_configuracion_estanteria', 1), k = v('vector_configuracion_estanteria', 2);
-  const celdas = f * c * k, demanda = demandaDelFormulario(), skus = demanda ? demanda.length : null;
-  const tareas = el('tareasAuto').checked ? Math.round(celdas * 0.1) : Number(el('tareasN').value);
+  const celdas = f * c * k, demanda = demandaDelFormulario(), datos = origenDatos();
+  const skus = datos ? (RESUMEN_DATOS ? RESUMEN_DATOS.skus : null) : (demanda ? demanda.length : null);
+  const tareas = datos ? (RESUMEN_DATOS ? RESUMEN_DATOS.tareas : NaN) : (el('tareasAuto').checked ? Math.round(celdas * 0.1) : Number(el('tareasN').value));
   const politicas = document.querySelectorAll('[data-politica]:checked').length;
   const fichas = [
     ['Estantería', isFinite(celdas) ? f + '×' + c + '×' + k : '—', isFinite(celdas) && celdas > 6000],
@@ -1156,6 +1166,36 @@ function mostrarPrimerError() {
   malo.focus();
 }
 // La sección de clases solo importa si se compara la política basada en clases
+// Con datos reales la demanda, los SKUs y las tareas salen del archivo, así que las secciones generadas no se usan
+let RESUMEN_DATOS = null, temporizadorTareas = null;
+function origenDatos() { return el('origenTareas').value === 'datos'; }
+function actualizarOrigen() {
+  const datos = origenDatos();
+  el('seccionDatos').hidden = !datos; el('seccionProductos').hidden = datos; el('seccionTareas').hidden = datos;
+  el('notaOrigen').textContent = datos ? 'La cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla de operaciones salen del archivo. Todas las réplicas usan la misma lista; solo cambia el llenado inicial.' : 'La lista se genera al azar según la demanda de cada SKU y el porcentaje de almacenar.';
+  if (datos) validarTareas(); else { RESUMEN_DATOS = null; actualizarResumen(); }
+}
+// Valida el archivo con el servidor y muestra su resumen
+function validarTareas() {
+  clearTimeout(temporizadorTareas);
+  const caja = el('resumenDatos'), texto = el('textoTareas').value;
+  if (!texto.trim()) { RESUMEN_DATOS = null; caja.className = 'resumen-datos'; caja.textContent = 'Todavía no hay datos.'; actualizarResumen(); return; }
+  caja.className = 'resumen-datos'; caja.textContent = 'Revisando…';
+  temporizadorTareas = setTimeout(() => {
+    fetch('/api/tareas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texto, porcentaje: Number(el('pctHistorial').value) || 100 }) })
+      .then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        if (texto !== el('textoTareas').value) return;
+        if (!ok) { RESUMEN_DATOS = null; caja.className = 'resumen-datos error'; caja.textContent = j.error || 'No se pudo leer el archivo.'; }
+        else {
+          RESUMEN_DATOS = j; caja.className = 'resumen-datos ok';
+          caja.innerHTML = '<b>' + j.tareas + '</b> tareas · <b>' + j.skus + '</b> SKUs · ' + j.pct_almacenar + ' % almacenar<br>Las políticas planifican con las primeras ' + j.historial + ' tareas' +
+            (j.sin_historial ? ' (' + j.sin_historial + ' SKUs no aparecen ahí y para ellas tienen demanda 0)' : '') + '.<br>Más frecuentes: ' + j.principales.map(x => x[0] + ' (' + x[1] + ' %)').join(', ') + '.';
+        }
+        actualizarResumen();
+      }).catch(() => { caja.className = 'resumen-datos error'; caja.textContent = 'No se pudo revisar el archivo: ¿sigue abierta la herramienta?'; });
+  }, 350);
+}
 function actualizarClasesActivas() {
   const usa = !!document.querySelector('[data-politica="basada_en_clases"]:checked');
   el('seccionClases').classList.toggle('inactivo', !usa);
@@ -1181,6 +1221,17 @@ function construirFormulario() {
           '<label class="bloque"><small>Demanda personalizada <em>(opcional, reemplaza a los dos de arriba)</em></small>' +
           '<input type="text" id="demandaPersonalizada" placeholder="Pesos separados por comas, p. ej. 40, 25, 15, 10, 10"></label>' +
           '<div class="grafico-demanda" id="graficoDemanda"></div><p class="nota" id="resumenDemanda"></p>';
+      } else if (s.especial === 'origen') {
+        cuerpo.innerHTML = '<label class="bloque"><small>De dónde sale la lista de tareas</small><select id="origenTareas">' +
+          '<option value="generada">Generada con una demanda</option><option value="datos">Datos reales (archivo CSV)</option></select></label>' +
+          '<p class="nota" id="notaOrigen"></p>';
+      } else if (s.especial === 'datos') {
+        cuerpo.innerHTML = '<p class="nota">Un archivo con una tarea por fila, en orden: la actividad (A o R, o almacenar y recuperar, o 0 y 1) y el código del SKU. Admite coma, punto y coma o tabulación, con o sin encabezado.</p>' +
+          '<div class="botones-fila"><button type="button" id="btnArchivoTareas">Elegir archivo…</button><button type="button" id="btnEjemploTareas">Descargar ejemplo</button>' +
+          '<input type="file" id="archivoTareas" accept=".csv,.txt,text/csv,text/plain" hidden></div>' +
+          '<label class="bloque"><small>O pega las filas aquí</small><textarea id="textoTareas" rows="5" spellcheck="false" placeholder="actividad;sku&#10;A;PROD-001&#10;R;PROD-001"></textarea></label>' +
+          '<label class="bloque" title="Las políticas planifican con el primer porcentaje de la lista: con él se hace el llenado inicial y se calculan las clases. Después se ejecuta la lista completa. Con 100 conocen toda la demanda."><small>Historial que conocen las políticas (%)</small><input type="number" id="pctHistorial" min="1" max="100" step="1"></label>' +
+          '<div class="resumen-datos" id="resumenDatos"></div>';
       } else if (s.especial === 'clases') {
         cuerpo.innerHTML = '<p class="nota">Agrupa los SKUs por demanda (la clase A con los más demandados) y reserva una zona a cada clase. Los valores son pesos y se normalizan.</p>' +
           '<p class="nota aviso-clases" id="avisoClases"></p>' +
@@ -1202,6 +1253,15 @@ function construirFormulario() {
       sec.appendChild(cuerpo); panel.appendChild(sec);
     });
   });
+  el('origenTareas').onchange = actualizarOrigen;
+  el('btnArchivoTareas').onclick = () => el('archivoTareas').click();
+  el('archivoTareas').onchange = ev => {
+    const f = ev.target.files[0]; if (!f) return;
+    const lector = new FileReader(); lector.onload = () => { el('textoTareas').value = String(lector.result).replace(/^\uFEFF/, ''); validarTareas(); }; lector.readAsText(f); ev.target.value = '';
+  };
+  el('btnEjemploTareas').onclick = () => descargar('tareas_ejemplo.csv', 'actividad;sku\nA;PROD-001\nA;PROD-002\nR;PROD-001\nA;PROD-001\nR;PROD-002\nA;PROD-003\nR;PROD-001\nR;PROD-003\n', 'text/csv');
+  el('textoTareas').addEventListener('input', () => { el('textoTareas').classList.remove('invalido'); validarTareas(); });
+  el('pctHistorial').addEventListener('input', () => { el('pctHistorial').classList.remove('invalido'); validarTareas(); });
   el('btnMasClase').onclick = () => { if (clasesUI.length < 8) { clasesUI.push(20); dibujarClases(); } };
   el('btnMenosClase').onclick = () => { if (clasesUI.length > 1) { clasesUI.pop(); dibujarClases(); } };
   el('tareasAuto').onchange = () => { el('tareasN').disabled = el('tareasAuto').checked; actualizarAuto(); actualizarResumen(); };
@@ -1232,7 +1292,8 @@ function ponerFormulario(cfg) {
   const celdas = cfg.vector_configuracion_estanteria.reduce((a, b) => a * b, 1), auto = Math.round(celdas * 0.1) === cfg.escalar_largo_secuencia;
   el('tareasAuto').checked = auto; el('tareasN').value = cfg.escalar_largo_secuencia; el('tareasN').disabled = auto;
   document.querySelectorAll('[data-politica]').forEach(c => { c.checked = (cfg.vector_politicas_asignacion || []).includes(c.dataset.politica); });
-  dibujarClases(); actualizarClasesActivas(); actualizarResumen();
+  el('origenTareas').value = cfg.texto_origen_tareas || 'generada'; el('textoTareas').value = cfg.texto_tareas_csv || ''; el('pctHistorial').value = cfg.escalar_porcentaje_historial || 100;
+  dibujarClases(); actualizarClasesActivas(); actualizarOrigen(); actualizarResumen();
 }
 
 function leerFormulario() {
@@ -1243,6 +1304,17 @@ function leerFormulario() {
     if (!isFinite(v)) { inp.classList.add('invalido'); primerError = primerError || ((c.nombreError || c.etiqueta) + ': falta el valor.'); return; }
     if (c.indice === null) cfg[c.clave] = v; else cfg[c.clave][c.indice] = v;
   });
+  cfg.texto_origen_tareas = el('origenTareas').value; cfg.texto_tareas_csv = el('textoTareas').value; cfg.escalar_porcentaje_historial = Number(el('pctHistorial').value);
+  if (origenDatos()) {
+    // Con datos reales los campos de la demanda generada no se usan y no deben bloquear la simulación
+    if (!cfg.texto_tareas_csv.trim()) { el('textoTareas').classList.add('invalido'); primerError = primerError || 'Datos reales: elige un archivo o pega las filas.'; }
+    if (!(cfg.escalar_porcentaje_historial > 0 && cfg.escalar_porcentaje_historial <= 100)) { el('pctHistorial').classList.add('invalido'); primerError = primerError || 'Historial: debe estar entre 1 y 100.'; }
+    if (RESUMEN_DATOS === null && cfg.texto_tareas_csv.trim()) primerError = primerError || 'Datos reales: revisa el mensaje de error del archivo.';
+    cfg.vector_proporcion_skus_por_clase = clasesUI.slice();
+    cfg.escalar_largo_secuencia = RESUMEN_DATOS ? RESUMEN_DATOS.tareas : 1;
+    if (primerError) { mostrarPrimerError(); throw new Error(primerError); }
+    return cfg;
+  }
   // demanda: lista personalizada o curva de Hausman
   const txtDemanda = el('demandaPersonalizada').value.trim();
   if (txtDemanda) {
