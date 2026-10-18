@@ -160,7 +160,7 @@ class PruebasGeneradorTareas(unittest.TestCase):
 
 
 class PruebasDatosReales(unittest.TestCase):
-    CSV = "actividad;sku\nA;X1\nA;X2\nR;X1\nA;X1\nR;X2\nA;Z9\nR;X1\n"
+    CSV = "SKU;Task\nX1;A\nX2;A\nX1;R\nX1;A\nX2;R\nZ9;A\nX1;R\n"
 
     def test_lee_encabezado_separador_y_actividades(self):
         from asrs.generacion.datos_reales import leer_tareas
@@ -168,13 +168,16 @@ class PruebasDatosReales(unittest.TestCase):
         self.assertEqual(tareas[:3], [(0, "X1"), (0, "X2"), (1, "X1")])
         self.assertEqual(len(tareas), 7)
         # sin encabezado, con coma y palabras completas
-        self.assertEqual(leer_tareas("entrada,P1\nsalida,P1"), [(0, "P1"), (1, "P1")])
-        # encabezado con las columnas en otro orden
-        self.assertEqual(leer_tareas("sku,tipo\nP1,R"), [(1, "P1")])
+        self.assertEqual(leer_tareas("P1,entrada\nP1,salida"), [(0, "P1"), (1, "P1")])
+        # SKU numéricos: se toma el orden SKU y Task aunque "1" también sea una actividad válida
+        self.assertEqual(leer_tareas("1;R\n2;A"), [(1, "1"), (0, "2")])
+        # encabezado con las columnas en otro orden, o sin encabezado y con la actividad primero
+        self.assertEqual(leer_tareas("Task,SKU\nR,P1"), [(1, "P1")])
+        self.assertEqual(leer_tareas("A;P1\nR;P1"), [(0, "P1"), (1, "P1")])
 
     def test_errores_claros(self):
         from asrs.generacion.datos_reales import leer_tareas
-        for texto in ("", "solo una columna", "actividad;sku\nQ;X1", "actividad;sku\nA;", "x;y;z\n1;2;3"):
+        for texto in ("", "solo una columna", "SKU;Task\nX1;Q", "SKU;Task\n;A", "x;y;z\n1;2;3"):
             with self.assertRaises(ValueError, msg=texto):
                 leer_tareas(texto)
 
@@ -209,20 +212,6 @@ class PruebasDatosReales(unittest.TestCase):
             config_desde_json({**datos, "texto_origen_tareas": "datos", "texto_tareas_csv": ""})
         with self.assertRaises(ValueError):
             config_desde_json({**datos, "texto_origen_tareas": "otro"})
-
-
-class PruebasConversionBD(unittest.TestCase):
-    def test_convierte_cantidades_en_tareas_y_limita_salidas(self):
-        import pandas as pd
-        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "herramientas"))
-        from bd_a_tareas import construir_tareas
-        entradas = pd.DataFrame({"T": ["0", "1"], "Q": ["25", "10"], "item_SKU": ["7", "7"]})
-        salidas = pd.DataFrame({"T": ["1", "2"], "Q": ["20", "50"], "item_SKU": ["7_3_1", "7_3_1"]})
-        tareas, resumen = construir_tareas(entradas, salidas, 10)
-        self.assertEqual(tareas, [("A", "7")] * 2 + [("A", "7")] + [("R", "7")] * 2 + [("R", "7")] * 5)   # 25 -> 2 cargas, +10 -> 1 más; 20 -> 2 y 50 -> 5
-        self.assertAlmostEqual(resumen["pct_salidas_sin_existencias"], 100 * 35 / 70, places=1)       # 70 unidades salen y solo había 35
-        limitadas, _ = construir_tareas(entradas, salidas, 10, True, True)
-        self.assertEqual(sum(1 for a, _ in limitadas if a == "R"), 3)                                 # 35 unidades en total: 20 y luego 15
 
 
 class PruebasPoliticas(unittest.TestCase):

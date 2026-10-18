@@ -1,4 +1,4 @@
-"""Lista de tareas a partir de datos reales: un archivo CSV con la actividad y el SKU de cada tarea, en orden."""
+"""Lista de tareas a partir de datos reales: un archivo CSV con dos columnas, el SKU y la tarea (almacenar o recuperar), en orden."""
 import csv
 import math
 from collections import Counter
@@ -7,7 +7,7 @@ import numpy as np
 
 PALABRAS_ALMACENAR = {"a", "0", "almacenar", "almacenamiento", "entrada", "ingreso", "in", "store", "put", "putaway", "e"}
 PALABRAS_RECUPERAR = {"r", "1", "recuperar", "recuperacion", "recuperación", "salida", "despacho", "out", "retrieve", "pick", "get", "s"}
-NOMBRES_COLUMNA_ACTIVIDAD = ("act", "tipo", "oper", "movim", "type")
+NOMBRES_COLUMNA_ACTIVIDAD = ("task", "tarea", "act", "tipo", "oper", "movim", "type")
 NOMBRES_COLUMNA_SKU = ("sku", "art", "prod", "ref", "item", "cod", "cód")
 
 
@@ -17,18 +17,22 @@ def _es_actividad(txt_valor):
 
 def leer_tareas(txt_csv, escalar_limite_tareas=None):
     # Devuelve la lista de tareas como pares (actividad, etiqueta del SKU): actividad 0 es almacenar y 1 es recuperar
-    # El separador (coma, punto y coma, tabulación o barra vertical) y el encabezado se detectan solos
+    # Las columnas son SKU y Task, en ese orden. El separador (coma, punto y coma, tabulación o barra vertical) y el encabezado se detectan solos
+    # Con encabezado las columnas se buscan por su nombre; sin encabezado se toma SKU y Task, salvo que solo la primera columna sea una actividad
     vector_lineas = [txt_linea for txt_linea in txt_csv.splitlines() if txt_linea.strip()]
     if not vector_lineas:
         raise ValueError("Datos reales: el archivo está vacío.")
     txt_separador = max(",;\t|", key=lambda s: vector_lineas[0].count(s))
     if vector_lineas[0].count(txt_separador) == 0:
-        raise ValueError("Datos reales: se esperan dos columnas, la actividad y el SKU, separadas por coma, punto y coma o tabulación.")
+        raise ValueError("Datos reales: se esperan dos columnas, SKU y Task, separadas por coma, punto y coma o tabulación.")
     matriz_filas = list(csv.reader(vector_lineas, delimiter=txt_separador))
 
-    # Si la primera fila no tiene una actividad reconocible se toma como encabezado y se buscan las columnas por su nombre
-    escalar_columna_actividad, escalar_columna_sku, escalar_primera = 0, 1, 0
-    if not _es_actividad(matriz_filas[0][0]) and not (len(matriz_filas[0]) > 1 and _es_actividad(matriz_filas[0][1])):
+    # Si ninguna celda de la primera fila es una actividad reconocible se toma como encabezado y se buscan las columnas por su nombre
+    escalar_columna_sku, escalar_columna_actividad, escalar_primera = 0, 1, 0
+    vector_primera = matriz_filas[0]
+    if len(vector_primera) > 1 and _es_actividad(vector_primera[0]) and not _es_actividad(vector_primera[1]):
+        escalar_columna_sku, escalar_columna_actividad = 1, 0      # sin encabezado y con la actividad primero
+    elif not any(_es_actividad(txt) for txt in vector_primera):
         vector_nombres = [txt_nombre.strip().lower() for txt_nombre in matriz_filas[0]]
         escalar_primera = 1
         encontrada = next((i for i, n in enumerate(vector_nombres) if any(p in n for p in NOMBRES_COLUMNA_ACTIVIDAD)), None)
@@ -36,7 +40,7 @@ def leer_tareas(txt_csv, escalar_limite_tareas=None):
         if encontrada is not None and escalar_sku is not None and encontrada != escalar_sku:
             escalar_columna_actividad, escalar_columna_sku = encontrada, escalar_sku
         elif len(vector_nombres) != 2:
-            raise ValueError("Datos reales: no encuentro las columnas. El encabezado debe nombrarlas, por ejemplo 'actividad' y 'sku'.")
+            raise ValueError("Datos reales: no encuentro las columnas. El encabezado debe nombrarlas, por ejemplo 'SKU' y 'Task'.")
 
     matriz_tareas = []
     for escalar_fila, vector_fila in enumerate(matriz_filas[escalar_primera:], start=escalar_primera + 1):

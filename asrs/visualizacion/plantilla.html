@@ -1226,10 +1226,10 @@ function construirFormulario() {
           '<option value="generada">Generada con una demanda</option><option value="datos">Datos reales (archivo CSV)</option></select></label>' +
           '<p class="nota" id="notaOrigen"></p>';
       } else if (s.especial === 'datos') {
-        cuerpo.innerHTML = '<p class="nota">Un archivo con una tarea por fila, en orden: la actividad (A o R, o almacenar y recuperar, o 0 y 1) y el código del SKU. Admite coma, punto y coma o tabulación, con o sin encabezado.</p>' +
+        cuerpo.innerHTML = '<p class="nota">Un archivo con una tarea por fila, en orden, con dos columnas: SKU y Task. La tarea es A (almacenar) o R (recuperar); también se aceptan almacenar y recuperar, entrada y salida, o 0 y 1. Admite coma, punto y coma o tabulación, con o sin encabezado.</p>' +
           '<div class="botones-fila"><button type="button" id="btnArchivoTareas">Elegir archivo…</button><button type="button" id="btnEjemploTareas">Descargar ejemplo</button>' +
           '<input type="file" id="archivoTareas" accept=".csv,.txt,text/csv,text/plain" hidden></div>' +
-          '<label class="bloque"><small>O pega las filas aquí</small><textarea id="textoTareas" rows="5" spellcheck="false" placeholder="actividad;sku&#10;A;PROD-001&#10;R;PROD-001"></textarea></label>' +
+          '<label class="bloque"><small>O pega las filas aquí</small><textarea id="textoTareas" rows="5" spellcheck="false" placeholder="SKU;Task&#10;PROD-001;A&#10;PROD-001;R"></textarea></label>' +
           '<label class="bloque" title="Las políticas planifican con el primer porcentaje de la lista: con él se hace el llenado inicial y se calculan las clases. Después se ejecuta la lista completa. Con 100 conocen toda la demanda."><small>Historial que conocen las políticas (%)</small><input type="number" id="pctHistorial" min="1" max="100" step="1"></label>' +
           '<div class="resumen-datos" id="resumenDatos"></div>';
       } else if (s.especial === 'clases') {
@@ -1259,7 +1259,7 @@ function construirFormulario() {
     const f = ev.target.files[0]; if (!f) return;
     const lector = new FileReader(); lector.onload = () => { el('textoTareas').value = String(lector.result).replace(/^\uFEFF/, ''); validarTareas(); }; lector.readAsText(f); ev.target.value = '';
   };
-  el('btnEjemploTareas').onclick = () => descargar('tareas_ejemplo.csv', 'actividad;sku\nA;PROD-001\nA;PROD-002\nR;PROD-001\nA;PROD-001\nR;PROD-002\nA;PROD-003\nR;PROD-001\nR;PROD-003\n', 'text/csv');
+  el('btnEjemploTareas').onclick = () => descargar('tareas_ejemplo.csv', 'SKU;Task\nPROD-001;A\nPROD-002;A\nPROD-001;R\nPROD-001;A\nPROD-002;R\nPROD-003;A\nPROD-001;R\nPROD-003;R\n', 'text/csv');
   el('textoTareas').addEventListener('input', () => { el('textoTareas').classList.remove('invalido'); validarTareas(); });
   el('pctHistorial').addEventListener('input', () => { el('pctHistorial').classList.remove('invalido'); validarTareas(); });
   el('btnMasClase').onclick = () => { if (clasesUI.length < 8) { clasesUI.push(20); dibujarClases(); } };
