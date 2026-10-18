@@ -89,7 +89,7 @@
   .politica small { display: block; color: var(--suave); font-size: 12.5px; }
 
   /* avisos y progreso */
-  .aviso { display: none; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; border: 1px solid var(--borde); background: var(--tarjeta); }
+  .aviso { display: none; border-radius: 10px; padding: 7px 12px; margin-bottom: 10px; font-size: 14px; border: 1px solid var(--borde); background: var(--tarjeta); }
   .aviso.visible { display: block; }
   .aviso.error { background: var(--error-fondo); border-color: var(--omitida); color: var(--omitida); }
   .aviso.exito { border-color: var(--exito); }
@@ -98,24 +98,27 @@
   .progreso .barra i { display: block; height: 100%; width: 0; background: var(--acento); transition: width .25s; }
 
   /* carrera */
-  .controles { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+  .controles { position: sticky; top: 8px; z-index: 5; box-shadow: 0 6px 16px -8px rgba(0,0,0,.45); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
   .reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
   .reloj small { color: var(--suave); font-weight: 400; font-size: 13px; }
-  .vistas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 10px; font-size: 13px; color: var(--suave); }
+  .vistas { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding-top: 8px; border-top: 1px solid var(--borde); font-size: 13px; color: var(--suave); }
   .vistas button { padding: 3px 10px; font-size: 13px; }
   .vistas small { margin-left: 6px; }
-  .leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--suave); font-size: 13px; margin: 0 0 14px; }
+  .ayuda { margin: 0 0 12px; font-size: 13px; color: var(--suave); }
+  .ayuda summary { cursor: pointer; width: fit-content; padding: 2px 0; }
+  .ayuda summary:hover { color: var(--texto); }
+  .leyenda { display: flex; flex-direction: column; gap: 4px; color: var(--suave); font-size: 13px; margin: 6px 0 0; padding: 10px 14px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; }
   .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
   .punto { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
-  .marcador { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .marcador { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
   .marcador h2, .resultados h2, .estadistica h2 { font-size: 14px; margin: 0 0 8px; color: var(--suave); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-  .fila { display: grid; grid-template-columns: 34px 170px 1fr 120px; align-items: center; gap: 10px; padding: 3px 0; }
+  .fila { display: grid; grid-template-columns: 34px 170px 1fr 120px; align-items: center; gap: 10px; padding: 1px 0; }
   .fila .lugar { font-weight: 700; color: var(--suave); text-align: center; }
   .fila .barra { height: 12px; background: var(--vacio); border-radius: 6px; overflow: hidden; }
   .fila .barra i { display: block; height: 100%; width: 0; background: var(--acento); border-radius: 6px; }
   .fila .valor { text-align: right; font-variant-numeric: tabular-nums; color: var(--suave); }
   .fila.termino .barra i { background: var(--almacenar); }
-  .paneles { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+  .paneles { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 14px; }
   .vacio-escena { background: var(--tarjeta); border: 1px dashed var(--borde); border-radius: 12px; padding: 40px 16px; text-align: center; color: var(--suave); }
   .panel { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
   .panel.termino { border-color: var(--almacenar); }
@@ -191,10 +194,11 @@
         <label>Réplica <select id="replica"></select></label>
         <label>Velocidad <input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></label>
         <div class="reloj"><small>Tiempo simulado</small> <span id="reloj">0</span> s</div>
+        <div class="vistas" id="vistas"><span>Vista</span><button data-vista="iso">Isométrica</button><button data-vista="frente">Frente</button><button data-vista="lateral">Lateral</button><button data-vista="superior">Superior</button><small>La cámara es la misma en todos los paneles</small></div>
       </div>
 
-      <div class="vistas" id="vistas"><span>Vista</span><button data-vista="iso">Isométrica</button><button data-vista="frente">Frente</button><button data-vista="lateral">Lateral</button><button data-vista="superior">Superior</button><small>La cámara es la misma en todos los paneles</small></div>
-      <div class="leyenda" id="leyenda"></div>
+      
+      <details class="ayuda"><summary>Leyenda y ayuda</summary><div class="leyenda" id="leyenda"></div></details>
 
       <section class="marcador"><h2>Marcador</h2><div id="marcador"></div></section>
       <section class="paneles" id="paneles"></section>
