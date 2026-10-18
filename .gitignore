@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Archivos generados al ejecutar (se regeneran con main.py y visualizar.py)
+resultados_simulacion.csv
+visualizacion.html
+
+# Configuración local del editor y de las vistas previas
+.claude/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
