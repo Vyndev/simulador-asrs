@@ -10,6 +10,7 @@ import random as rnd
 
 import numpy as np
 
+from asrs.cinematica import tiempo_chebyshev_xy
 from asrs.politicas.restriccion import MatricesRestriccion
 
 
@@ -26,6 +27,9 @@ class PoliticaAsignacion:
         # Las políticas que usan zonas fijas rellenan esta matriz con la etiqueta de zona de cada celda
         self.matriz_zonificacion = None
 
+        # Caché de matrices de cercanía por punto de referencia, con el punto E/S es siempre la misma
+        self._cache_tiempos = {}
+
     def etiquetaZona(self, escalar_sku):
         # Zona que corresponde a un SKU, cada política con zonas decide cómo agrupa sus SKUs
         return escalar_sku
@@ -37,12 +41,20 @@ class PoliticaAsignacion:
 
     def tiempoChebyshevXY(self, vector_posicion_referencia):
         # Tiempo mínimo de viaje en el plano xy desde la referencia a cada celda, max(x/vx, y/vy)
+        # Incluye la aceleración y la deceleración de la grúa, así la cercanía coincide con lo que tarda en llegar
+        clave = tuple(np.round(np.asarray(vector_posicion_referencia, dtype=float)[:2], 9))
+        if clave in self._cache_tiempos:
+            return self._cache_tiempos[clave]
         matriz_posiciones = self.instancia_estanteria.posicionesCeldas()
         matriz_distancias_xy = np.abs(matriz_posiciones[:, :, :, :2] - np.asarray(vector_posicion_referencia, dtype=float)[:2])
-        matriz_tiempos_xy = matriz_distancias_xy / self.instancia_grua.vector_velocidad[:2]
+        matriz_tiempos = tiempo_chebyshev_xy(matriz_distancias_xy, self.instancia_grua.vector_velocidad[:2],
+                                             self.instancia_grua.vector_aceleracion[:2], self.instancia_grua.vector_deceleracion[:2])
 
         # Se redondea para que las celdas equidistantes empaten de verdad
-        return np.round(np.max(matriz_tiempos_xy, axis=3), 9)
+        if len(self._cache_tiempos) > 512:
+            self._cache_tiempos.clear()
+        self._cache_tiempos[clave] = np.round(matriz_tiempos, 9)
+        return self._cache_tiempos[clave]
 
     def asignar(self, escalar_sku, matriz_extra=None, booleano_restringir_zona=True, vector_posicion_referencia=None):
         # Devuelve el índice de la celda elegida para un ítem del SKU dado, o una tupla vacía si no hay celda factible

@@ -21,7 +21,7 @@ Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`,
 
 **Parámetros editables**
 - Estantería: filas, columnas, capas de profundidad, medidas de la celda, posición y centro de referencia de la celda.
-- Grúa y E/S: velocidades en filas, columnas y canales, tiempo de carga y descarga, separación del riel.
+- Grúa y E/S: velocidades, aceleraciones y deceleraciones en filas, columnas y canales, tiempo de carga y descarga, separación del riel. Cada eje acelera, avanza a la velocidad máxima y frena (perfil trapezoidal, o triangular en distancias cortas); el tramo xy dura lo que tarda el eje más lento y luego se recorre z. Con aceleración o deceleración 0 no hay límite (velocidad constante). Por defecto son 1 m/s². Ver `asrs/cinematica.py`.
 - Ocupación inicial.
 - Productos (SKU): cantidad (hasta 200), sesgo de la demanda según la curva de Hausman o una lista de demanda propia, con una vista previa de la demanda por SKU.
 - Clases de la política basada en clases: de 1 a 8, con la proporción de SKUs de cada una.

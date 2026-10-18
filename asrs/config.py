@@ -28,6 +28,8 @@ def cargar_configuracion():
         "escalar_nivel_ocupacion": 0.85, # Porcentaje de la estatería que esta ocupada, intervalo [0, 1]
         "escalar_separacion_riel_grua": 0.5, # Unidades de separación entre la cara frontal de la estantería y el riel de la grúa
         "vector_velocidad_grua": np.array([1, 1.5, 0.7]), #(Velocidad en filas, velocidad en columnas, velocidad a lo largo de canales)
+        "vector_aceleracion_grua": np.array([1.0, 1.0, 1.0]), # Aceleración de cada eje (filas, columnas, canales), 0 significa sin límite: el eje alcanza la velocidad al instante
+        "vector_deceleracion_grua": np.array([1.0, 1.0, 1.0]), # Deceleración de cada eje, 0 significa sin límite
         "escalar_tiempo_carga_descarga": 0, # Tiempo que demora la grúa en cargar o descargar algún ítem
 
         # Demanda por SKU: la lista de tareas solo conoce SKUs, el SKU 1 es el más demandado
@@ -121,6 +123,8 @@ def config_desde_json(diccionario):
     config["escalar_nivel_ocupacion"] = _numero(datos["escalar_nivel_ocupacion"], "Nivel de ocupación", minimo=0, maximo=1)
     config["escalar_separacion_riel_grua"] = _numero(datos["escalar_separacion_riel_grua"], "Separación del riel", minimo=0, maximo=100)
     config["vector_velocidad_grua"] = np.array(_vector(datos["vector_velocidad_grua"], 3, "Velocidad de la grúa", minimo=0, minimo_estricto=True, maximo=1000), dtype=float)
+    config["vector_aceleracion_grua"] = np.array(_vector(datos["vector_aceleracion_grua"], 3, "Aceleración de la grúa", minimo=0, maximo=1000), dtype=float)
+    config["vector_deceleracion_grua"] = np.array(_vector(datos["vector_deceleracion_grua"], 3, "Deceleración de la grúa", minimo=0, maximo=1000), dtype=float)
     config["escalar_tiempo_carga_descarga"] = _numero(datos["escalar_tiempo_carga_descarga"], "Tiempo de carga y descarga", minimo=0, maximo=3600)
 
     # Demanda por SKU: curva de Hausman o una lista personalizada, siempre se normaliza para que sume 1

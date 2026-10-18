@@ -2,6 +2,8 @@
 import numpy as np
 from statistics import stdev
 
+from asrs.cinematica import tiempo_recorrido
+
 
 class Metricas:
 
@@ -81,25 +83,20 @@ self.vector_tiempo_reubicaciones_regulares_almacenamiento) > 1 else 0
 
         return [A0, A1, A2, B0, B1, B2, C0, C1, C2, D0, D1, D2, E0, E1, E2, F0, F1, F2, G0, G1, G2, H0, H1, H2, I0, I1, I2, O0, O1]
 
-    def tiempoDezplamiento(self, vector_posicion_inicial, vector_posicion_final, vector_velocidad):
+    def tiempoDezplamiento(self, vector_posicion_inicial, vector_posicion_final, vector_velocidad, vector_aceleracion=None, vector_deceleracion=None):
+        # Tiempo de un desplazamiento: el tramo xy (ejes simultáneos, cada uno con su perfil de velocidad) más el tramo z
+        # Sin aceleración ni deceleración (None) cada eje se mueve a velocidad constante
         vector_distancia = np.abs(
             vector_posicion_final - vector_posicion_inicial)
+        vector_velocidad = np.asarray(vector_velocidad, dtype=float)
+        vector_aceleracion = np.zeros(3) if vector_aceleracion is None else np.asarray(vector_aceleracion, dtype=float)
+        vector_deceleracion = np.zeros(3) if vector_deceleracion is None else np.asarray(vector_deceleracion, dtype=float)
 
-        # Determinar la distancia en el plano xy
-        vector_distancia_xy = vector_distancia[:2]
+        # Tiempo de cada eje con su perfil
+        vector_tiempos = tiempo_recorrido(vector_distancia, vector_velocidad, vector_aceleracion, vector_deceleracion)
 
-        # Determina la distancia en el tramo z
-        escalar_distancia_z = vector_distancia[2]
-
-        # Calcula tiempos de Chebyshev el tramo xz
-        vector_tiempo_xy = vector_distancia_xy / vector_velocidad[:2]
-        esclar_tiempo_chebyshev_xy = np.max(vector_tiempo_xy)
-
-        # Calcula tiempo de desplazamiento en z
-        escalar_tiempo_z = escalar_distancia_z / vector_velocidad[2]
-
-        # Calcula el tiempo total de ejecución
-        tiempo_total_ejecucion = esclar_tiempo_chebyshev_xy + escalar_tiempo_z
+        # El tramo xy termina cuando llega el eje más lento (tiempo de Chebyshev) y después se recorre z
+        tiempo_total_ejecucion = float(np.max(vector_tiempos[:2]) + vector_tiempos[2])
 
         # Retorna el tiempo total de ejecución
         return tiempo_total_ejecucion

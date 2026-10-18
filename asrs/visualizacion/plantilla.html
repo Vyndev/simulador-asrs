@@ -247,7 +247,7 @@ const el = id => document.getElementById(id);
 
 // ================= escena isométrica (se recalcula con cada simulación) =================
 let DATOS = null, SECUENCIA = [], totalTareas = 0;
-let FILAS, COLUMNAS, CAPAS, VEL_FILA, VEL_COLUMNA, COTA_FILA, COTA_COLUMNA, COTA_PROF, Z_RIEL, POS, CEN, RIEL;
+let FILAS, COLUMNAS, CAPAS, VEL_FILA, VEL_COLUMNA, VEL_PROF, ACEL, DECEL, COTA_FILA, COTA_COLUMNA, COTA_PROF, Z_RIEL, POS, CEN, RIEL;
 let COL_M, FIL_M, PRO_M, LARGO, ALTURA, FONDO, PLATAFORMA, ES_X, ESC, ESC_V, LIM, OX, OY, ANCHO, ALTO, DIR_VISTA, ORDEN_HUECOS, RANGO, DEN_Z;
 const DY = 0.55, C30 = Math.cos(Math.PI / 6);
 const proy0 = (X, Y, H) => [(X - Y * DY) * C30 * ESC, (X + Y * DY) * 0.5 * ESC - H * ESC_V];
@@ -264,7 +264,8 @@ function limitesProyeccion() {
 function prepararEscena() {
   [FILAS, COLUMNAS, CAPAS] = DATOS.configuracion;
   CLASE_SKU = DATOS.clase_sku || []; RANGO_SKU = DATOS.rango_sku || [];
-  [VEL_FILA, VEL_COLUMNA] = DATOS.velocidad;
+  [VEL_FILA, VEL_COLUMNA, VEL_PROF] = DATOS.velocidad;
+  ACEL = DATOS.aceleracion || [0, 0, 0]; DECEL = DATOS.deceleracion || [0, 0, 0];
   [COTA_FILA, COTA_COLUMNA, COTA_PROF] = DATOS.cotas;
   Z_RIEL = DATOS.z_riel; POS = DATOS.posicion || [0, 0, 0]; CEN = DATOS.centro || [0, 0, 0];
   RIEL = Z_RIEL - POS[2];                                               // posición del pasillo medida desde el fondo de la estantería
@@ -292,6 +293,24 @@ function prepararEscena() {
   ORDEN_HUECOS.forEach((h, i) => { RANGO[(h.f * COLUMNAS + h.c) * CAPAS + h.k] = i; });
   // la horquilla llega al centro del hueco cuando está dentro del canal; esta distancia reparte la transición desde el pasillo
   DEN_Z = Math.max(RIEL - ((CAPAS - 1) * PRO_M + CEN[2] * PRO_M), 1e-6);
+}
+
+// Perfil de velocidad de un eje: acelera hasta la velocidad máxima, avanza a velocidad constante y frena
+// Si la distancia es corta no llega a la velocidad máxima (perfil triangular). Una aceleración de 0 significa sin límite
+// Es la misma fórmula que usa Python para calcular el tiempo, así la animación y los tiempos coinciden
+// Devuelve la duración T y la fracción recorrida (de 0 a 1) en el instante tau
+function perfilEje(D, v, a, d) {
+  if (!(D > 0)) return { T: 0, fraccion: () => 1 };
+  const ia = a > 0 ? 1 / a : 0, id = d > 0 ? 1 / d : 0, da = v * v * ia / 2, dd = v * v * id / 2;
+  const trapecio = D >= da + dd, vp = trapecio ? v : Math.sqrt(2 * D / (ia + id));
+  const t1 = vp * ia, t2 = trapecio ? t1 + (D - da - dd) / v : t1, T = t2 + vp * id;
+  const fraccion = tau => {
+    if (tau >= T) return 1; if (tau <= 0) return 0;
+    if (tau < t1) return 0.5 * a * tau * tau / D;
+    if (tau < t2) return (0.5 * vp * t1 + vp * (tau - t1)) / D;
+    return (D - 0.5 * d * (T - tau) * (T - tau)) / D;
+  };
+  return { T, fraccion };
 }
 
 const tonos = new Map();
@@ -431,20 +450,22 @@ class Panel {
     const m = this.mov;
     if (!m) return { H: reposo.H, X: reposo.X, Y: RIEL, z: RIEL, fase: 0, m: null, dt: 0, enES: true };
     const dt = Math.max(0, tiempo - m.t0);
-    const tx = Math.abs(m.x1 - m.x0) / VEL_FILA, ty = Math.abs(m.y1 - m.y0) / VEL_COLUMNA;   // tiempo que tarda cada eje
-    const fx = tx > 0 ? Math.min(1, dt / tx) : 1, fy = ty > 0 ? Math.min(1, dt / ty) : 1;
-    const tz = m.dur - m.txy;
+    // cada eje del tramo xy sigue su propio perfil de velocidad y el tramo termina cuando llega el más lento, después se recorre z
+    const perfX = perfilEje(Math.abs(m.x1 - m.x0), VEL_FILA, ACEL[0], DECEL[0]), perfY = perfilEje(Math.abs(m.y1 - m.y0), VEL_COLUMNA, ACEL[1], DECEL[1]);
+    const perfZ = perfilEje(Math.abs(m.z1 - m.z0), VEL_PROF, ACEL[2], DECEL[2]);
+    const tx = perfX.T, ty = perfY.T, txy = Math.max(tx, ty);
+    const fx = perfX.fraccion(dt), fy = perfY.fraccion(dt);
     let z = m.z1, fase = 0;
     if (m.z1 !== m.z0) {
-      z = m.z0 + (m.z1 - m.z0) * (tz > 0 ? Math.min(1, Math.max(0, (dt - m.txy) / tz)) : 1);
-      if (dt >= m.txy && dt < m.dur) fase = 1;
+      z = m.z0 + (m.z1 - m.z0) * perfZ.fraccion(dt - txy);
+      if (dt >= txy && dt < m.dur) fase = 1;
     }
     // el punto de referencia de la celda puede estar desplazado dentro de ella (centro de celda): se dibuja en el centro del hueco
     const centro = (xm, ym) => ({ H: xm - CEN[0] * FIL_M + FIL_M / 2, X: ym - CEN[1] * COL_M + COL_M / 2 });
     const A = (m.ini || m.desdeES) ? reposo : centro(m.x0, m.y0), B = (m.fin || m.haciaES) ? reposo : centro(m.x1, m.y1);
     // la punta de la horquilla queda en el centro del hueco cuando está dentro del canal
     const Y = z + (PRO_M / 2 - CEN[2] * PRO_M) * Math.max(0, Math.min(1, (RIEL - z) / DEN_Z));
-    return { H: A.H + (B.H - A.H) * fx, X: A.X + (B.X - A.X) * fy, Y, z, fase, m, dt, A, B, tx, ty, enES: dt >= m.dur ? !!m.fin : false };
+    return { H: A.H + (B.H - A.H) * fx, X: A.X + (B.X - A.X) * fy, Y, z, fase, m, dt, A, B, tx, ty, perfX, perfY, enES: dt >= m.dur ? !!m.fin : false };
   }
 
   // ---- dibujo ----
@@ -575,7 +596,7 @@ class Panel {
     const m = e.m;
     if (m && e.dt < m.dur && m.txy > 0) {
       const tm = Math.min(e.tx, e.ty);
-      const fh = e.tx === 0 ? 1 : Math.min(1, tm / e.tx), fX = e.ty === 0 ? 1 : Math.min(1, tm / e.ty);
+      const fh = e.perfX.fraccion(tm), fX = e.perfY.fraccion(tm);
       const p0 = proy(e.A.X, RIEL, e.A.H), pc = proy(e.A.X + (e.B.X - e.A.X) * fX, RIEL, e.A.H + (e.B.H - e.A.H) * fh), p1 = proy(e.B.X, RIEL, e.B.H);
       let dx = p1[0] - pc[0], dy = p1[1] - pc[1], largo = Math.hypot(dx, dy);
       if (largo < 0.5) { dx = pc[0] - p0[0]; dy = pc[1] - p0[1]; largo = Math.hypot(dx, dy) || 1; }
@@ -844,6 +865,15 @@ const PESTANAS = [
         campo('vector_velocidad_grua', 0, 'Filas', { min: 0.01, paso: 0.1 }),
         campo('vector_velocidad_grua', 1, 'Columnas', { min: 0.01, paso: 0.1 }),
         campo('vector_velocidad_grua', 2, 'Canales (z)', { min: 0.01, paso: 0.1 })] },
+      { trio: 'Aceleración', unidad: 'm/s²', campos: [
+        campo('vector_aceleracion_grua', 0, 'Filas', { min: 0, paso: 0.1, ayuda: 'Con 0 el eje alcanza la velocidad al instante' }),
+        campo('vector_aceleracion_grua', 1, 'Columnas', { min: 0, paso: 0.1 }),
+        campo('vector_aceleracion_grua', 2, 'Canales (z)', { min: 0, paso: 0.1 })] },
+      { trio: 'Deceleración', unidad: 'm/s²', campos: [
+        campo('vector_deceleracion_grua', 0, 'Filas', { min: 0, paso: 0.1, ayuda: 'Con 0 el eje frena al instante' }),
+        campo('vector_deceleracion_grua', 1, 'Columnas', { min: 0, paso: 0.1 }),
+        campo('vector_deceleracion_grua', 2, 'Canales (z)', { min: 0, paso: 0.1 })] },
+      { nota: 'Cada eje acelera, avanza a la velocidad máxima y frena. En distancias cortas no llega a esa velocidad. Con 0 no hay límite y el eje va a velocidad constante.' },
       { fila: campo('escalar_tiempo_carga_descarga', null, 'Tiempo de carga o descarga', { unidad: 's', min: 0, paso: 0.5 }) },
       { fila: campo('escalar_separacion_riel_grua', null, 'Separación del riel', { unidad: 'm', min: 0, paso: 0.1, ayuda: 'Distancia entre la cara de la estantería y el riel de la grúa' }) }
     ] },

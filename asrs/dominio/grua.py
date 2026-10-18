@@ -1,11 +1,12 @@
 """Grúa que se desplaza entre el punto E/S y la estantería."""
 import numpy as np
 
+from asrs.cinematica import tiempo_chebyshev_xy
 from asrs.metricas import Metricas
 
 
 class Grua:
-    def __init__(self, vector_posicion_reposo, vector_velocidad, tiempo_cargadescarga):
+    def __init__(self, vector_posicion_reposo, vector_velocidad, tiempo_cargadescarga, vector_aceleracion=None, vector_deceleracion=None):
         # Inicializa la grúa con una posición de reposo y una velocidad
         # La posición actual de la grúa se establece en la posición de reposo
         # La grúa inicialmente no tiene ninguna carga ni está en ninguna estantería o punto E/S
@@ -13,6 +14,9 @@ class Grua:
         self.vector_posicion_resposo = np.array(vector_posicion_reposo, dtype=float)
         self.vector_posicion_actual = np.copy(self.vector_posicion_resposo)
         self.vector_velocidad = np.array(vector_velocidad, dtype=float)
+        # Aceleración y deceleración de cada eje (filas, columnas, canales), 0 significa sin límite
+        self.vector_aceleracion = np.zeros(3) if vector_aceleracion is None else np.array(vector_aceleracion, dtype=float)
+        self.vector_deceleracion = np.zeros(3) if vector_deceleracion is None else np.array(vector_deceleracion, dtype=float)
         self.vector_carga = []
         self.instancia_estanteria_actual = 0
         self.instancia_puntoES_actual = 0
@@ -31,6 +35,11 @@ class Grua:
         if self.vector_eventos is not None:
             self.vector_eventos.append([round(self.escalar_reloj, 4), txt_tipo, *vector_datos])
 
+    def _tiempo(self, vector_posicion_inicial, vector_posicion_final):
+        # Tiempo de un desplazamiento con la velocidad, la aceleración y la deceleración de la grúa
+        return self.intancia_metricas.tiempoDezplamiento(vector_posicion_inicial, vector_posicion_final, self.vector_velocidad,
+                                                         self.vector_aceleracion, self.vector_deceleracion)
+
     def _enES(self):
         # Indica si la grúa está en el punto E/S (o en reposo) y no dentro del recorrido de una estantería
         return self.instancia_estanteria_actual == 0
@@ -38,7 +47,8 @@ class Grua:
     def _registrarMovimiento(self, vector_posicion_inicial, vector_posicion_final, escalar_tiempo, booleano_en_es_inicial, booleano_en_es_final):
         # Registra un desplazamiento (con el tiempo xy aparte, porque los ejes xy son simultáneos y z es secuencial) y avanza el reloj
         if self.vector_eventos is not None:
-            escalar_tiempo_xy = float(np.max(np.abs(vector_posicion_final[:2] - vector_posicion_inicial[:2]) / self.vector_velocidad[:2]))
+            escalar_tiempo_xy = float(tiempo_chebyshev_xy(np.abs(vector_posicion_final[:2] - vector_posicion_inicial[:2]), self.vector_velocidad[:2],
+                                                          self.vector_aceleracion[:2], self.vector_deceleracion[:2]))
             self.registrarEvento('M', round(escalar_tiempo, 4),
                                  round(float(vector_posicion_inicial[0]), 4), round(float(vector_posicion_inicial[1]), 4),
                                  round(float(vector_posicion_final[0]), 4), round(float(vector_posicion_final[1]), 4),
@@ -61,7 +71,7 @@ class Grua:
         self.vector_posicion_actual[2] = self.vector_posicion_resposo[2]
         vector_posicion_final = np.copy(self.vector_posicion_actual)
 
-        return vector_posicion_inicial, vector_posicion_final, self.intancia_metricas.tiempoDezplamiento(vector_posicion_inicial, vector_posicion_final, self.vector_velocidad)
+        return vector_posicion_inicial, vector_posicion_final, self._tiempo(vector_posicion_inicial, vector_posicion_final)
 
     # Métodos para interactuar con la estantería
 
@@ -79,7 +89,7 @@ class Grua:
         vector_posicion_final = np.copy(self.vector_posicion_actual)
 
         return self._registrarMovimiento(vector_posicion_inicial, vector_posicion_final,
-                                         self.intancia_metricas.tiempoDezplamiento(vector_posicion_inicial, vector_posicion_final, self.vector_velocidad),
+                                         self._tiempo(vector_posicion_inicial, vector_posicion_final),
                                          booleano_en_es_inicial, False)
 
     def moverEnEstanteria(self, vector_indice_destino):
@@ -94,7 +104,7 @@ class Grua:
 
         # Retorna el tiempo total de ejecución
         return self._registrarMovimiento(vector_posicion_inicial, vector_posicion_final,
-                                         self.intancia_metricas.tiempoDezplamiento(vector_posicion_inicial, vector_posicion_final, self.vector_velocidad),
+                                         self._tiempo(vector_posicion_inicial, vector_posicion_final),
                                          False, False)
 
     def cargarItemDeEstanteria(self, vector_coordenada_recuperacion):
@@ -131,7 +141,7 @@ class Grua:
 
         # Retorna el tiempo total de ejecución
         return self._registrarMovimiento(vector_posicion_inicial, vector_posicion_final,
-                                         self.intancia_metricas.tiempoDezplamiento(vector_posicion_inicial, vector_posicion_final, self.vector_velocidad),
+                                         self._tiempo(vector_posicion_inicial, vector_posicion_final),
                                          booleano_en_es_inicial, True)
 
     def cargarItemPuntoES(self, indice=-1):
@@ -184,7 +194,7 @@ class Grua:
 
         # Retorna el tiempo total de ejecución
         return self._registrarMovimiento(vector_posicion_inicial, vector_posicion_final,
-                                         self.intancia_metricas.tiempoDezplamiento(vector_posicion_inicial, vector_posicion_final, self.vector_velocidad),
+                                         self._tiempo(vector_posicion_inicial, vector_posicion_final),
                                          booleano_en_es_inicial, True)
 
     def __repr__(self) -> str:

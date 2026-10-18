@@ -31,6 +31,39 @@ def preparar_estado(txt_clave_politica):
     return simulacion, E, G, P, politica
 
 
+class PruebasCinematica(unittest.TestCase):
+    def test_sin_aceleracion_es_velocidad_constante(self):
+        from asrs.cinematica import tiempo_recorrido
+        self.assertAlmostEqual(float(tiempo_recorrido(10, 2)), 5.0)
+        self.assertAlmostEqual(float(tiempo_recorrido(10, 2, 0, 0)), 5.0)
+
+    def test_perfil_trapezoidal(self):
+        from asrs.cinematica import tiempo_recorrido
+        # v=2, a=1, d=1: 2 s acelerando (2 m), 2 s frenando (2 m) y 6 m a velocidad constante (3 s)
+        self.assertAlmostEqual(float(tiempo_recorrido(10, 2, 1, 1)), 7.0)
+
+    def test_perfil_triangular_si_no_alcanza_la_velocidad(self):
+        from asrs.cinematica import tiempo_recorrido
+        self.assertAlmostEqual(float(tiempo_recorrido(2, 2, 1, 1)), 2 * np.sqrt(2.0))
+
+    def test_aceleracion_y_deceleracion_distintas(self):
+        from asrs.cinematica import tiempo_recorrido
+        # v=2, a=1 (2 s, 2 m), d=0.5 (4 s, 4 m), 4 m a velocidad constante (2 s)
+        self.assertAlmostEqual(float(tiempo_recorrido(10, 2, 1, 0.5)), 8.0)
+        # solo hay límite al acelerar, frenar es instantáneo
+        self.assertAlmostEqual(float(tiempo_recorrido(10, 2, 1, 0)), 6.0)
+
+    def test_acelerar_nunca_acorta_el_tiempo_y_la_distancia_cero_es_gratis(self):
+        from asrs.cinematica import tiempo_recorrido
+        distancias = np.linspace(0, 30, 31)
+        self.assertTrue(np.all(tiempo_recorrido(distancias, 1.5, 1, 1) >= tiempo_recorrido(distancias, 1.5) - 1e-12))
+        self.assertEqual(float(tiempo_recorrido(0, 1.5, 1, 1)), 0.0)
+
+    def test_tiempo_chebyshev_toma_el_eje_mas_lento(self):
+        from asrs.cinematica import tiempo_chebyshev_xy
+        self.assertAlmostEqual(float(tiempo_chebyshev_xy(np.array([2.0, 10.0]), np.array([2.0, 2.0]), np.array([1.0, 1.0]), np.array([1.0, 1.0]))), 7.0)
+
+
 class PruebasGrua(unittest.TestCase):
     def setUp(self):
         self.E, self.G, self.P = Simulacion().crearInstancias()
@@ -40,6 +73,13 @@ class PruebasGrua(unittest.TestCase):
         grua.irAEsquinaEstanteria(self.E)
         grua.moverEnEstanteria((3, 3, 0))
         self.assertGreater(grua.volverAplano(), 0)
+
+    def test_la_aceleracion_alarga_los_desplazamientos(self):
+        sin = Grua(np.array([0, 0, 2.7]), np.array([1, 1.5, 0.7]), 0)
+        con = Grua(np.array([0, 0, 2.7]), np.array([1, 1.5, 0.7]), 0, np.array([0.5, 0.5, 0.5]), np.array([0.5, 0.5, 0.5]))
+        origen, destino = np.array([0.0, 0.0, 2.7]), np.array([9.6, 12.6, 0.0])
+        self.assertAlmostEqual(sin.intancia_metricas.tiempoDezplamiento(origen, destino, sin.vector_velocidad), max(9.6 / 1.0, 12.6 / 1.5) + 2.7 / 0.7)
+        self.assertGreater(con._tiempo(origen, destino), sin._tiempo(origen, destino))
 
     def test_posicion_riel_no_se_trunca(self):
         grua = Grua(np.array([0, 0, 2.7]), np.array([1, 1.5, 0.7]), 0)
@@ -251,6 +291,15 @@ class PruebasConfiguracion(unittest.TestCase):
         config = config_desde_json({"escalar_numero_skus": 12, "escalar_sigma_hausman": 0.6})
         self.assertEqual(len(config["vector_demanda_sku"]), 12)
         self.assertAlmostEqual(float(config["vector_demanda_sku"].sum()), 1.0)
+
+    def test_aceleracion_por_defecto_y_validacion(self):
+        from asrs.config import config_desde_json
+        config = config_desde_json({})
+        self.assertEqual(config["vector_aceleracion_grua"].tolist(), [1.0, 1.0, 1.0])
+        self.assertEqual(config_desde_json({"vector_aceleracion_grua": [0, 0, 0]})["vector_aceleracion_grua"].tolist(), [0, 0, 0])
+        for caso in ({"vector_aceleracion_grua": [1, -1, 1]}, {"vector_deceleracion_grua": [1, 1]}, {"vector_aceleracion_grua": [1, "x", 1]}):
+            with self.assertRaises(ValueError, msg=str(caso)):
+                config_desde_json(caso)
 
     def test_tareas_por_defecto_son_el_diez_por_ciento(self):
         from asrs.config import config_desde_json

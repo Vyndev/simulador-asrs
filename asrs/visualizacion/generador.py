@@ -72,6 +72,8 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         "configuracion": [int(escalar) for escalar in config["vector_configuracion_estanteria"]],
         "cotas": [float(escalar) for escalar in config["vector_cotas_estanteria"]],
         "velocidad": [float(escalar) for escalar in config["vector_velocidad_grua"]],
+        "aceleracion": [float(escalar) for escalar in config["vector_aceleracion_grua"]],
+        "deceleracion": [float(escalar) for escalar in config["vector_deceleracion_grua"]],
         "posicion": [float(escalar) for escalar in config["vector_posicion_estanteria"]],
         "centro": [float(escalar) for escalar in config["vector_centro_celda_estanteria"]],
         "skus": int(config["escalar_numero_skus"]),
