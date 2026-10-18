@@ -159,6 +159,50 @@ class PruebasGeneradorTareas(unittest.TestCase):
         self.assertTrue(np.all(np.diff(sesgada) < 0))          # el SKU 1 es el más demandado
 
 
+class PruebasDemandaPorEtapas(unittest.TestCase):
+    ETAPAS = [{"peso": 1, "prob_almacenar": 1.0, "sigma": None, "rotacion": 0},
+              {"peso": 3, "prob_almacenar": 0.0, "sigma": None, "rotacion": 2}]
+
+    def test_la_rotacion_desplaza_el_ranking(self):
+        from asrs.generacion.probabilidades import demanda_de_etapa
+        base = np.array([0.6, 0.3, 0.1, 0.0])
+        self.assertTrue(np.allclose(demanda_de_etapa(base, None, 0), base))
+        self.assertTrue(np.allclose(demanda_de_etapa(base, None, 1), [0.0, 0.6, 0.3, 0.1]))
+        self.assertAlmostEqual(float(demanda_de_etapa(base, 0.5, 3).sum()), 1.0)
+
+    def test_cada_etapa_tiene_su_mezcla_y_su_largo(self):
+        from asrs.generacion.secuencia import generar_secuencia_por_etapas, largos_de_etapas
+        base = np.array([0.7, 0.2, 0.1])
+        self.assertEqual(largos_de_etapas(40, self.ETAPAS), [10, 30])
+        random.seed(0)
+        tareas = generar_secuencia_por_etapas(40, self.ETAPAS, base)
+        self.assertEqual(len(tareas), 40)
+        self.assertTrue(all(actividad == 0 for actividad, _ in tareas[:10]))      # la primera etapa solo almacena
+        self.assertTrue(all(actividad == 1 for actividad, _ in tareas[10:]))      # la segunda solo recupera
+        segunda = [sku for _, sku in tareas[10:]]
+        self.assertEqual(segunda.count(3), 21)                                    # con rotación 2 el SKU 3 pasa a ser el más pedido (70 %)
+
+    def test_la_simulacion_usa_las_etapas(self):
+        from asrs.config import config_a_json, config_desde_json
+        datos = config_a_json(cargar_configuracion()); datos["texto_modelo_demanda"] = "por_etapas"; datos["lista_etapas_demanda"] = self.ETAPAS
+        cfg = config_desde_json(datos)
+        random.seed(3)
+        _, tareas = Simulacion(cfg).generarSecuencias()
+        self.assertEqual(len(tareas), cfg["escalar_largo_secuencia"])
+        largo_primera = round(cfg["escalar_largo_secuencia"] / 4)
+        self.assertTrue(all(actividad == 0 for actividad, _ in tareas[:largo_primera - 1]))
+
+    def test_validacion_de_etapas(self):
+        from asrs.config import config_a_json, config_desde_json
+        base = config_a_json(cargar_configuracion())
+        for etapas in ([], [{"peso": 0, "prob_almacenar": 0.5, "sigma": None, "rotacion": 0}], [{"peso": 1, "prob_almacenar": 1.5, "sigma": None, "rotacion": 0}],
+                       [{"peso": 1, "prob_almacenar": 0.5, "sigma": 0, "rotacion": 0}], [{"peso": 1, "prob_almacenar": 0.5, "sigma": None, "rotacion": 1.5}]):
+            with self.assertRaises(ValueError, msg=str(etapas)):
+                config_desde_json({**base, "lista_etapas_demanda": etapas})
+        with self.assertRaises(ValueError):
+            config_desde_json({**base, "texto_modelo_demanda": "otra"})
+
+
 class PruebasPoliticas(unittest.TestCase):
     def test_todas_las_politicas_registradas_se_construyen(self):
         simulacion = Simulacion()

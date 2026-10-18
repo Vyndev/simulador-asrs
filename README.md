@@ -21,6 +21,7 @@ Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`,
 
 **Parámetros editables**
 - Estantería: filas, columnas, capas de profundidad, medidas de la celda, posición y centro de referencia de la celda.
+- Modelo de demanda: fija (la misma demanda y mezcla de almacenar y recuperar durante toda la lista) o variable por etapas. En cada etapa cambian la duración, el porcentaje de almacenar, el sesgo de la demanda y el desplazamiento del ranking de SKUs (con desplazamiento k, el SKU i recibe la demanda que tenía el SKU i-k, así cambian los más pedidos). Las políticas planifican con la demanda base y el llenado inicial también, por lo que se ve cuánto les afecta que la demanda cambie. En la animación el cambio de etapa se marca en la barra de tareas.
 - Grúa y E/S: velocidades, aceleraciones y deceleraciones en filas, columnas y canales, tiempo de carga y descarga, separación del riel. Cada eje acelera, avanza a la velocidad máxima y frena (perfil trapezoidal, o triangular en distancias cortas); el tramo xy dura lo que tarda el eje más lento y luego se recorre z. Con aceleración o deceleración 0 no hay límite (velocidad constante). Por defecto son 1 m/s². Ver `asrs/cinematica.py`.
 - Ocupación inicial.
 - Productos (SKU): cantidad (hasta 200), sesgo de la demanda según la curva de Hausman o una lista de demanda propia, con una vista previa de la demanda por SKU.

@@ -3,6 +3,7 @@ import random as rnd
 import numpy as np
 import pandas as pd
 
+from asrs.generacion.probabilidades import demanda_de_etapa
 from asrs.utilidades import repartir_entero
 
 
@@ -54,3 +55,23 @@ class GeneradorSecuencia:
     def __repr__(self):
         # Convierte la matriz de operaciones a un DataFrame de pandas y la devuelve como una cadena
         return pd.DataFrame(self.matriz_lista_operaciones_sorteada, columns=['Actividad', 'SKU']).to_string(index=False)
+
+
+def largos_de_etapas(escalar_largo_total, lista_etapas):
+    # Cantidad de tareas de cada etapa: reparte el total según el peso de cada una (mayor resto)
+    return [int(escalar) for escalar in repartir_entero(escalar_largo_total, [dic_etapa["peso"] for dic_etapa in lista_etapas])]
+
+
+def generar_secuencia_por_etapas(escalar_largo_total, lista_etapas, vector_demanda_base):
+    # Demanda variable: la lista se arma por etapas consecutivas y cada una tiene su propia mezcla de almacenar y recuperar
+    # y su propia demanda por SKU. El orden se sortea dentro de cada etapa, las etapas se recorren en orden
+    matriz_lista_operaciones = []
+    for dic_etapa, escalar_largo in zip(lista_etapas, largos_de_etapas(escalar_largo_total, lista_etapas)):
+        if escalar_largo == 0:
+            continue
+        vector_demanda = demanda_de_etapa(vector_demanda_base, dic_etapa["sigma"], dic_etapa["rotacion"])
+        vector_prob_acum_sku = np.cumsum(vector_demanda)
+        vector_prob_acum_sku[-1] = 1.0
+        vector_prob_acum_AR = np.array([dic_etapa["prob_almacenar"], 1.0])
+        matriz_lista_operaciones.extend(GeneradorSecuencia(escalar_largo, vector_prob_acum_AR, vector_prob_acum_sku).generarSecuencia())
+    return matriz_lista_operaciones

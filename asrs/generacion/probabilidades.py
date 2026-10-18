@@ -28,3 +28,12 @@ def demanda_hausman(escalar_cantidad_skus, escalar_sigma):
     # El SKU 1 es el más demandado. Con sigma = 1 la demanda es uniforme y cuanto menor es sigma, más se concentra en pocos SKUs
     vector_acumulada = _GeneradorProbAcumuladas().hausman(escalar_cantidad_skus, escalar_sigma)
     return np.diff(np.concatenate(([0.0], vector_acumulada)))
+
+
+def demanda_de_etapa(vector_demanda_base, escalar_sigma=None, escalar_rotacion=0):
+    # Demanda de cada SKU durante una etapa de demanda variable
+    # Sin sigma se parte de la demanda base y con sigma se usa la curva de Hausman de la misma cantidad de SKUs
+    # La rotación desplaza el ranking: con rotación k el SKU i recibe la demanda que tenía el SKU i - k, así cambia cuáles SKUs son los más demandados
+    vector_base = np.asarray(vector_demanda_base, dtype=float)
+    vector_demanda = vector_base if escalar_sigma is None else demanda_hausman(len(vector_base), escalar_sigma)
+    return np.roll(vector_demanda, int(escalar_rotacion))
