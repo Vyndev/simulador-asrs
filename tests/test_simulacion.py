@@ -211,6 +211,20 @@ class PruebasDatosReales(unittest.TestCase):
             config_desde_json({**datos, "texto_origen_tareas": "otro"})
 
 
+class PruebasConversionBD(unittest.TestCase):
+    def test_convierte_cantidades_en_tareas_y_limita_salidas(self):
+        import pandas as pd
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "herramientas"))
+        from bd_a_tareas import construir_tareas
+        entradas = pd.DataFrame({"T": ["0", "1"], "Q": ["25", "10"], "item_SKU": ["7", "7"]})
+        salidas = pd.DataFrame({"T": ["1", "2"], "Q": ["20", "50"], "item_SKU": ["7_3_1", "7_3_1"]})
+        tareas, resumen = construir_tareas(entradas, salidas, 10)
+        self.assertEqual(tareas, [("A", "7")] * 2 + [("A", "7")] + [("R", "7")] * 2 + [("R", "7")] * 5)   # 25 -> 2 cargas, +10 -> 1 más; 20 -> 2 y 50 -> 5
+        self.assertAlmostEqual(resumen["pct_salidas_sin_existencias"], 100 * 35 / 70, places=1)       # 70 unidades salen y solo había 35
+        limitadas, _ = construir_tareas(entradas, salidas, 10, True, True)
+        self.assertEqual(sum(1 for a, _ in limitadas if a == "R"), 3)                                 # 35 unidades en total: 20 y luego 15
+
+
 class PruebasPoliticas(unittest.TestCase):
     def test_todas_las_politicas_registradas_se_construyen(self):
         simulacion = Simulacion()
