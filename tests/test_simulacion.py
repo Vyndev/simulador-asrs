@@ -299,6 +299,15 @@ class PruebasEstadistica(unittest.TestCase):
 
 
 class PruebasServidor(unittest.TestCase):
+    def test_un_segundo_servidor_en_el_mismo_puerto_falla(self):
+        from asrs.visualizacion.servidor import crear_servidor
+        primero = crear_servidor(0)
+        try:
+            with self.assertRaises(OSError):
+                crear_servidor(primero.server_address[1])
+        finally:
+            primero.server_close()
+
     def test_simulacion_completa_por_http(self):
         import json
         import threading

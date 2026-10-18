@@ -4,6 +4,7 @@ Solo escucha en 127.0.0.1. Las simulaciones largas corren en segundo plano como 
 """
 import json
 import multiprocessing as mp
+import socket
 import threading
 import time
 import uuid
@@ -181,17 +182,32 @@ def crear_manejador(estado):
     return Manejador
 
 
+class ServidorLocal(ThreadingHTTPServer):
+    # En Windows, reutilizar la dirección permite que dos procesos escuchen el mismo puerto y las peticiones caen en uno u otro al azar
+    # Por eso en Windows el puerto se reserva en exclusiva: un segundo servidor falla con un error claro en lugar de convivir con el primero
+    allow_reuse_address = not hasattr(socket, 'SO_EXCLUSIVEADDRUSE')
+
+    def server_bind(self):
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
+
+
 def crear_servidor(escalar_puerto=8765):
     # Servidor listo para usar; con puerto 0 el sistema elige uno libre
     estado = Estado()
-    servidor = ThreadingHTTPServer(('127.0.0.1', escalar_puerto), crear_manejador(estado))
+    servidor = ServidorLocal(('127.0.0.1', escalar_puerto), crear_manejador(estado))
     servidor.daemon_threads = True
     servidor.estado_trabajos = estado
     return servidor
 
 
 def servir(escalar_puerto=8765, booleano_abrir=True):
-    servidor = crear_servidor(escalar_puerto)
+    try:
+        servidor = crear_servidor(escalar_puerto)
+    except OSError:
+        raise SystemExit(f'El puerto {escalar_puerto} ya está en uso, probablemente por otra herramienta abierta.\n'
+                         f'Ciérrala con Ctrl+C en su terminal, o usa otro puerto: python visualizar.py --servir --puerto {escalar_puerto + 1}')
     txt_url = f'http://127.0.0.1:{servidor.server_address[1]}/'
     print(f'Herramienta de simulación en {txt_url}  (Ctrl+C para detener)')
     if booleano_abrir:

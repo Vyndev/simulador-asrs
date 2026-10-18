@@ -1031,6 +1031,12 @@ async function iniciar() {
     try {
       const r = await fetch('/api/config'); CONFIG_DEFECTO = await r.json();
     } catch (e) { CONFIG_DEFECTO = null; }
+    if (CONFIG_DEFECTO && (CONFIG_DEFECTO.escalar_numero_skus === undefined || CONFIG_DEFECTO.vector_proporcion_skus_por_clase === undefined)) {
+      // el servidor corre una versión anterior del programa y no entiende los parámetros actuales
+      CONFIG_DEFECTO = null;
+      escenaVacia('El servidor que responde en esta dirección es de una versión anterior. Ciérralo con Ctrl+C en su terminal y vuelve a ejecutar <code>python visualizar.py --servir</code>.');
+      return;
+    }
   }
   if (CONFIG_DEFECTO) {
     // modo interactivo: formulario y simulación en el servidor local
