@@ -31,6 +31,8 @@ Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`,
 
 Los parámetros se validan antes de ejecutar y los errores se muestran junto al formulario. Se pueden guardar y cargar como archivo JSON, y el navegador recuerda los últimos usados.
 
+**Color de los ítems.** Depende de la política y cada panel trae su leyenda: en la política basada en clases es la clase del SKU (A, B, C), y en las demás es la rotación del SKU, en un degradado de amarillo (más rotación) a violeta (menos). Así, en `full_turnover` se ve cómo los SKUs más rotativos ocupan las posiciones más cercanas al E/S sin que aparezcan clases.
+
 **Qué muestra**
 - La carrera: todas las políticas ejecutan la misma lista de tareas sobre un mismo reloj. Cada una tiene su estantería y su grúa animadas, una tira con las tareas, un marcador en vivo y una tabla final de la réplica.
 - La estadística: promedio con intervalo de confianza del 95 %, desviación, mínimo, máximo y en cuántas réplicas gana cada política, para la métrica que elijas. Se puede descargar como CSV.
@@ -55,7 +57,7 @@ Toda combinación de decisiones es una **política de asignación de almacenamie
 |---|---|---|
 | `aleatoria` | `Aleatoria` | Canal elegido al azar |
 | `basada_en_clases` | `BasadaEnClases` | La política agrupa los SKUs en clases por demanda (la clase A con los más demandados) y reserva una zona a cada clase; la clase A recibe las celdas más cercanas al E/S |
-| `full_turnover` | `FullTurnover` | Cada SKU tiene su propia zona fija; los SKUs se ordenan de mayor a menor demanda y el más demandado recibe las ubicaciones más cercanas (Hausman, Graves y Schwarz, 1976) |
+| `full_turnover` | `FullTurnover` | Se hace una lista de SKUs ordenada por rotación y se empareja con la lista de posiciones ordenada por cercanía al E/S: el SKU más rotativo recibe las posiciones más cercanas, el siguiente las que siguen, y así sucesivamente (Hausman, Graves y Schwarz, 1976). No hay clases |
 | `mas_cercana_es` | `MasCercanaAlES` | Celda libre más cercana al E/S |
 | `mas_cercana_grua` | `MasCercanaALaGrua` | Celda libre más cercana a la grúa: en reposo al almacenar, la celda del ítem que retira al reubicar |
 

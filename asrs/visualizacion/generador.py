@@ -10,6 +10,13 @@ from asrs.politicas.zonificacion import agrupar_skus_en_clases
 from asrs.simulacion.simulacion import Simulacion
 
 
+def _rango_por_demanda(vector_demanda):
+    # Ranking de rotación: 0 para el SKU más demandado, a igual demanda se conserva el orden por número de SKU
+    vector_rango = np.empty(len(vector_demanda), dtype=int)
+    vector_rango[np.argsort(-np.asarray(vector_demanda), kind='stable')] = np.arange(len(vector_demanda))
+    return vector_rango
+
+
 def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S):
     # Ejecuta una política registrando todos los eventos de la grúa durante la secuencia de operación
     E, G, P, instancia_politica, instancia_politica_recuperacion = instancia_simulacion.prepararEscenario(txt_clave_politica, SA)
@@ -28,6 +35,8 @@ def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S):
     vector_metricas = C.instancia_metricas.recuperarInformcion()
     return {
         "nombre": instancia_politica.nombre,
+        # Cómo se colorean los ítems: la política basada en clases usa la clase de cada SKU y las demás la rotación del SKU
+        "color_por": "clase" if txt_clave_politica == 'basada_en_clases' else "sku",
         "inicial": vector_estado_inicial,
         "eventos": G.vector_eventos,
         "tiempo_total": round(float(vector_metricas[-1]), 4),
@@ -69,6 +78,8 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         "demanda_sku": [round(float(escalar), 6) for escalar in config["vector_demanda_sku"]],
         # Clase de cada SKU según la agrupación de la política basada en clases, solo para colorear la animación
         "clase_sku": [int(escalar) for escalar in agrupar_skus_en_clases(config["vector_demanda_sku"], config["vector_proporcion_skus_por_clase"])],
+        # Posición de cada SKU en el ranking de rotación (0 = el más demandado), indexada por SKU - 1
+        "rango_sku": [int(escalar) for escalar in _rango_por_demanda(config["vector_demanda_sku"])],
         "z_riel": float(instancia_simulacion.crearInstancias()[1].vector_posicion_resposo[2]),
         "replicas": vector_replicas,
     }
