@@ -1033,8 +1033,8 @@ const PESTANAS = [
     ] }
   ] },
   { id: 'demanda', nombre: 'Demanda', secciones: [
-    { titulo: 'Origen de las tareas', especial: 'origen' },
-    { titulo: 'Datos reales', especial: 'datos', id: 'seccionDatos' },
+    { titulo: 'Demanda', especial: 'origen' },
+    { titulo: 'Archivo subido', especial: 'datos', id: 'seccionDatos' },
     { titulo: 'Productos (SKU)', especial: 'skus', id: 'seccionProductos' },
     { titulo: 'Lista de tareas', especial: 'tareas', id: 'seccionTareas' }
   ] },
@@ -1172,7 +1172,7 @@ function origenDatos() { return el('origenTareas').value === 'datos'; }
 function actualizarOrigen() {
   const datos = origenDatos();
   el('seccionDatos').hidden = !datos; el('seccionProductos').hidden = datos; el('seccionTareas').hidden = datos;
-  el('notaOrigen').textContent = datos ? 'La cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla de operaciones salen del archivo. Todas las réplicas usan la misma lista; solo cambia el llenado inicial.' : 'La lista se genera al azar según la demanda de cada SKU y el porcentaje de almacenar.';
+  el('notaOrigen').textContent = datos ? 'Subir archivo: la cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla de operaciones salen del archivo. Todas las réplicas usan la misma lista; solo cambia el llenado inicial.' : 'Simulada: la lista se genera al azar según la demanda de cada SKU y el porcentaje de almacenar.';
   if (datos) validarTareas(); else { RESUMEN_DATOS = null; actualizarResumen(); }
 }
 // Valida el archivo con el servidor y muestra su resumen
@@ -1222,8 +1222,8 @@ function construirFormulario() {
           '<input type="text" id="demandaPersonalizada" placeholder="Pesos separados por comas, p. ej. 40, 25, 15, 10, 10"></label>' +
           '<div class="grafico-demanda" id="graficoDemanda"></div><p class="nota" id="resumenDemanda"></p>';
       } else if (s.especial === 'origen') {
-        cuerpo.innerHTML = '<label class="bloque"><small>De dónde sale la lista de tareas</small><select id="origenTareas">' +
-          '<option value="generada">Generada con una demanda</option><option value="datos">Datos reales (archivo CSV)</option></select></label>' +
+        cuerpo.innerHTML = '<label class="bloque"><small>Tipo de demanda</small><select id="origenTareas">' +
+          '<option value="generada">Simulada</option><option value="datos">Subir archivo</option></select></label>' +
           '<p class="nota" id="notaOrigen"></p>';
       } else if (s.especial === 'datos') {
         cuerpo.innerHTML = '<p class="nota">Un archivo con una tarea por fila, en orden, con dos columnas: SKU y Task. La tarea es A (almacenar) o R (recuperar); también se aceptan almacenar y recuperar, entrada y salida, o 0 y 1. Admite coma, punto y coma o tabulación, con o sin encabezado.</p>' +
