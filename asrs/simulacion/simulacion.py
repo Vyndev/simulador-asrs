@@ -10,7 +10,7 @@ from asrs.dominio.estanteria import Estanteria
 from asrs.dominio.grua import Grua
 from asrs.dominio.item import Item
 from asrs.dominio.punto_es import PuntoES
-from asrs.generacion.secuencia import GeneradorSecuencia, generar_secuencia_por_etapas
+from asrs.generacion.secuencia import GeneradorSecuencia
 from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS
 from asrs.politicas.registro import crear_politica
 from asrs.simulacion.resultados import guardar_resultados_csv
@@ -54,11 +54,7 @@ class Simulacion:
         escalar_largo_secuencia_llenado = int(escalar_capacidad_total * cfg["escalar_nivel_ocupacion"])
 
         SA = GeneradorSecuencia(escalar_largo_secuencia_llenado, np.array([1, 1]), vector_prob_acum_sku).generarSecuencia()
-        if cfg.get("texto_modelo_demanda") == "por_etapas":
-            # El llenado usa la demanda base y la lista de tareas cambia de etapa en etapa
-            S = generar_secuencia_por_etapas(cfg["escalar_largo_secuencia"], cfg["lista_etapas_demanda"], cfg["vector_demanda_sku"])
-        else:
-            S = GeneradorSecuencia(cfg["escalar_largo_secuencia"], cfg["vector_prob_acum_AR"], vector_prob_acum_sku).generarSecuencia()
+        S = GeneradorSecuencia(cfg["escalar_largo_secuencia"], cfg["vector_prob_acum_AR"], vector_prob_acum_sku).generarSecuencia()
 
         return SA, S
 

@@ -6,8 +6,6 @@ import random as rnd
 import numpy as np
 
 from asrs.control.controlador_grua import ControladorGrua
-from asrs.generacion.probabilidades import demanda_de_etapa
-from asrs.generacion.secuencia import largos_de_etapas
 from asrs.politicas.zonificacion import agrupar_skus_en_clases
 from asrs.simulacion.simulacion import Simulacion
 
@@ -17,16 +15,6 @@ def _rango_por_demanda(vector_demanda):
     vector_rango = np.empty(len(vector_demanda), dtype=int)
     vector_rango[np.argsort(-np.asarray(vector_demanda), kind='stable')] = np.arange(len(vector_demanda))
     return vector_rango
-
-
-def _describir_etapas(config):
-    # Una lista vacía significa demanda fija
-    if config.get("texto_modelo_demanda") != "por_etapas":
-        return []
-    vector_largos = largos_de_etapas(config["escalar_largo_secuencia"], config["lista_etapas_demanda"])
-    return [{"tareas": escalar_largo, "prob_almacenar": float(dic_etapa["prob_almacenar"]),
-             "demanda": [round(float(escalar), 6) for escalar in demanda_de_etapa(config["vector_demanda_sku"], dic_etapa["sigma"], dic_etapa["rotacion"])]}
-            for dic_etapa, escalar_largo in zip(config["lista_etapas_demanda"], vector_largos)]
 
 
 def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S):
@@ -94,8 +82,6 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         "clase_sku": [int(escalar) for escalar in agrupar_skus_en_clases(config["vector_demanda_sku"], config["vector_proporcion_skus_por_clase"])],
         # Posición de cada SKU en el ranking de rotación (0 = el más demandado), indexada por SKU - 1
         "rango_sku": [int(escalar) for escalar in _rango_por_demanda(config["vector_demanda_sku"])],
-        # Etapas de la demanda (solo si es variable): cantidad de tareas, mezcla y demanda de cada una, para marcarlas en la animación
-        "etapas": _describir_etapas(config),
         "z_riel": float(instancia_simulacion.crearInstancias()[1].vector_posicion_resposo[2]),
         "replicas": vector_replicas,
     }

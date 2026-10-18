@@ -9,7 +9,6 @@ LIMITE_TAREAS = 5000
 LIMITE_SKUS = 200
 LIMITE_CLASES = 8
 LIMITE_REPLICAS_ANIMADAS = 10
-LIMITE_ETAPAS = 10
 LIMITE_REPLICAS_ESTADISTICA = 2000
 
 
@@ -43,17 +42,6 @@ def cargar_configuracion():
         "vector_proporcion_skus_por_clase": np.array([0.2, 0.3, 0.5]), # Proporción de SKUs de cada clase, la clase 1 agrupa a los más demandados
 
         "vector_prob_acum_AR": np.array([0.5, 1]), # Vector de probabilidad acumulada, para el almacenamiento y recuperación
-
-        # Modelo de demanda: 'fija' usa la demanda y la mezcla de arriba durante toda la lista; 'por_etapas' la cambia a lo largo de la lista
-        # Las políticas planifican con la demanda base (la de arriba) y no se enteran de los cambios, igual que el llenado inicial
-        "texto_modelo_demanda": "fija",
-        # Etapas consecutivas: peso (proporción de las tareas), prob_almacenar (0 a 1), sigma de Hausman (None usa la demanda base)
-        # y rotación (cuántos puestos se desplaza el ranking de SKUs, 0 lo deja igual)
-        "lista_etapas_demanda": [
-            {"peso": 1, "prob_almacenar": 0.5, "sigma": None, "rotacion": 0},
-            {"peso": 1, "prob_almacenar": 0.7, "sigma": None, "rotacion": 8},
-            {"peso": 1, "prob_almacenar": 0.3, "sigma": None, "rotacion": 16},
-        ],
         "escalar_largo_secuencia": 1,  # Valor inicial, se ajustará en la inicialización
         "escalar_cantidad_replicas": 100, # la simulación se repetira según la cantidad de replicas
         "escalar_replicas_animadas": 3, # réplicas que se graban para la animación del visualizador
@@ -77,7 +65,7 @@ def config_a_json(config):
         if isinstance(valor, np.ndarray):
             resultado[txt_clave] = valor.tolist()
         elif isinstance(valor, (tuple, list)):
-            resultado[txt_clave] = [dict(v) if isinstance(v, dict) else v for v in valor]
+            resultado[txt_clave] = list(valor)
         elif isinstance(valor, np.generic):
             resultado[txt_clave] = valor.item()
         else:
@@ -172,26 +160,6 @@ def config_desde_json(diccionario):
     if probabilidad[1] != 1:
         raise ValueError("Mezcla de operaciones: la probabilidad acumulada debe terminar en 1.")
     config["vector_prob_acum_AR"] = np.array(probabilidad, dtype=float)
-
-    # Modelo de demanda: fija o por etapas
-    modelo = datos["texto_modelo_demanda"]
-    if modelo not in ("fija", "por_etapas"):
-        raise ValueError("Modelo de demanda: debe ser 'fija' o 'por_etapas'.")
-    config["texto_modelo_demanda"] = modelo
-    etapas = datos["lista_etapas_demanda"]
-    if not isinstance(etapas, (list, tuple)) or not 1 <= len(etapas) <= LIMITE_ETAPAS:
-        raise ValueError(f"Etapas de la demanda: debe haber entre 1 y {LIMITE_ETAPAS}.")
-    config["lista_etapas_demanda"] = []
-    for indice, etapa in enumerate(etapas, start=1):
-        if not isinstance(etapa, dict):
-            raise ValueError(f"Etapa {indice}: formato no válido.")
-        sigma = etapa.get("sigma")
-        config["lista_etapas_demanda"].append({
-            "peso": _numero(etapa.get("peso"), f"Etapa {indice}, duración", minimo=0, minimo_estricto=True, maximo=1e6),
-            "prob_almacenar": _numero(etapa.get("prob_almacenar"), f"Etapa {indice}, proporción de almacenar", minimo=0, maximo=1),
-            "sigma": None if sigma is None or sigma == "" else _numero(sigma, f"Etapa {indice}, sesgo de la demanda", minimo=0, minimo_estricto=True, maximo=1),
-            "rotacion": _numero(etapa.get("rotacion", 0), f"Etapa {indice}, desplazamiento de SKUs", entero=True, minimo=-LIMITE_SKUS, maximo=LIMITE_SKUS),
-        })
 
     # Si no se indica la cantidad de tareas se usa el 10 % de la capacidad de la estantería
     largo = diccionario.get("escalar_largo_secuencia")

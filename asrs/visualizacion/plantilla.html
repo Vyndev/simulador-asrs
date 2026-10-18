@@ -80,11 +80,6 @@
   .tabla-clases { display: grid; grid-template-columns: 26px 78px minmax(0, 1fr); gap: 6px 8px; align-items: center; font-size: 13.5px; }
   .tabla-clases .enc { color: var(--suave); font-size: 12px; }
   .tabla-clases .pct { color: var(--suave); font-variant-numeric: tabular-nums; font-size: 12.5px; }
-  .tabla-etapas { display: grid; grid-template-columns: 26px repeat(4, minmax(0, 1fr)); gap: 6px; align-items: center; font-size: 13.5px; }
-  .tabla-etapas input { padding: 4px 4px; }
-  .bloque select { width: 100%; min-width: 0; }
-  .tabla-etapas .enc { color: var(--suave); font-size: 11.5px; line-height: 1.15; }
-  .tabla-etapas .ficha { background: var(--vacio); color: var(--texto); }
   .grafico-demanda { display: flex; align-items: flex-end; gap: 1px; height: 64px; padding: 4px; background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; }
   .grafico-demanda i { flex: 1; min-width: 1px; border-radius: 2px 2px 0 0; }
   .ficha { display: inline-flex; width: 22px; height: 22px; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #10151c; }
@@ -145,7 +140,6 @@
   .tareas { display: grid; gap: 2px; margin: 10px 0 8px; }
   .tareas i { height: 9px; border-radius: 2px; background: var(--pendiente); }
   .tareas i.a { background: var(--almacenar); opacity: .35; } .tareas i.r { background: var(--recuperar); opacity: .35; }
-  .tareas i.etapa-ini { box-shadow: -2px 0 0 0 var(--texto); }
   .tareas i.hecha { opacity: 1; } .tareas i.actual { opacity: 1; outline: 2px solid var(--texto); outline-offset: 1px; }
   .tareas i.omitida { background: transparent; outline: 1px solid var(--omitida); outline-offset: -1px; opacity: 1; }
   .pie { display: flex; justify-content: space-between; color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -263,7 +257,6 @@ const el = id => document.getElementById(id);
 // ================= escena 3D (se recalcula con cada simulación) =================
 // Ejes del mundo en metros: X a lo largo del pasillo (columnas), Y hacia arriba (filas), Z hacia el pasillo (el fondo de la estantería está en Z = 0)
 let DATOS = null, SECUENCIA = [], totalTareas = 0;
-let INICIOS_ETAPA = [0];      // índice de la primera tarea de cada etapa de la demanda (solo una si la demanda es fija)
 let FILAS, COLUMNAS, CAPAS, VEL_FILA, VEL_COLUMNA, VEL_PROF, ACEL, DECEL, COTA_FILA, COTA_COLUMNA, COTA_PROF, Z_RIEL, POS, CEN, RIEL;
 let COL_M, FIL_M, PRO_M, LARGO, ALTURA, FONDO, PLATAFORMA, ES_X, LIM, ANCHO = 640, ALTO = 400, DEN_Z;
 
@@ -307,8 +300,6 @@ function prepararEscena() {
   ALTO = Math.round(Math.max(340, Math.min(720, ANCHO * (y1 - y0) / (x1 - x0))));
   crearRender();
   RENDER.setSize(ANCHO, ALTO, false);
-  let acumulado = 0; INICIOS_ETAPA = (DATOS.etapas || []).map(e => { const i = acumulado; acumulado += e.tareas; return i; });
-  if (!INICIOS_ETAPA.length) INICIOS_ETAPA = [0];
 }
 
 // Perfil de velocidad de un eje: acelera hasta la velocidad máxima, avanza a velocidad constante y frena
@@ -374,7 +365,6 @@ class Panel {
     this.ctx = this.canvas.getContext('2d');
     this.ctx.scale(DPR, DPR);
     this.ticks = tarjeta.querySelectorAll('.tareas i');
-    this.ticks.forEach((tk, i) => tk.classList.toggle('etapa-ini', INICIOS_ETAPA.includes(i) && i > 0));
     this.insignia = tarjeta.querySelector('.insignia');
     this.pie = tarjeta.querySelector('.pie');
     this.elTipo = tarjeta.querySelector('.estado .tipo');
@@ -393,7 +383,7 @@ class Panel {
     this.fin = null; this.lugar = 0;
     this.tarjeta.classList.remove('termino');
     this.insignia.textContent = ''; this.insignia.className = 'insignia';
-    this.ticks.forEach((tk, i) => { tk.className = (SECUENCIA[i][0] === 0 ? 'a' : 'r') + (INICIOS_ETAPA.includes(i) && i > 0 ? ' etapa-ini' : ''); });
+    this.ticks.forEach((tk, i) => { tk.className = SECUENCIA[i][0] === 0 ? 'a' : 'r'; });
   }
   // Color de un ítem según la política: la basada en clases usa la clase de su SKU y las demás la rotación del SKU
   colorSku(s) {
@@ -768,8 +758,7 @@ class Panel {
     this.elChip.style.display = this.claseTarea ? 'inline-flex' : 'none';
     this.elChip.textContent = 'SKU ' + this.claseTarea; this.elChip.style.background = this.claseTarea ? this.colorSku(this.claseTarea) : '';
     this.elAccion.textContent = this.textoAccion;
-    const etapas = DATOS.etapas || [], etapa = etapas.length > 1 ? INICIOS_ETAPA.filter(i => i <= Math.max(0, this.tarea)).length : 0;
-    this.pie.innerHTML = '<span>Tareas ' + hechas + '/' + totalTareas + (etapa && this.fin === null ? ' · etapa ' + etapa + '/' + etapas.length : '') + '</span><span>' +
+    this.pie.innerHTML = '<span>Tareas ' + hechas + '/' + totalTareas + '</span><span>' +
       (this.fin !== null ? 'Terminó en ' + fmt(this.fin) + ' s' : fmt(t) + ' s') + '</span>';
   }
   progreso() { return this.fin !== null ? totalTareas : this.hechas; }
@@ -903,10 +892,6 @@ el('replica').onchange = () => { replicaActual = +el('replica').value; construir
 
 function construirLeyenda() {
   const ley = el('leyenda'); ley.innerHTML = '';
-  if ((DATOS.etapas || []).length > 1) {
-    const principales = d => d.map((v, i) => [v, i + 1]).sort((a, b) => b[0] - a[0]).slice(0, 3).map(x => x[1]).join(', ');
-    ley.insertAdjacentHTML('beforeend', '<span><b>Demanda variable.</b> ' + DATOS.etapas.map((e, i) => 'Etapa ' + (i + 1) + ': ' + e.tareas + ' tareas, ' + Math.round(e.prob_almacenar * 100) + ' % almacenar, SKUs más pedidos ' + principales(e.demanda)).join(' · ') + '. La marca vertical en la barra de tareas indica el cambio de etapa.</span>');
-  }
   ley.insertAdjacentHTML('beforeend', '<span>El color de cada ítem depende de la política (mira la leyenda de cada panel); el número del SKU aparece en el rótulo de la tarea</span>');
   ley.insertAdjacentHTML('beforeend',
     '<span>Vista 3D: arrastra para girar, rueda para acercar, doble clic para restablecer. Fila 1 y columna 1 abajo a la izquierda, cada celda tiene ' + CAPAS + (CAPAS === 1 ? ' lugar' : ' lugares') + ' en profundidad</span>' +
@@ -992,7 +977,6 @@ function descargar(nombre, contenido, tipo) {
 // ================= formulario de parámetros =================
 let CONFIG_DEFECTO = null, ULTIMA_CONFIG = null;
 const entradas = [];            // campos numéricos simples del formulario
-let etapasUI = [];              // etapas de la demanda variable: peso, % de almacenar, sesgo (vacío = el base) y desplazamiento del ranking
 let clasesUI = [];              // proporción de SKUs de cada clase de la política basada en clases, en %
 const campo = (clave, indice, etiqueta, opc = {}) => ({ clave, indice, etiqueta, ...opc });
 
@@ -1043,7 +1027,6 @@ const PESTANAS = [
   ] },
   { id: 'demanda', nombre: 'Demanda', secciones: [
     { titulo: 'Productos (SKU)', especial: 'skus' },
-    { titulo: 'Modelo de demanda', especial: 'modelo' },
     { titulo: 'Lista de tareas', especial: 'tareas' }
   ] },
   { id: 'politicas', nombre: 'Políticas', secciones: [
@@ -1173,33 +1156,6 @@ function mostrarPrimerError() {
   malo.focus();
 }
 // La sección de clases solo importa si se compara la política basada en clases
-// Tabla editable de las etapas de la demanda variable
-function dibujarEtapas() {
-  const cont = el('tablaEtapas');
-  cont.innerHTML = '<span class="enc">Etapa</span><span class="enc" title="Peso relativo: cuántas tareas dura frente a las demás">Duración</span><span class="enc">% almacenar</span><span class="enc" title="Vacío usa el sesgo de los Productos">Sesgo σ</span><span class="enc" title="Cuántos puestos se desplaza el ranking: cambia cuáles SKUs son los más pedidos">Desplaz.</span>' +
-    etapasUI.map((e, i) => '<span class="ficha">' + (i + 1) + '</span>' +
-      '<input type="number" min="0.01" step="any" data-e="' + i + '" data-k="peso" value="' + e.peso + '" aria-label="Duración de la etapa ' + (i + 1) + '">' +
-      '<input type="number" min="0" max="100" step="1" data-e="' + i + '" data-k="pct" value="' + e.pct + '" aria-label="Porcentaje de almacenar de la etapa ' + (i + 1) + '">' +
-      '<input type="number" min="0.05" max="1" step="0.05" data-e="' + i + '" data-k="sigma" value="' + e.sigma + '" placeholder="base" aria-label="Sesgo de la etapa ' + (i + 1) + '">' +
-      '<input type="number" step="1" data-e="' + i + '" data-k="rot" value="' + e.rot + '" aria-label="Desplazamiento de SKUs de la etapa ' + (i + 1) + '">').join('');
-  cont.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => {
-    inp.classList.remove('invalido'); const e = etapasUI[+inp.dataset.e], k = inp.dataset.k;
-    e[k] = k === 'sigma' ? inp.value : (inp.value === '' ? NaN : +inp.value); actualizarNotaEtapas();
-  }));
-  el('btnMasEtapa').disabled = etapasUI.length >= 10; el('btnMenosEtapa').disabled = etapasUI.length <= 1;
-  actualizarNotaEtapas();
-}
-function actualizarNotaEtapas() {
-  const total = etapasUI.reduce((a, e) => a + (e.peso > 0 ? e.peso : 0), 0), tareas = el('tareasAuto').checked ? Math.round(Number(el('tareasN').value)) : Number(el('tareasN').value);
-  el('notaEtapas').textContent = total > 0 && tareas > 0 ? 'Con ' + tareas + ' tareas: ' + etapasUI.map((e, i) => 'etapa ' + (i + 1) + ' ≈ ' + Math.round(tareas * (e.peso > 0 ? e.peso : 0) / total)).join(', ') + '.' : '';
-}
-// Con demanda variable el % de almacenar de cada etapa reemplaza al de la lista de tareas
-function actualizarModelo() {
-  const var_ = el('modeloDemanda').value === 'por_etapas';
-  el('bloqueEtapas').hidden = !var_;
-  el('pctAlmacenar').disabled = var_; el('pctAlmacenar').title = var_ ? 'Con demanda variable lo define cada etapa' : '';
-  actualizarNotaEtapas();
-}
 function actualizarClasesActivas() {
   const usa = !!document.querySelector('[data-politica="basada_en_clases"]:checked');
   el('seccionClases').classList.toggle('inactivo', !usa);
@@ -1225,14 +1181,6 @@ function construirFormulario() {
           '<label class="bloque"><small>Demanda personalizada <em>(opcional, reemplaza a los dos de arriba)</em></small>' +
           '<input type="text" id="demandaPersonalizada" placeholder="Pesos separados por comas, p. ej. 40, 25, 15, 10, 10"></label>' +
           '<div class="grafico-demanda" id="graficoDemanda"></div><p class="nota" id="resumenDemanda"></p>';
-      } else if (s.especial === 'modelo') {
-        cuerpo.innerHTML = '<label class="bloque"><small>Cómo cambia la demanda durante la lista de tareas</small><select id="modeloDemanda">' +
-          '<option value="fija">Fija</option><option value="por_etapas">Variable por etapas</option></select></label>' +
-          '<p class="nota">Fija mantiene la misma demanda y mezcla de operaciones; por etapas las cambia a lo largo de la lista.</p>' +
-          '<div id="bloqueEtapas" hidden><p class="nota">La lista se recorre por etapas seguidas. En cada una cambia el porcentaje de almacenar y cuáles SKUs son los más pedidos. ' +
-          'Las políticas planifican con la demanda de la sección Productos y no se enteran de los cambios, igual que el llenado inicial.</p>' +
-          '<div class="tabla-etapas" id="tablaEtapas"></div><p class="nota" id="notaEtapas"></p>' +
-          '<div class="botones-fila"><button type="button" id="btnMasEtapa">Añadir etapa</button><button type="button" id="btnMenosEtapa">Quitar última</button></div></div>';
       } else if (s.especial === 'clases') {
         cuerpo.innerHTML = '<p class="nota">Agrupa los SKUs por demanda (la clase A con los más demandados) y reserva una zona a cada clase. Los valores son pesos y se normalizan.</p>' +
           '<p class="nota aviso-clases" id="avisoClases"></p>' +
@@ -1254,14 +1202,11 @@ function construirFormulario() {
       sec.appendChild(cuerpo); panel.appendChild(sec);
     });
   });
-  el('modeloDemanda').onchange = actualizarModelo;
-  el('btnMasEtapa').onclick = () => { if (etapasUI.length < 10) { etapasUI.push({ peso: 1, pct: 50, sigma: '', rot: 0 }); dibujarEtapas(); } };
-  el('btnMenosEtapa').onclick = () => { if (etapasUI.length > 1) { etapasUI.pop(); dibujarEtapas(); } };
   el('btnMasClase').onclick = () => { if (clasesUI.length < 8) { clasesUI.push(20); dibujarClases(); } };
   el('btnMenosClase').onclick = () => { if (clasesUI.length > 1) { clasesUI.pop(); dibujarClases(); } };
   el('tareasAuto').onchange = () => { el('tareasN').disabled = el('tareasAuto').checked; actualizarAuto(); actualizarResumen(); };
   ['nSkus', 'sigma', 'demandaPersonalizada'].forEach(id => el(id).addEventListener('input', () => { el(id).classList.remove('invalido'); actualizarVistaPrevia(); }));
-  el('tareasN').addEventListener('input', () => { actualizarResumen(); actualizarNotaEtapas(); });
+  el('tareasN').addEventListener('input', actualizarResumen);
   document.querySelectorAll('[data-politica]').forEach(c => c.addEventListener('change', () => { actualizarClasesActivas(); actualizarResumen(); }));
   entradas.forEach(({ c, inp }) => { if (c.clave === 'vector_configuracion_estanteria') inp.addEventListener('input', actualizarAuto); });
   let inicial = 'almacen'; try { inicial = localStorage.getItem('asrs_pestana') || 'almacen'; } catch (e) {}
@@ -1284,13 +1229,10 @@ function ponerFormulario(cfg) {
   el('demandaPersonalizada').value = cfg.vector_demanda_sku_personalizada ? cfg.vector_demanda_sku_personalizada.join(', ') : '';
   clasesUI = cfg.vector_proporcion_skus_por_clase.map(p => Math.round(p * 1000) / 10);
   el('pctAlmacenar').value = Math.round((cfg.vector_prob_acum_AR[0] || 0) * 1000) / 10;
-  el('modeloDemanda').value = cfg.texto_modelo_demanda || 'fija';
-  etapasUI = (cfg.lista_etapas_demanda || []).map(e => ({ peso: e.peso, pct: Math.round(e.prob_almacenar * 1000) / 10, sigma: e.sigma === null || e.sigma === undefined ? '' : e.sigma, rot: e.rotacion || 0 }));
-  if (!etapasUI.length) etapasUI = [{ peso: 1, pct: 50, sigma: '', rot: 0 }];
   const celdas = cfg.vector_configuracion_estanteria.reduce((a, b) => a * b, 1), auto = Math.round(celdas * 0.1) === cfg.escalar_largo_secuencia;
   el('tareasAuto').checked = auto; el('tareasN').value = cfg.escalar_largo_secuencia; el('tareasN').disabled = auto;
   document.querySelectorAll('[data-politica]').forEach(c => { c.checked = (cfg.vector_politicas_asignacion || []).includes(c.dataset.politica); });
-  dibujarClases(); dibujarEtapas(); actualizarModelo(); actualizarClasesActivas(); actualizarResumen();
+  dibujarClases(); actualizarClasesActivas(); actualizarResumen();
 }
 
 function leerFormulario() {
@@ -1315,22 +1257,6 @@ function leerFormulario() {
   const pct = Number(el('pctAlmacenar').value);
   if (el('pctAlmacenar').value === '' || !isFinite(pct) || pct < 0 || pct > 100) { el('pctAlmacenar').classList.add('invalido'); primerError = primerError || '% almacenar: debe estar entre 0 y 100.'; }
   cfg.vector_prob_acum_AR = [pct / 100, 1];
-  cfg.texto_modelo_demanda = el('modeloDemanda').value;
-  if (cfg.texto_modelo_demanda === 'por_etapas') {
-    // el % de almacenar de la lista de tareas no se usa, así que no debe bloquear la validación
-    el('pctAlmacenar').classList.remove('invalido');
-    if (primerError && primerError.startsWith('% almacenar')) primerError = null;
-    cfg.lista_etapas_demanda = etapasUI.map((e, i) => {
-      const fila = document.querySelectorAll('#tablaEtapas input[data-e="' + i + '"]');
-      const marcar = (k, msg) => { fila.forEach(x => { if (x.dataset.k === k) x.classList.add('invalido'); }); primerError = primerError || ('Etapa ' + (i + 1) + ': ' + msg); };
-      if (!(e.peso > 0)) marcar('peso', 'la duración debe ser mayor que 0.');
-      if (!(e.pct >= 0 && e.pct <= 100)) marcar('pct', '% almacenar entre 0 y 100.');
-      const sigma = e.sigma === '' ? null : Number(e.sigma);
-      if (sigma !== null && !(sigma > 0 && sigma <= 1)) marcar('sigma', 'el sesgo debe estar entre 0 y 1.');
-      if (!Number.isInteger(e.rot)) marcar('rot', 'el desplazamiento debe ser un entero.');
-      return { peso: e.peso, prob_almacenar: e.pct / 100, sigma, rotacion: e.rot };
-    });
-  }
   if (el('tareasAuto').checked) delete cfg.escalar_largo_secuencia; else cfg.escalar_largo_secuencia = Number(el('tareasN').value);
   cfg.vector_politicas_asignacion = Array.from(document.querySelectorAll('[data-politica]:checked')).map(c => c.dataset.politica);
   if (primerError) { mostrarPrimerError(); throw new Error(primerError); }
