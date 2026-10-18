@@ -107,6 +107,24 @@
   .controles { position: sticky; top: 8px; z-index: 5; box-shadow: 0 6px 16px -8px rgba(0,0,0,.45); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
   .reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
   .reloj small { color: var(--suave); font-weight: 400; font-size: 13px; }
+  .encabezado-acciones { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+  .nav-vistas { display: inline-flex; gap: 3px; background: var(--vacio); border-radius: 10px; padding: 3px; }
+  .nav-vistas button { border: 0; background: transparent; border-radius: 8px; padding: 6px 14px; color: var(--suave); }
+  .nav-vistas button.activa { background: var(--tarjeta); color: var(--texto); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.18); }
+  #vistaCarrera[hidden], #vistaEntrenamiento[hidden] { display: none; }
+  /* entrenamiento */
+  .ent-tarjeta { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; min-width: 0; }
+  .ent-tarjeta h3 { margin: 0 0 4px; font-size: 15px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ent-tarjeta .nota { margin: 0 0 8px; }
+  .ent-tarjeta canvas { width: 100%; display: block; }
+  .ent-controles { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; margin-bottom: 8px; }
+  .ent-controles input[type=number] { width: 96px; }
+  .ent-estado { margin-bottom: 8px; display: grid; gap: 8px; }
+  .ent-error { background: var(--error-fondo); border-radius: 8px; padding: 8px; overflow: auto; max-height: 200px; font-size: 12px; white-space: pre-wrap; }
+  .ent-cuadricula { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 14px; }
+  .ent-cabecera { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .ent-replay { display: flex; align-items: center; gap: 10px; color: var(--suave); font-size: 13px; }
+  .ent-replay input[type=range] { width: 220px; }
   .vistas { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding-top: 8px; border-top: 1px solid var(--borde); font-size: 13px; color: var(--suave); }
   .vistas button { padding: 3px 10px; font-size: 13px; }
   .vistas small { margin-left: 6px; }
@@ -175,7 +193,10 @@
       <h1>Simulador ASRS</h1>
       <p class="sub">Todas las políticas de asignación ejecutan la misma lista de tareas sobre un mismo reloj. Gana la que termina primero.</p>
     </div>
-    <button id="btnParametros" style="display:none">Ocultar parámetros</button>
+    <div class="encabezado-acciones">
+      <nav class="nav-vistas" id="navVistas" style="display:none"><button data-v="carrera" class="activa">Carrera</button><button data-v="entrenamiento">Entrenamiento</button></nav>
+      <button id="btnParametros" style="display:none">Ocultar parámetros</button>
+    </div>
   </header>
 
   <div class="app sin-parametros" id="app">
@@ -193,6 +214,7 @@
     <main>
       <div class="aviso" id="aviso"></div>
 
+      <div id="vistaCarrera">
       <div class="controles" id="controles">
         <button id="jugar" class="primario">Iniciar</button>
         <button id="reiniciar">Reiniciar</button>
@@ -225,6 +247,9 @@
         <div class="tabla-ancha"><table><thead id="encEstadistica"></thead><tbody id="cuerpoEstadistica"></tbody></table></div>
         <p class="nota" id="notaEstadistica"></p>
       </section>
+      </div>
+
+      <div id="vistaEntrenamiento" hidden></div>
     </main>
   </div>
 </div>
@@ -1402,7 +1427,7 @@ async function iniciar() {
   }
   if (CONFIG_DEFECTO) {
     // modo interactivo: formulario y simulación en el servidor local
-    el('app').classList.remove('sin-parametros'); el('btnParametros').style.display = '';
+    el('app').classList.remove('sin-parametros'); el('btnParametros').style.display = ''; el('navVistas').style.display = '';
     construirFormulario();
     let inicial = CONFIG_DEFECTO;
     try { const g = localStorage.getItem('asrs_config'); if (g) inicial = { ...CONFIG_DEFECTO, ...JSON.parse(g) }; } catch (e) {}
@@ -1432,5 +1457,6 @@ async function iniciar() {
 }
 iniciar();
 </script>
+<!--ENTRENAMIENTO-->
 </body>
 </html>

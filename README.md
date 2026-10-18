@@ -129,3 +129,14 @@ El agente decide en qué canal almacenar cada ítem (dentro del canal se aplica 
 El entrenamiento usa un entorno por núcleo (`--entornos`, por defecto los núcleos menos uno) con `SubprocVecEnv`, porque lo más lento es la simulación y no las redes. Con 7 entornos PPO pasó de 146 a unos 280 pasos por segundo y DQN llegó a unos 235. Con `--dispositivo cuda` las redes se entrenan en la tarjeta gráfica, pero hace falta PyTorch con CUDA (el que se instala por defecto aquí es el de CPU) y con redes tan pequeñas la ganancia es mínima.
 
 Primera corrida (5000 pasos, 18×20×2, 72 tareas, 6 estados de prueba): unos 75 a 85 pasos por segundo, cerca de 1 minuto por algoritmo. Con tan poco entrenamiento ninguno mejora a la mejor política clásica (más cercana a la grúa): DQN queda 19 % por encima y PPO 16 %, a nivel del azar. Hacen falta entrenamientos más largos para saber si pueden superarla.
+
+### Vista Entrenamiento del visualizador
+
+En la herramienta interactiva (`python visualizar.py --servir`) hay dos vistas: Carrera y Entrenamiento. En la segunda eliges DQN o PPO, los pasos y los entornos en paralelo, y el servidor entrena en un proceso aparte (`asrs/rl/entrenamiento_vivo.py`) mientras la página muestra en vivo:
+
+- la curva de aprendizaje, con el tiempo total por episodio y las políticas clásicas como líneas de referencia;
+- las pérdidas (y epsilon en DQN);
+- la red por dentro: la estantería que ve el agente (llenado, cercanía al E/S, ítems del mismo SKU y canales con espacio), cómo se activan las neuronas de cada capa oculta, y el mapa de canales con lo que decide;
+- cómo cambian los pesos: histogramas, a qué grupo de entradas mira cada neurona de la primera capa y un mapa de los pesos entre capas.
+
+La red se muestra siempre ante la misma situación de la estantería, y un deslizador permite comparar el principio del entrenamiento con el final. Usa el almacén, la demanda y las tareas del formulario. Solo se entrena un agente a la vez y se puede detener en cualquier momento.

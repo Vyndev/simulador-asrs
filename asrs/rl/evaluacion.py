@@ -10,12 +10,14 @@ from asrs.politicas.registro import crear_politica
 from asrs.rl.entorno import copiar_estado, generar_estado
 
 
-def evaluar_politica_clasica(config, txt_clave_politica, escalar_semilla_base, vector_estados):
+def evaluar_politica_clasica(config, txt_clave_politica, escalar_semilla_base, vector_estados, dic_estados=None):
     # Ejecuta la lista de tareas con una política clásica desde cada estado inicial, devuelve los tiempos totales y el tiempo de cálculo
     vector_tiempos, escalar_reubicaciones, escalar_operaciones = [], 0, 0
     escalar_inicio = time.perf_counter()
     for escalar_indice in vector_estados:
-        E, G, P, S = copiar_estado(generar_estado(config, escalar_semilla_base + escalar_indice))
+        if dic_estados is not None and escalar_indice not in dic_estados:
+            dic_estados[escalar_indice] = generar_estado(config, escalar_semilla_base + escalar_indice)     # se genera una vez y se reutiliza con todas las políticas
+        E, G, P, S = copiar_estado(dic_estados[escalar_indice] if dic_estados is not None else generar_estado(config, escalar_semilla_base + escalar_indice))
         rnd.seed(escalar_semilla_base * 7919 + escalar_indice)
         politica = crear_politica(txt_clave_politica, E, G, P, config)
         C = ControladorGrua(E, G, P, S, politica, PoliticaRecuperacionFCFS())

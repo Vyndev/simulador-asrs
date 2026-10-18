@@ -97,7 +97,11 @@ def leer_plantilla():
     # La librería gráfica (Three.js) se incluye en la página para que funcione sin conexión a internet
     txt_ruta_libreria = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor", "three.min.js")
     with open(txt_ruta_libreria, encoding="utf-8") as archivo:
-        return txt_pagina.replace("<!--THREE-->", "<script>" + archivo.read() + "</script>")
+        txt_pagina = txt_pagina.replace("<!--THREE-->", "<script>" + archivo.read() + "</script>")
+    # La vista Entrenamiento vive en su propio archivo para no engordar la plantilla
+    txt_ruta_vista = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vista_entrenamiento.js")
+    with open(txt_ruta_vista, encoding="utf-8") as archivo:
+        return txt_pagina.replace("<!--ENTRENAMIENTO-->", "<script>" + archivo.read() + "</script>")
 
 
 def escribir_html(diccionario_datos, txt_ruta_salida):

@@ -167,7 +167,8 @@ class EntornoAsignacion(gym.Env):
         self.escalar_indice += 1
         booleano_hay_mas = self._avanzar()
         escalar_recompensa = -(self.G.escalar_reloj - escalar_t0) / ESCALAR_SEGUNDOS_POR_UNIDAD - escalar_penalizacion
-        return self._observacion(), escalar_recompensa, not booleano_hay_mas, False, {}
+        dic_info = {} if booleano_hay_mas else {"tiempo_total": self.tiempo_total()}   # al terminar el episodio se informa la métrica de comparación
+        return self._observacion(), escalar_recompensa, not booleano_hay_mas, False, dic_info
 
     def tiempo_total(self):
         # Tiempo total de operación de la lista, la misma métrica que reportan las políticas clásicas

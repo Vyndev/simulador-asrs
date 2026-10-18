@@ -274,6 +274,38 @@ class PruebasEntornoRL(unittest.TestCase):
         observacion, _ = entorno.reset()
         self.assertEqual(observacion.shape, entorno.observation_space.shape)
 
+    def test_la_foto_de_la_red_describe_la_entrada_las_capas_y_la_decision(self):
+        from asrs.rl.entrenamiento import entrenar
+        from asrs.rl.entorno import EntornoAsignacion
+        from asrs.rl.entrenamiento_vivo import foto_de_la_red
+        entorno = EntornoAsignacion(self.config, 1000, 2)
+        observacion, _ = entorno.reset(options={"estado": 0})
+        for algoritmo in ("ppo", "dqn"):
+            modelo, _ = entrenar(algoritmo, self.config, 150 if algoritmo == "ppo" else 1100, 2, 0, 1)
+            foto = foto_de_la_red(modelo, algoritmo, observacion, entorno.action_masks(), entorno.escalar_canales, 150)
+            self.assertEqual(len(foto["entrada"]), 4)
+            self.assertEqual(len(foto["entrada"][0]), entorno.escalar_canales)
+            self.assertEqual(len(foto["activaciones"]), 2)
+            self.assertEqual(len(foto["pesos"]), 3)
+            self.assertEqual(len(foto["salida"]["valores"]), entorno.escalar_canales)
+            self.assertTrue(entorno.action_masks()[foto["salida"]["elegida"]])          # la decisión nunca es un canal sin espacio
+            if algoritmo == "ppo":
+                self.assertAlmostEqual(sum(v for v in foto["salida"]["valores"] if v is not None), 1.0, places=2)
+
+    def test_el_gestor_ordena_los_eventos_del_proceso(self):
+        from asrs.visualizacion.gestor_entrenamiento import Entrenamiento
+        entrenamiento = object.__new__(Entrenamiento)
+        entrenamiento.estado, entrenamiento.metricas, entrenamiento.fotos, entrenamiento.secuencia = "iniciando", [], [], 0
+        entrenamiento.referencias, entrenamiento.evaluacion, entrenamiento.cerrojo = {}, {}, __import__("threading").Lock()
+        entrenamiento.id, entrenamiento.algoritmo, entrenamiento.inicio, entrenamiento.fin, entrenamiento.error = "x", "ppo", None, None, None
+        for evento in ({"tipo": "inicio", "pasos": 10}, {"tipo": "referencia", "clave": "aleatoria", "media": 5.0}, {"tipo": "metrica", "pasos": 1},
+                       {"tipo": "snapshot", "pasos": 1}, {"tipo": "evaluacion", "clave": "PPO", "media": 4.0}, {"tipo": "fin", "segundos": 1}):
+            entrenamiento._aplicar(evento)
+        self.assertEqual(entrenamiento.estado, "listo")
+        self.assertEqual(entrenamiento.publico(0)["secuencia"], 2)
+        self.assertEqual(len(entrenamiento.publico(1)["fotos"]), 1)                    # solo lo posterior a la secuencia indicada
+        self.assertEqual(entrenamiento.publico(2)["metricas"], [])
+
     def test_las_clasicas_parten_del_mismo_estado(self):
         from asrs.rl.evaluacion import evaluar_politica_clasica
         a = evaluar_politica_clasica(self.config, "mas_cercana_es", 77, [0, 1])["tiempos"]

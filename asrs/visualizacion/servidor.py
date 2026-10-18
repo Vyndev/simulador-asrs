@@ -10,12 +10,14 @@ import time
 import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlparse
 
 from asrs.config import LIMITE_SKUS, LIMITE_TAREAS, cargar_configuracion, config_a_json, config_desde_json
 from asrs.generacion.datos_reales import leer_tareas, resumir_tareas
 from asrs.simulacion.estadistica import resumir
 from asrs.simulacion.simulacion import Simulacion
 from asrs.visualizacion.generador import generar_datos, leer_plantilla
+from asrs.visualizacion.gestor_entrenamiento import GestorEntrenamiento
 
 LIMITE_CUERPO = 1_000_000          # bytes aceptados en una solicitud
 TRABAJOS_GUARDADOS = 20            # trabajos terminados que se conservan en memoria
@@ -94,6 +96,7 @@ class Estado:
     def __init__(self):
         self.trabajos = {}
         self.cerrojo = threading.Lock()
+        self.entrenamientos = GestorEntrenamiento()
 
     def crear(self, config):
         with self.cerrojo:
@@ -154,6 +157,19 @@ def crear_manejador(estado):
             elif ruta == '/api/activo':
                 trabajo = estado.activo()
                 self._json(200, {"id": trabajo.id if trabajo else None})
+            elif ruta == '/api/entrenamiento/activo':
+                entrenamiento = estado.entrenamientos.activo()
+                self._json(200, {"id": entrenamiento.id if entrenamiento else None})
+            elif ruta.startswith('/api/entrenamiento/'):
+                entrenamiento = estado.entrenamientos.buscar(ruta.rsplit('/', 1)[-1])
+                if entrenamiento is None:
+                    self._json(404, {"error": "Entrenamiento desconocido."})
+                    return
+                try:
+                    escalar_desde = int(parse_qs(urlparse(self.path).query).get('desde', ['0'])[0])
+                except ValueError:
+                    escalar_desde = 0
+                self._json(200, entrenamiento.publico(escalar_desde))
             elif ruta.startswith('/api/trabajo/'):
                 trabajo = estado.buscar(ruta.rsplit('/', 1)[-1])
                 if trabajo is None:
@@ -181,6 +197,24 @@ def crear_manejador(estado):
                     self._json(409, {"error": str(error)})
                 except (ValueError, KeyError) as error:
                     self._json(400, {"error": str(error)})
+            elif ruta == '/api/entrenar':
+                try:
+                    escalar_largo = int(self.headers.get('Content-Length', '0'))
+                    if escalar_largo <= 0 or escalar_largo > LIMITE_CUERPO:
+                        raise ValueError('La solicitud está vacía o es demasiado grande.')
+                    entrenamiento = estado.entrenamientos.iniciar(json.loads(self.rfile.read(escalar_largo).decode('utf-8')))
+                    self._json(202, {"id": entrenamiento.id})
+                except RuntimeError as error:
+                    self._json(409, {"error": str(error)})
+                except (ValueError, KeyError, TypeError) as error:
+                    self._json(400, {"error": str(error)})
+            elif ruta.startswith('/api/entrenamiento/') and ruta.endswith('/cancelar'):
+                entrenamiento = estado.entrenamientos.buscar(ruta.split('/')[-2])
+                if entrenamiento is None:
+                    self._json(404, {"error": "Entrenamiento desconocido."})
+                else:
+                    entrenamiento.cancelar()
+                    self._json(200, {"ok": True})
             elif ruta == '/api/tareas':
                 # Valida un archivo de tareas reales y devuelve su resumen, para mostrarlo antes de simular
                 try:
@@ -243,4 +277,5 @@ def servir(escalar_puerto=8765, booleano_abrir=True):
     except KeyboardInterrupt:
         print('\nServidor detenido.')
     finally:
+        servidor.estado_trabajos.entrenamientos.cancelar_todo()
         servidor.server_close()
