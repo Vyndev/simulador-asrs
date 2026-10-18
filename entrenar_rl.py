@@ -81,17 +81,9 @@ def main():
         dic_resultados[txt_algoritmo.upper()] = resultado
         print(f"  evaluación: {resultado['segundos']:.1f} s, {1000 * resultado['segundos'] / max(1, resultado['decisiones']):.1f} ms por decisión\n")
 
-    # Tabla comparativa: tiempo total de la lista (menor es mejor) y victorias pareadas contra la mejor política clásica
-    escalar_mejor = min(CLASICAS, key=lambda c: dic_resultados[c]["tiempos"].mean())
-    print(f"{'Política':<20}{'Tiempo total (s)':>18}{'± error':>10}{'vs mejor clásica':>20}{'Mejor que ella':>16}")
-    for txt_clave, dic in dic_resultados.items():
-        vector = dic["tiempos"]
-        escalar_error = vector.std(ddof=1) / np.sqrt(len(vector)) if len(vector) > 1 else 0.0
-        escalar_dif = 100 * (vector.mean() / dic_resultados[escalar_mejor]["tiempos"].mean() - 1)
-        escalar_ganadas = int((vector < dic_resultados[escalar_mejor]["tiempos"]).sum())
-        print(f"{txt_clave:<20}{vector.mean():>18.0f}{escalar_error:>10.0f}{escalar_dif:>19.1f}%{escalar_ganadas:>12}/{len(vector)}")
-    print(f"\nMejor política clásica: {escalar_mejor}. Los agentes se evalúan sin exploración y los canales sin espacio se enmascaran.")
-
+    # Tabla comparativa: tiempo total de la lista (menor es mejor) con diferencias pareadas contra la mejor política clásica
+    from asrs.rl import comparacion
+    print(comparacion.tabla(dic_resultados))
 
 if __name__ == "__main__":
     main()

@@ -18,3 +18,4 @@ Thumbs.db
 
 # Modelos entrenados
 modelos/
+resultados_rl.csv

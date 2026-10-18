@@ -99,6 +99,7 @@ asrs/
   generacion/
     secuencia.py                  GeneradorSecuencia: lista de tareas por SKU
     probabilidades.py             Demanda por SKU (curva de Hausman)
+    datos_reales.py               Lista de tareas desde un CSV (SKU y Task)
   control/
     controlador_grua.py         Ejecuta la secuencia usando las políticas
   simulacion/
@@ -108,8 +109,16 @@ asrs/
   visualizacion/
     generador.py                Graba los eventos de la grúa y prepara los datos de la animación
     servidor.py                 Servidor local: sirve la página y ejecuta simulaciones como trabajos
-    plantilla.html              Página con el formulario y la carrera (JavaScript, sin dependencias)
+    plantilla.html              Página con el formulario y la carrera (Three.js incluido en vendor/)
+    vista_entrenamiento.js      Vista Entrenamiento: curvas y red neuronal en vivo
+    gestor_entrenamiento.py     Lanza y vigila el proceso de entrenamiento
+  rl/                           Aprendizaje por refuerzo (experimento aparte)
+    entorno.py                    Entorno gymnasium de la asignación de almacenamiento
+    entrenamiento.py              Creación de DQN y PPO y entrenamiento con entornos en paralelo
+    entrenamiento_vivo.py         Proceso que entrena y emite su estado como JSON
+    evaluacion.py  comparacion.py Evaluación y tabla comparativa con diferencias pareadas
 visualizar.py                   Herramienta visual (--servir) o archivo autónomo
+entrenar_rl.py  comparar_rl.py  Entrenamiento y comparación de los agentes de RL
 tests/                          Pruebas de regresión
 original/                       Versiones previas en un solo archivo
 ```
@@ -122,21 +131,45 @@ Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de
 
 ## Aprendizaje por refuerzo (DQN y PPO)
 
-Experimento aparte del simulador, que no necesita estas librerías: `pip install -r requirements-rl.txt` y luego `python entrenar_rl.py --algoritmo ambos --pasos 5000`.
+**Objetivo:** comprobar si un agente entrenado con DQN o PPO puede **superar a las políticas clásicas** en el tiempo total de la lista de tareas. Es un experimento aparte del simulador, que no necesita estas librerías: `pip install -r requirements-rl.txt`.
 
-El agente decide en qué canal almacenar cada ítem (dentro del canal se aplica la regla de minimización de varianza). Las recuperaciones son FCFS y las reubicaciones las decide la política más cercana a la grúa. La recompensa es el tiempo que invierte la grúa, así que el retorno del episodio es el tiempo total de la lista. El episodio parte de una estantería llena con la política aleatoria, igual para el agente y las políticas clásicas, y se evalúa en estados que el agente no vio. DQN toma el mejor valor Q entre los canales con espacio y PPO usa su máscara de acciones (`MaskablePPO` de sb3-contrib).
+### Cómo se plantea
 
-El entrenamiento usa un entorno por núcleo (`--entornos`, por defecto los núcleos menos uno) con `SubprocVecEnv`, porque lo más lento es la simulación y no las redes. Con 7 entornos PPO pasó de 146 a unos 280 pasos por segundo y DQN llegó a unos 235. Con `--dispositivo cuda` las redes se entrenan en la tarjeta gráfica, pero hace falta PyTorch con CUDA (el que se instala por defecto aquí es el de CPU) y con redes tan pequeñas la ganancia es mínima.
+- **Decisión del agente:** en qué canal almacenar cada ítem; dentro del canal se aplica la regla de minimización de varianza. Las recuperaciones son FCFS y las reubicaciones las decide la política más cercana a la grúa.
+- **Recompensa:** el tiempo que invierte la grúa desde una decisión hasta la siguiente, con signo negativo. El retorno del episodio es el tiempo total de la lista, la misma métrica con la que se compara a las políticas clásicas.
+- **Protocolo de comparación:** todos (agente y políticas clásicas) parten de la misma estantería, llenada con la política aleatoria, y ejecutan la misma lista de tareas. El agente se evalúa en estados de prueba que no vio al entrenar. Esto es distinto de la carrera del visualizador, donde cada política llena su propia estantería.
+- **Qué ve el agente:** por cada canal, su llenado, su cercanía al E/S, cuántos ítems del mismo SKU tiene y si tiene espacio; más el rango de demanda del SKU y el avance de la lista.
+- **Algoritmos:** DQN toma el mejor valor Q entre los canales con espacio; PPO usa su máscara de acciones (`MaskablePPO` de sb3-contrib).
 
-Primera corrida (5000 pasos, 18×20×2, 72 tareas, 6 estados de prueba): unos 75 a 85 pasos por segundo, cerca de 1 minuto por algoritmo. Con tan poco entrenamiento ninguno mejora a la mejor política clásica (más cercana a la grúa): DQN queda 19 % por encima y PPO 16 %, a nivel del azar. Hacen falta entrenamientos más largos para saber si pueden superarla.
+### Cómo se usa
+
+| Para… | Comando |
+|---|---|
+| Entrenar y comparar de una vez | `python entrenar_rl.py --algoritmo ambos --pasos 20000` |
+| Entrenar viendo la red por dentro | `python visualizar.py --servir` y la vista **Entrenamiento** |
+| Comparar los modelos ya guardados (`modelos/`) con un número fiable de estados | `python comparar_rl.py --pruebas 30 --csv resultados_rl.csv` |
+
+El entrenamiento usa un entorno por núcleo (`--entornos`, por defecto los núcleos menos uno), porque lo más lento es la simulación y no las redes: con 7 entornos PPO pasó de 146 a unos 280 pasos por segundo y DQN llegó a unos 235. `--dispositivo cuda` entrena las redes en la tarjeta gráfica, pero hace falta PyTorch con CUDA (aquí se instaló el de CPU) y con redes tan pequeñas la ganancia es mínima.
+
+La tabla de `comparar_rl.py` da, para cada política, el tiempo medio, la **diferencia pareada** contra la mejor clásica con su intervalo de confianza del 95 %, en cuántos estados le gana y cuántas tareas omitió. Si el intervalo no incluye 0, la diferencia es real.
+
+### Dónde estamos
+
+Con los modelos entrenados hasta ahora (entre 5 000 y 12 000 pasos, 18×20×2, 72 tareas, 20 estados de prueba) ningún agente supera a las clásicas: PPO queda un 13 % por encima de la mejor (más cercana a la grúa) y DQN un 17 %. Son entrenamientos muy cortos, de modo que todavía no se puede concluir nada sobre su techo.
+
+### Siguientes pasos
+
+1. **Entrenar en serio** (200 000 pasos o más) y medir con `comparar_rl.py` en 30 o más estados.
+2. **Mejorar al agente antes de gastar más cómputo:** que arranque imitando a la mejor política clásica (así parte de su nivel y solo tiene que mejorarla), y una red que puntúe cada canal con los mismos pesos, que aprende mucho más rápido que mirar los 1442 números a la vez.
+3. **Unificar el protocolo con la carrera** (que el agente también llene su estantería) para poder ponerlo junto a las demás políticas en el visualizador.
 
 ### Vista Entrenamiento del visualizador
 
-En la herramienta interactiva (`python visualizar.py --servir`) hay dos vistas: Carrera y Entrenamiento. En la segunda eliges DQN o PPO, los pasos y los entornos en paralelo, y el servidor entrena en un proceso aparte (`asrs/rl/entrenamiento_vivo.py`) mientras la página muestra en vivo:
+En la herramienta interactiva hay dos vistas: Carrera y Entrenamiento. En la segunda eliges DQN o PPO, los pasos y los entornos en paralelo, y el servidor entrena en un proceso aparte (`asrs/rl/entrenamiento_vivo.py`) mientras la página muestra en vivo:
 
 - la curva de aprendizaje, con el tiempo total por episodio y las políticas clásicas como líneas de referencia;
 - las pérdidas (y epsilon en DQN);
-- la red por dentro: la estantería que ve el agente (llenado, cercanía al E/S, ítems del mismo SKU y canales con espacio), cómo se activan las neuronas de cada capa oculta, y el mapa de canales con lo que decide;
+- la red por dentro: la estantería que ve el agente, cómo se activan las neuronas de cada capa oculta y el mapa de canales con lo que decide;
 - cómo cambian los pesos: histogramas, a qué grupo de entradas mira cada neurona de la primera capa y un mapa de los pesos entre capas.
 
 La red se muestra siempre ante la misma situación de la estantería, y un deslizador permite comparar el principio del entrenamiento con el final. Usa el almacén, la demanda y las tareas del formulario. Solo se entrena un agente a la vez y se puede detener en cualquier momento.

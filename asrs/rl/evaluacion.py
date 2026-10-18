@@ -12,7 +12,7 @@ from asrs.rl.entorno import copiar_estado, generar_estado
 
 def evaluar_politica_clasica(config, txt_clave_politica, escalar_semilla_base, vector_estados, dic_estados=None):
     # Ejecuta la lista de tareas con una política clásica desde cada estado inicial, devuelve los tiempos totales y el tiempo de cálculo
-    vector_tiempos, escalar_reubicaciones, escalar_operaciones = [], 0, 0
+    vector_tiempos, vector_omitidas = [], []
     escalar_inicio = time.perf_counter()
     for escalar_indice in vector_estados:
         if dic_estados is not None and escalar_indice not in dic_estados:
@@ -24,8 +24,8 @@ def evaluar_politica_clasica(config, txt_clave_politica, escalar_semilla_base, v
         C.ejecutarSecuencia()
         vector_resultados = C.instancia_metricas.recuperarInformcion()
         vector_tiempos.append(float(vector_resultados[-1]))
-        escalar_operaciones += int(vector_resultados[0])
-    return {"tiempos": np.array(vector_tiempos), "operaciones": escalar_operaciones, "segundos": time.perf_counter() - escalar_inicio}
+        vector_omitidas.append(len(S) - int(vector_resultados[-2]))          # tareas que no se pudieron ejecutar (sin espacio o sin existencias)
+    return {"tiempos": np.array(vector_tiempos), "omitidas": np.array(vector_omitidas), "segundos": time.perf_counter() - escalar_inicio}
 
 
 def _accion_dqn_enmascarada(modelo, vector_observacion, vector_valido):
@@ -40,7 +40,7 @@ def _accion_dqn_enmascarada(modelo, vector_observacion, vector_valido):
 def evaluar_agente(modelo, txt_algoritmo, entorno, vector_estados):
     # Ejecuta el agente entrenado sin exploración desde cada estado inicial
     # PPO usa su máscara de acciones y DQN toma el mejor valor Q entre los canales disponibles
-    vector_tiempos, escalar_decisiones, escalar_invalidas = [], 0, 0
+    vector_tiempos, vector_omitidas, escalar_decisiones, escalar_invalidas = [], [], 0, 0
     escalar_inicio = time.perf_counter()
     for escalar_indice in vector_estados:
         vector_observacion, _ = entorno.reset(options={"estado": escalar_indice})
@@ -52,7 +52,8 @@ def evaluar_agente(modelo, txt_algoritmo, entorno, vector_estados):
                 escalar_accion, _ = modelo.predict(vector_observacion, action_masks=entorno.action_masks(), deterministic=True)
             vector_observacion, _, booleano_fin, _, _ = entorno.step(int(escalar_accion))
         vector_tiempos.append(entorno.tiempo_total())
+        vector_omitidas.append(len(entorno.S) - int(entorno.C.instancia_metricas.recuperarInformcion()[-2]))
         escalar_decisiones += entorno.escalar_decisiones
         escalar_invalidas += entorno.escalar_invalidas
-    return {"tiempos": np.array(vector_tiempos), "decisiones": escalar_decisiones, "invalidas": escalar_invalidas,
+    return {"tiempos": np.array(vector_tiempos), "omitidas": np.array(vector_omitidas), "decisiones": escalar_decisiones, "invalidas": escalar_invalidas,
             "segundos": time.perf_counter() - escalar_inicio}
