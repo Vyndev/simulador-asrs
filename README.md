@@ -23,7 +23,8 @@ Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`,
 - Estantería: filas, columnas, capas de profundidad, medidas de la celda, posición y centro de referencia de la celda.
 - Grúa y E/S: velocidades en filas, columnas y canales, tiempo de carga y descarga, separación del riel.
 - Ocupación inicial.
-- Clases: de 1 a 8, con el espacio que ocupa cada una y su demanda (se normalizan solas).
+- Productos (SKU): cantidad (hasta 200), sesgo de la demanda según la curva de Hausman o una lista de demanda propia, con una vista previa de la demanda por SKU.
+- Clases de la política basada en clases: de 1 a 8, con la proporción de SKUs de cada una.
 - Lista de tareas: cantidad (automática o fija) y porcentaje de almacenamientos.
 - Políticas a comparar: cualquier subconjunto de las cinco.
 - Semilla, réplicas animadas (hasta 10) y réplicas para la estadística (hasta 2000).
@@ -53,12 +54,22 @@ Toda combinación de decisiones es una **política de asignación de almacenamie
 | Clave de configuración | Nombre en resultados | Criterio |
 |---|---|---|
 | `aleatoria` | `Aleatoria` | Canal elegido al azar |
-| `basada_en_clases` | `BasadaEnClases` | Zonas fijas por clase, la clase 1 recibe las celdas más cercanas al E/S, la 2 las siguientes, etc. |
-| `full_turnover` | `FullTurnover` | Zonas fijas por clase, pero las clases se ordenan de mayor a menor demanda y la de mayor demanda recibe las ubicaciones más cercanas (Hausman, Graves y Schwarz, 1976) |
+| `basada_en_clases` | `BasadaEnClases` | La política agrupa los SKUs en clases por demanda (la clase A con los más demandados) y reserva una zona a cada clase; la clase A recibe las celdas más cercanas al E/S |
+| `full_turnover` | `FullTurnover` | Cada SKU tiene su propia zona fija; los SKUs se ordenan de mayor a menor demanda y el más demandado recibe las ubicaciones más cercanas (Hausman, Graves y Schwarz, 1976) |
 | `mas_cercana_es` | `MasCercanaAlES` | Celda libre más cercana al E/S |
 | `mas_cercana_grua` | `MasCercanaALaGrua` | Celda libre más cercana a la grúa: en reposo al almacenar, la celda del ítem que retira al reubicar |
 
 La cercanía es el tiempo de viaje Chebyshev en el plano xy, `max(x/vx, y/vy)`.
+
+Las zonas se reparten por **canales completos** y el espacio de cada clase o SKU es proporcional a su demanda (el inventario sigue a la demanda), con al menos un canal por zona. Con FCFS, `full_turnover` suele reubicar más que `basada_en_clases`: el ítem más antiguo de un SKU queda al fondo del canal, con ítems del mismo SKU delante.
+
+## Lista de tareas
+
+La lista de tareas solo conoce **SKUs**: cada tarea es un par `(actividad, SKU)`, donde la actividad es almacenar o recuperar. Agrupar los SKUs en clases, si hace falta, es decisión de cada política y no del generador.
+
+- La demanda de cada SKU sigue la curva de Hausman `F(i) = (i/n)^σ` (σ = 1 es uniforme; menor σ concentra la demanda en pocos SKUs) o una lista propia. El SKU 1 es el más demandado.
+- Las cantidades son exactas (método del mayor resto): se reparte primero entre almacenar y recuperar según la mezcla y luego entre SKUs según su demanda. El azar solo decide el orden.
+- Cada réplica genera dos listas: una de llenado, solo almacenamientos, que deja la estantería en el nivel de ocupación inicial, y la lista de operación que se compara.
 
 **Regla de minimización de varianza** (en todas las políticas): entre las celdas que la política considera equivalentes se elige la libre más profunda, así los canales se llenan desde el fondo. Solo se consideran celdas accesibles, es decir sin ítems delante. Si aún hay empate, se desempata al azar.
 
@@ -71,19 +82,20 @@ main.py                         Punto de entrada
 asrs/
   config.py                     Parámetros del modelo, con validación y conversión a JSON
   metricas.py                   Conteos y tiempos (Metricas)
+  utilidades.py                 Reparto entero por mayor resto
   dominio/                      Entidades físicas
     item.py  estanteria.py  grua.py  punto_es.py
   politicas/
     asignacion.py                 PoliticaAsignacion: base común (candidatas, varianza, desempate)
     aleatoria.py  basada_en_clases.py  full_turnover.py
     mas_cercana_es.py  mas_cercana_grua.py
-    zonificacion.py               Construcción de zonas por clase
+    zonificacion.py               Zonas por canales completos y agrupación de SKUs en clases
     recuperacion.py               PoliticaRecuperacionFCFS
     restriccion.py                Ocupación y accesibilidad
     registro.py                   Registro y fábrica de políticas
   generacion/
-    secuencia.py                  GeneradorSecuencia
-    probabilidades.py             Probabilidades acumuladas (Hausman), sin uso actual
+    secuencia.py                  GeneradorSecuencia: lista de tareas por SKU
+    probabilidades.py             Demanda por SKU (curva de Hausman)
   control/
     controlador_grua.py         Ejecuta la secuencia usando las políticas
   simulacion/

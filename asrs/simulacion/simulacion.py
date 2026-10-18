@@ -44,16 +44,16 @@ class Simulacion:
         # Se generan la secuencia de llenado y la secuencia de operación, comunes a todas las políticas de la réplica
         cfg = self.config
 
-        # Las probabilidades de llegada y de solicitud por clase siguen la demanda de cada clase
-        vector_prob_acum_clases = np.cumsum(cfg["vector_demanda_clase"] / np.sum(cfg["vector_demanda_clase"]))
-        vector_prob_acum_clases[-1] = 1.0
+        # Las llegadas y las solicitudes de cada SKU siguen su demanda, las tareas no saben nada de clases
+        vector_prob_acum_sku = np.cumsum(cfg["vector_demanda_sku"])
+        vector_prob_acum_sku[-1] = 1.0
 
         # Se calcula la cantidad de almacenamientos a realizar en el llenado, con el fin de alcanzar el nivel de ocupación fijado
         escalar_capacidad_total = int(np.prod(cfg["vector_configuracion_estanteria"]))
         escalar_largo_secuencia_llenado = int(escalar_capacidad_total * cfg["escalar_nivel_ocupacion"])
 
-        SA = GeneradorSecuencia(escalar_largo_secuencia_llenado, np.array([1, 1]), vector_prob_acum_clases, vector_prob_acum_clases).generarSecuencia()
-        S = GeneradorSecuencia(cfg["escalar_largo_secuencia"], cfg["vector_prob_acum_AR"], vector_prob_acum_clases, vector_prob_acum_clases).generarSecuencia()
+        SA = GeneradorSecuencia(escalar_largo_secuencia_llenado, np.array([1, 1]), vector_prob_acum_sku).generarSecuencia()
+        S = GeneradorSecuencia(cfg["escalar_largo_secuencia"], cfg["vector_prob_acum_AR"], vector_prob_acum_sku).generarSecuencia()
 
         return SA, S
 

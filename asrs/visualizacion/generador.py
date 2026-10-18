@@ -6,6 +6,7 @@ import random as rnd
 import numpy as np
 
 from asrs.control.controlador_grua import ControladorGrua
+from asrs.politicas.zonificacion import agrupar_skus_en_clases
 from asrs.simulacion.simulacion import Simulacion
 
 
@@ -13,8 +14,8 @@ def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S):
     # Ejecuta una política registrando todos los eventos de la grúa durante la secuencia de operación
     E, G, P, instancia_politica, instancia_politica_recuperacion = instancia_simulacion.prepararEscenario(txt_clave_politica, SA)
 
-    # Estado inicial de la estantería, una etiqueta de clase por celda (0 = vacía) en orden fila, columna, capa
-    vector_estado_inicial = [int(instancia_item.escalar_etiqueta_clase) if instancia_item != 0 else 0
+    # Estado inicial de la estantería, un SKU por celda (0 = vacía) en orden fila, columna, capa
+    vector_estado_inicial = [int(instancia_item.escalar_sku) if instancia_item != 0 else 0
                              for instancia_item in E.matriz_contenedor_items.flat]
 
     # Desde aquí el reloj de la grúa empieza en cero y se registran los eventos
@@ -64,7 +65,10 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         "velocidad": [float(escalar) for escalar in config["vector_velocidad_grua"]],
         "posicion": [float(escalar) for escalar in config["vector_posicion_estanteria"]],
         "centro": [float(escalar) for escalar in config["vector_centro_celda_estanteria"]],
-        "clases": len(config["vector_demanda_clase"]),
+        "skus": int(config["escalar_numero_skus"]),
+        "demanda_sku": [round(float(escalar), 6) for escalar in config["vector_demanda_sku"]],
+        # Clase de cada SKU según la agrupación de la política basada en clases, solo para colorear la animación
+        "clase_sku": [int(escalar) for escalar in agrupar_skus_en_clases(config["vector_demanda_sku"], config["vector_proporcion_skus_por_clase"])],
         "z_riel": float(instancia_simulacion.crearInstancias()[1].vector_posicion_resposo[2]),
         "replicas": vector_replicas,
     }

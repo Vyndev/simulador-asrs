@@ -53,12 +53,12 @@ class ControladorGrua:
 
         while len(instancia_puntoES.matriz_contenedor_temporal_items):
             instancia_item_retornar = instancia_puntoES.matriz_contenedor_temporal_items[-1]
-            escalar_etiqueta_clase = instancia_item_retornar.escalar_etiqueta_clase
+            escalar_sku = instancia_item_retornar.escalar_sku
 
-            vector_indice_retorno = self.instancia_politica_asignacion.asignar(escalar_etiqueta_clase, vector_posicion_referencia = instancia_puntoES.vector_posicion)
+            vector_indice_retorno = self.instancia_politica_asignacion.asignar(escalar_sku, vector_posicion_referencia = instancia_puntoES.vector_posicion)
             if not len(vector_indice_retorno):
-                # Si la zona de la clase no tiene espacio accesible se relaja la zonificación
-                vector_indice_retorno = self.instancia_politica_asignacion.asignar(escalar_etiqueta_clase, booleano_restringir_zona = False, vector_posicion_referencia = instancia_puntoES.vector_posicion)
+                # Si la zona del SKU no tiene espacio accesible se relaja la zonificación
+                vector_indice_retorno = self.instancia_politica_asignacion.asignar(escalar_sku, booleano_restringir_zona = False, vector_posicion_referencia = instancia_puntoES.vector_posicion)
             if not len(vector_indice_retorno):
                 # No hay ninguna celda accesible, el ítem permanece en el puntoES
                 break
@@ -98,12 +98,12 @@ class ControladorGrua:
         # Por cada celda obstruida se realiza la reubicación respectiva
         for vector_indice_obstruye in vector_lista_indices_obstruyen:
 
-            # Se consulta el ítem que obstruye y a que clase pertence
+            # Se consulta el ítem que obstruye y de qué SKU es
             instancia_item_bloquea = instancia_estanteria.matriz_contenedor_items[vector_indice_obstruye]
-            escalar_etiqueta_clase = instancia_item_bloquea.escalar_etiqueta_clase
+            escalar_sku = instancia_item_bloquea.escalar_sku
 
-            # Se busca la mejor celda libre, accesible, de la zona de la clase y fuera del canal objetivo
-            vector_indice_reubicacion = self.instancia_politica_asignacion.asignar(escalar_etiqueta_clase, matriz_extra = matriz_no_estatico,
+            # Se busca la mejor celda libre, accesible, de la zona del SKU y fuera del canal objetivo
+            vector_indice_reubicacion = self.instancia_politica_asignacion.asignar(escalar_sku, matriz_extra = matriz_no_estatico,
                                                                        vector_posicion_referencia = instancia_estanteria.posicionesCeldas()[vector_indice_obstruye])
 
             # Se evalúa si hay si hay alguna ubicación factible para reubicar
@@ -313,26 +313,26 @@ class ControladorGrua:
         # Se recorre la secuencia de operaciones, operación por operación
         for vector_operacion in vector_secuencia_operaciones:
 
-            # Se desmpaqueta la linea de operación, que se compone de un identificador de actividad, y un identificador de la clase
-            escalar_actividad, escalar_etiqueta_clase = vector_operacion
+            # Se desmpaqueta la linea de operación, que se compone de un identificador de actividad, y un identificador del SKU
+            escalar_actividad, escalar_sku = vector_operacion
 
             # se evalúa si la actvidad es almacenar
             if escalar_actividad == escalar_almacenamiento:
 
                 # En caso verdadero se consulta la posición facitble en donde almacenar
                 # La política solo elige celdas accesibles, 'almacenar' conserva el manejo de obstrucciones por si se usa otra política
-                vector_indice_almacenamiento = self.instancia_politica_asignacion.asignar(escalar_etiqueta_clase)
+                vector_indice_almacenamiento = self.instancia_politica_asignacion.asignar(escalar_sku)
 
                 # Se evalúa si dicha posicion factible existe
                 if len(vector_indice_almacenamiento):
                     # En caso verdadero, entonces realizar el almacenamiento del ítem en la posición establecida
-                    self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_etiqueta_clase, 1)
-                    instancia_item_nuevo = Item(escalar_etiqueta_clase)
+                    self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_sku, 1)
+                    instancia_item_nuevo = Item(escalar_sku)
                     self.instancia_puntoES.matriz_contenedor_temporal_items.append(instancia_item_nuevo)
-                    self.instancia_grua.registrarEvento('A', escalar_etiqueta_clase)
+                    self.instancia_grua.registrarEvento('A', escalar_sku)
                     self.almacenar(vector_indice_almacenamiento)
                 else:
-                    self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_etiqueta_clase, 0)
+                    self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_sku, 0)
                     # En caso de que no exista posición factible, de forma predeterminada se descarta la operación de almacenamiento
                     # Este caso representa que no hay espacio disponible para almacenar el ítem
                     pass
@@ -340,17 +340,17 @@ class ControladorGrua:
             # O se evalúa si es recuperación
             elif escalar_actividad == escalar_recuperacion:
 
-                # En caso verdadero se consulta si hay algun ítem disponible que coincida con la etiqueta de clase solicitada
-                vector_indice_recuperacion = self.instancia_politica_recuperacion.seleccionar(self.instancia_estanteria, escalar_etiqueta_clase)
+                # En caso verdadero se consulta si hay algun ítem disponible que coincida con el SKU solicitado
+                vector_indice_recuperacion = self.instancia_politica_recuperacion.seleccionar(self.instancia_estanteria, escalar_sku)
 
                 # Se evalúa si efectivamente se encontro alguna celda que contenga el ítem solicitado
                 if len(vector_indice_recuperacion):
 
                     # En caso verdadero, se realiza la recuperación del ítem
-                    self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_etiqueta_clase, 1)
+                    self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_sku, 1)
                     self.recuperar(vector_indice_recuperacion)
 
                 else:
-                    self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_etiqueta_clase, 0)
+                    self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_sku, 0)
                     # En caso de no exista el ítem,  entonces se omite la operación de recuperación
                     pass

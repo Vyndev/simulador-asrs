@@ -14,7 +14,7 @@ from asrs.dominio.item import Item
 from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS
 from asrs.politicas.registro import POLITICAS_ASIGNACION, crear_politica
 from asrs.politicas.restriccion import MatricesRestriccion
-from asrs.politicas.zonificacion import construir_zonificacion
+from asrs.politicas.zonificacion import agrupar_skus_en_clases, construir_zonificacion
 from asrs.simulacion.simulacion import Simulacion
 
 
@@ -64,14 +64,59 @@ class PruebasRestriccion(unittest.TestCase):
 
 
 class PruebasZonificacion(unittest.TestCase):
-    def test_zonas_con_tamano_y_orden(self):
-        tiempos = np.arange(8, dtype=float).reshape(2, 2, 2)
+    def test_zonas_por_canales_completos_y_en_orden(self):
+        # 4 filas x 2 columnas x 2 capas, todas las capas de un canal tienen el mismo tiempo
+        tiempos = np.repeat(np.arange(8, dtype=float).reshape(4, 2, 1), 2, axis=2)
         zonas = construir_zonificacion(tiempos, [0.25, 0.75], [2, 1])
-        # las proporciones se indexan por etiqueta: la clase 1 tiene 25 % y la clase 2 tiene 75 %
-        self.assertEqual(int((zonas == 1).sum()), 2)
-        self.assertEqual(int((zonas == 2).sum()), 6)
-        # la clase 2 va primera en el orden, así que recibe las celdas de menor tiempo
+        # cada canal pertenece por completo a una etiqueta
+        self.assertTrue(np.all(zonas[:, :, 0] == zonas[:, :, 1]))
+        # cada etiqueta recibe al menos un canal y todas las celdas quedan asignadas
+        self.assertGreaterEqual(int((zonas == 1).sum()), 2)
+        self.assertEqual(int((zonas == 1).sum() + (zonas == 2).sum()), tiempos.size)
+        # la etiqueta 2 va primera en el orden, así que recibe las celdas de menor tiempo
         self.assertTrue(np.all(tiempos[zonas == 2] < tiempos[zonas == 1].min()))
+        self.assertGreater(int((zonas == 2).sum()), int((zonas == 1).sum()))
+
+    def test_cada_etiqueta_recibe_al_menos_un_canal(self):
+        tiempos = np.repeat(np.arange(6, dtype=float).reshape(3, 2, 1), 2, axis=2)
+        zonas = construir_zonificacion(tiempos, [0.98, 0.01, 0.01], [1, 2, 3])
+        for etiqueta in (1, 2, 3):
+            self.assertGreaterEqual(int((zonas == etiqueta).sum()), 2)
+
+    def test_agrupar_skus_en_clases_por_demanda(self):
+        demanda = np.array([0.05, 0.4, 0.1, 0.3, 0.15])           # el SKU 2 es el más demandado, luego el 4
+        clases = agrupar_skus_en_clases(demanda, [0.4, 0.6])        # 2 SKUs en la clase 1 y 3 en la clase 2
+        self.assertEqual(clases.tolist(), [2, 1, 2, 1, 2])
+        # cada clase recibe al menos un SKU aunque su proporción sea mínima
+        self.assertEqual(sorted(set(agrupar_skus_en_clases(np.ones(10) / 10, [0.99, 0.005, 0.005]).tolist())), [1, 2, 3])
+
+
+class PruebasGeneradorTareas(unittest.TestCase):
+    def test_las_tareas_son_de_skus_con_cantidades_exactas(self):
+        from asrs.generacion.secuencia import GeneradorSecuencia
+        demanda = np.array([0.5, 0.3, 0.2])
+        random.seed(0)
+        tareas = GeneradorSecuencia(100, np.array([0.6, 1]), np.cumsum(demanda)).generarSecuencia()
+        self.assertEqual(len(tareas), 100)
+        self.assertEqual(sum(1 for actividad, _ in tareas if actividad == 0), 60)
+        self.assertEqual(sorted({sku for _, sku in tareas}), [1, 2, 3])
+        almacenar = [sku for actividad, sku in tareas if actividad == 0]
+        self.assertEqual([almacenar.count(sku) for sku in (1, 2, 3)], [30, 18, 12])
+
+    def test_misma_semilla_misma_lista(self):
+        from asrs.generacion.secuencia import GeneradorSecuencia
+        acumulada = np.cumsum([0.25, 0.25, 0.5])
+        random.seed(5); a = GeneradorSecuencia(40, np.array([0.5, 1]), acumulada).generarSecuencia()
+        random.seed(5); b = GeneradorSecuencia(40, np.array([0.5, 1]), acumulada).generarSecuencia()
+        self.assertEqual(a, b)
+
+    def test_demanda_de_hausman(self):
+        from asrs.generacion.probabilidades import demanda_hausman
+        uniforme = demanda_hausman(10, 1.0)
+        self.assertTrue(np.allclose(uniforme, 0.1))
+        sesgada = demanda_hausman(10, 0.5)
+        self.assertAlmostEqual(float(sesgada.sum()), 1.0)
+        self.assertTrue(np.all(np.diff(sesgada) < 0))          # el SKU 1 es el más demandado
 
 
 class PruebasPoliticas(unittest.TestCase):
@@ -101,17 +146,27 @@ class PruebasPoliticas(unittest.TestCase):
         with self.assertRaises(ValueError):
             crear_politica('inexistente', E, G, P, simulacion.config)
 
-    def test_full_turnover_ordena_por_demanda(self):
+    def test_full_turnover_da_una_zona_a_cada_sku_ordenada_por_demanda(self):
         simulacion = Simulacion()
         E, G, P = simulacion.crearInstancias()
-        config = dict(simulacion.config, vector_demanda_clase=np.array([0.1, 0.2, 0.7]))
+        config = dict(simulacion.config, vector_demanda_sku=np.array([0.1, 0.2, 0.7]), escalar_numero_skus=3)
         politica = crear_politica('full_turnover', E, G, P, config)
-        self.assertEqual(politica.ordenClases(), [3, 2, 1])
-        self.assertEqual(politica.matriz_zonificacion[0, 0, 0], 3)
+        self.assertEqual(politica.matriz_zonificacion[0, 0, 0], 3)            # el SKU más demandado queda en la celda más cercana
+        self.assertEqual(sorted(set(politica.matriz_zonificacion.ravel().tolist())), [1, 2, 3])
+        self.assertEqual(politica.etiquetaZona(2), 2)
+
+    def test_basada_en_clases_agrupa_los_skus_ella_misma(self):
+        simulacion = Simulacion()
+        E, G, P = simulacion.crearInstancias()
+        config = dict(simulacion.config, vector_demanda_sku=np.array([0.05, 0.4, 0.1, 0.3, 0.15]), escalar_numero_skus=5,
+                      vector_proporcion_skus_por_clase=np.array([0.4, 0.6]))
+        politica = crear_politica('basada_en_clases', E, G, P, config)
+        self.assertEqual([politica.etiquetaZona(sku) for sku in range(1, 6)], [2, 1, 2, 1, 2])
+        self.assertEqual(politica.matriz_zonificacion[0, 0, 0], 1)           # la clase de los SKUs más demandados queda más cerca
 
 
 class PruebasRecuperacion(unittest.TestCase):
-    def test_fcfs_elige_el_item_mas_antiguo_de_la_clase(self):
+    def test_fcfs_elige_el_item_mas_antiguo_del_sku(self):
         simulacion = Simulacion()
         E, _, _ = simulacion.crearInstancias()
         E.matriz_contenedor_items[2, 2, 0] = Item(1)  # generación g
@@ -143,7 +198,7 @@ class PruebasEscenarios(unittest.TestCase):
             for indice in np.ndindex(E.matriz_contenedor_items.shape):
                 item = E.matriz_contenedor_items[indice]
                 if isinstance(item, Item):
-                    self.assertEqual(politica.matriz_zonificacion[indice], item.escalar_etiqueta_clase)
+                    self.assertEqual(politica.matriz_zonificacion[indice], politica.etiquetaZona(item.escalar_sku))
 
     def test_no_quedan_fondos_libres_tras_un_item_frontal(self):
         for clave in POLITICAS_ASIGNACION:
@@ -185,11 +240,17 @@ class PruebasConfiguracion(unittest.TestCase):
         self.assertEqual(copia["escalar_largo_secuencia"], original["escalar_largo_secuencia"])
         self.assertEqual(copia["vector_politicas_asignacion"], original["vector_politicas_asignacion"])
 
-    def test_normaliza_capacidad_y_demanda(self):
+    def test_demanda_personalizada_se_normaliza_y_fija_la_cantidad_de_skus(self):
         from asrs.config import config_desde_json
-        config = config_desde_json({"vector_capacidad_clase": [1, 1, 2], "vector_demanda_clase": [5, 5, 10]})
-        self.assertAlmostEqual(float(config["vector_capacidad_clase"].sum()), 1.0)
-        self.assertEqual(config["vector_demanda_clase"].tolist(), [0.25, 0.25, 0.5])
+        config = config_desde_json({"vector_demanda_sku_personalizada": [5, 5, 10]})
+        self.assertEqual(config["vector_demanda_sku"].tolist(), [0.25, 0.25, 0.5])
+        self.assertEqual(config["escalar_numero_skus"], 3)
+
+    def test_demanda_de_hausman_por_defecto(self):
+        from asrs.config import config_desde_json
+        config = config_desde_json({"escalar_numero_skus": 12, "escalar_sigma_hausman": 0.6})
+        self.assertEqual(len(config["vector_demanda_sku"]), 12)
+        self.assertAlmostEqual(float(config["vector_demanda_sku"].sum()), 1.0)
 
     def test_tareas_por_defecto_son_el_diez_por_ciento(self):
         from asrs.config import config_desde_json
@@ -203,7 +264,14 @@ class PruebasConfiguracion(unittest.TestCase):
             {"vector_cotas_estanteria": [1, -1, 1]},
             {"vector_velocidad_grua": [1, 0, 1]},
             {"escalar_nivel_ocupacion": 1.5},
-            {"vector_capacidad_clase": [0.5, 0.5], "vector_demanda_clase": [1]},
+            {"escalar_numero_skus": 0},
+            {"escalar_numero_skus": 500},
+            {"escalar_sigma_hausman": 1.5},
+            {"vector_demanda_sku_personalizada": [0, 0]},
+            {"vector_demanda_sku_personalizada": [1, -1]},
+            {"escalar_numero_skus": 3, "vector_proporcion_skus_por_clase": [1, 1, 1, 1]},
+            {"vector_proporcion_skus_por_clase": [1, 0, 1]},
+            {"vector_configuracion_estanteria": [2, 2, 2], "escalar_numero_skus": 30},
             {"vector_politicas_asignacion": []},
             {"vector_politicas_asignacion": ["inexistente"]},
             {"escalar_semilla": "abc"},
@@ -262,7 +330,7 @@ class PruebasServidor(unittest.TestCase):
             self.assertEqual(codigo, 400)
             self.assertIn("Velocidad", error["error"])
 
-            pequena = {"vector_configuracion_estanteria": [4, 5, 2], "escalar_largo_secuencia": 6, "escalar_nivel_ocupacion": 0.5,
+            pequena = {"vector_configuracion_estanteria": [4, 5, 2], "escalar_numero_skus": 6, "escalar_largo_secuencia": 6, "escalar_nivel_ocupacion": 0.5,
                        "vector_politicas_asignacion": ["aleatoria", "mas_cercana_es"], "escalar_replicas_animadas": 1, "escalar_cantidad_replicas": 2}
             codigo, creado = pedir("/api/simular", {"config": pequena})
             self.assertEqual(codigo, 202)

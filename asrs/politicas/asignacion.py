@@ -23,8 +23,12 @@ class PoliticaAsignacion:
         self.instancia_puntoES = instancia_puntoES
         self.config = config
 
-        # Las políticas que usan zonas fijas rellenan esta matriz con la etiqueta de clase de cada celda
+        # Las políticas que usan zonas fijas rellenan esta matriz con la etiqueta de zona de cada celda
         self.matriz_zonificacion = None
+
+    def etiquetaZona(self, escalar_sku):
+        # Zona que corresponde a un SKU, cada política con zonas decide cómo agrupa sus SKUs
+        return escalar_sku
 
     def matrizCriterio(self, vector_posicion_referencia = None):
         # Devuelve una matriz con la forma de la estantería, los valores menores son los preferidos
@@ -40,8 +44,8 @@ class PoliticaAsignacion:
         # Se redondea para que las celdas equidistantes empaten de verdad
         return np.round(np.max(matriz_tiempos_xy, axis=3), 9)
 
-    def asignar(self, escalar_etiqueta_clase, matriz_extra=None, booleano_restringir_zona=True, vector_posicion_referencia=None):
-        # Devuelve el índice de la celda elegida para un ítem de la clase dada, o una tupla vacía si no hay celda factible
+    def asignar(self, escalar_sku, matriz_extra=None, booleano_restringir_zona=True, vector_posicion_referencia=None):
+        # Devuelve el índice de la celda elegida para un ítem del SKU dado, o una tupla vacía si no hay celda factible
         # vector_posicion_referencia: al reubicar es la posición del ítem que se retira, al almacenar es None (la grúa en reposo)
         # matriz_extra: restricción lógica adicional, por ejemplo excluir el canal que se está despejando
         # booleano_restringir_zona: si es False se ignoran las zonas fijas de la política
@@ -52,7 +56,7 @@ class PoliticaAsignacion:
         matriz_candidatas = np.logical_not(matriz_ocupacion) & MatricesRestriccion().accesibilidad(matriz_ocupacion)
 
         if booleano_restringir_zona and self.matriz_zonificacion is not None:
-            matriz_candidatas = matriz_candidatas & (self.matriz_zonificacion == escalar_etiqueta_clase)
+            matriz_candidatas = matriz_candidatas & (self.matriz_zonificacion == self.etiquetaZona(escalar_sku))
 
         if matriz_extra is not None:
             matriz_candidatas = matriz_candidatas & matriz_extra

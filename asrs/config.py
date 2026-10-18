@@ -1,9 +1,12 @@
 """Parámetros del modelo de simulación."""
 import numpy as np
 
+from asrs.generacion.probabilidades import demanda_hausman
+
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
 LIMITE_CELDAS = 6000
 LIMITE_TAREAS = 5000
+LIMITE_SKUS = 200
 LIMITE_CLASES = 8
 LIMITE_REPLICAS_ANIMADAS = 10
 LIMITE_REPLICAS_ESTADISTICA = 2000
@@ -26,8 +29,16 @@ def cargar_configuracion():
         "escalar_separacion_riel_grua": 0.5, # Unidades de separación entre la cara frontal de la estantería y el riel de la grúa
         "vector_velocidad_grua": np.array([1, 1.5, 0.7]), #(Velocidad en filas, velocidad en columnas, velocidad a lo largo de canales)
         "escalar_tiempo_carga_descarga": 0, # Tiempo que demora la grúa en cargar o descargar algún ítem
-        "vector_capacidad_clase": np.array([0.2, 0.4, 0.4]), # Proporción de celdas que ocupa cada clase en las políticas con zonas fijas
-        "vector_demanda_clase": np.array([0.2, 0.4, 0.4]), # Proporción de la demanda (llegadas y solicitudes) de cada clase, ordena las clases en full-turnover
+
+        # Demanda por SKU: la lista de tareas solo conoce SKUs, el SKU 1 es el más demandado
+        "escalar_numero_skus": 30, # Cantidad de SKUs
+        "escalar_sigma_hausman": 0.5, # Sesgo de la demanda según la curva de Hausman, 1 es demanda uniforme y menor es más concentrada
+        "vector_demanda_sku_personalizada": None, # Opcional, demanda de cada SKU, reemplaza a los dos parámetros anteriores
+        "vector_demanda_sku": None, # Se calcula a partir de lo anterior, suma 1
+
+        # Agrupación de SKUs en clases, solo la usa la política basada en clases
+        "vector_proporcion_skus_por_clase": np.array([0.2, 0.3, 0.5]), # Proporción de SKUs de cada clase, la clase 1 agrupa a los más demandados
+
         "vector_prob_acum_AR": np.array([0.5, 1]), # Vector de probabilidad acumulada, para el almacenamiento y recuperación
         "escalar_largo_secuencia": 1,  # Valor inicial, se ajustará en la inicialización
         "escalar_cantidad_replicas": 100, # la simulación se repetira según la cantidad de replicas
@@ -38,8 +49,9 @@ def cargar_configuracion():
         # Disponibles: 'aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'
         "vector_politicas_asignacion": ('aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'),
     }
-    # Se calcula el largo de secuencia
+    # Se calcula el largo de secuencia y la demanda de cada SKU
     config["escalar_largo_secuencia"] = round(np.prod(config["vector_configuracion_estanteria"]) * 0.1)
+    config["vector_demanda_sku"] = demanda_hausman(config["escalar_numero_skus"], config["escalar_sigma_hausman"])
 
     return config
 
@@ -98,8 +110,9 @@ def config_desde_json(diccionario):
     config = {}
 
     vector_configuracion = _vector(datos["vector_configuracion_estanteria"], 3, "Dimensiones de la estantería", entero=True, minimo=1, maximo=200)
-    if int(np.prod(vector_configuracion)) > LIMITE_CELDAS:
-        raise ValueError(f"Dimensiones de la estantería: {int(np.prod(vector_configuracion))} celdas, el máximo es {LIMITE_CELDAS}.")
+    escalar_celdas = int(np.prod(vector_configuracion))
+    if escalar_celdas > LIMITE_CELDAS:
+        raise ValueError(f"Dimensiones de la estantería: {escalar_celdas} celdas, el máximo es {LIMITE_CELDAS}.")
     config["vector_configuracion_estanteria"] = np.array(vector_configuracion, dtype=int)
     config["vector_cotas_estanteria"] = np.array(_vector(datos["vector_cotas_estanteria"], 3, "Medidas de la celda", minimo=0, minimo_estricto=True, maximo=100), dtype=float)
     config["vector_centro_celda_estanteria"] = np.array(_vector(datos["vector_centro_celda_estanteria"], 3, "Centro de la celda", minimo=0, maximo=1), dtype=float)
@@ -110,28 +123,40 @@ def config_desde_json(diccionario):
     config["vector_velocidad_grua"] = np.array(_vector(datos["vector_velocidad_grua"], 3, "Velocidad de la grúa", minimo=0, minimo_estricto=True, maximo=1000), dtype=float)
     config["escalar_tiempo_carga_descarga"] = _numero(datos["escalar_tiempo_carga_descarga"], "Tiempo de carga y descarga", minimo=0, maximo=3600)
 
-    # Clases: capacidad y demanda se normalizan para que sumen 1
-    capacidad = datos["vector_capacidad_clase"]
-    demanda = datos["vector_demanda_clase"]
-    if not isinstance(capacidad, (list, tuple)) or not 1 <= len(capacidad) <= LIMITE_CLASES:
-        raise ValueError(f"Clases: debe haber entre 1 y {LIMITE_CLASES}.")
-    if not isinstance(demanda, (list, tuple)) or len(demanda) != len(capacidad):
-        raise ValueError("Clases: la capacidad y la demanda deben tener la misma cantidad de clases.")
-    capacidad = _vector(capacidad, len(capacidad), "Capacidad de la clase", minimo=0)
-    demanda = _vector(demanda, len(demanda), "Demanda de la clase", minimo=0)
-    if sum(capacidad) <= 0:
-        raise ValueError("Capacidad de las clases: la suma debe ser mayor que cero.")
-    if sum(demanda) <= 0:
-        raise ValueError("Demanda de las clases: la suma debe ser mayor que cero.")
-    config["vector_capacidad_clase"] = np.array(capacidad, dtype=float) / sum(capacidad)
-    config["vector_demanda_clase"] = np.array(demanda, dtype=float) / sum(demanda)
+    # Demanda por SKU: curva de Hausman o una lista personalizada, siempre se normaliza para que sume 1
+    personalizada = datos["vector_demanda_sku_personalizada"]
+    if personalizada is not None and personalizada != [] and personalizada != "":
+        if not isinstance(personalizada, (list, tuple)) or not 1 <= len(personalizada) <= LIMITE_SKUS:
+            raise ValueError(f"Demanda de los SKUs: indica entre 1 y {LIMITE_SKUS} valores.")
+        vector_demanda = np.array(_vector(personalizada, len(personalizada), "Demanda del SKU", minimo=0), dtype=float)
+        if vector_demanda.sum() <= 0:
+            raise ValueError("Demanda de los SKUs: la suma debe ser mayor que cero.")
+        config["escalar_numero_skus"] = len(vector_demanda)
+        config["escalar_sigma_hausman"] = _numero(datos["escalar_sigma_hausman"], "Sesgo de la demanda", minimo=0, minimo_estricto=True, maximo=1)
+        config["vector_demanda_sku_personalizada"] = vector_demanda.tolist()
+        config["vector_demanda_sku"] = vector_demanda / vector_demanda.sum()
+    else:
+        config["escalar_numero_skus"] = _numero(datos["escalar_numero_skus"], "Cantidad de SKUs", entero=True, minimo=1, maximo=LIMITE_SKUS)
+        config["escalar_sigma_hausman"] = _numero(datos["escalar_sigma_hausman"], "Sesgo de la demanda", minimo=0, minimo_estricto=True, maximo=1)
+        config["vector_demanda_sku_personalizada"] = None
+        config["vector_demanda_sku"] = demanda_hausman(config["escalar_numero_skus"], config["escalar_sigma_hausman"])
+    escalar_canales = int(vector_configuracion[0] * vector_configuracion[1])
+    if config["escalar_numero_skus"] > escalar_canales:
+        raise ValueError(f"Cantidad de SKUs: hay {config['escalar_numero_skus']} SKUs y solo {escalar_canales} canales, la política full-turnover reserva al menos un canal por SKU.")
+
+    proporciones = datos["vector_proporcion_skus_por_clase"]
+    if not isinstance(proporciones, (list, tuple, np.ndarray)) or not 1 <= len(proporciones) <= LIMITE_CLASES:
+        raise ValueError(f"Clases de la política: debe haber entre 1 y {LIMITE_CLASES}.")
+    proporciones = _vector(list(proporciones), len(proporciones), "Proporción de SKUs de la clase", minimo=0, minimo_estricto=True)
+    if len(proporciones) > config["escalar_numero_skus"]:
+        raise ValueError(f"Clases de la política: hay {len(proporciones)} clases y solo {config['escalar_numero_skus']} SKUs.")
+    config["vector_proporcion_skus_por_clase"] = np.array(proporciones, dtype=float) / sum(proporciones)
 
     probabilidad = _vector(datos["vector_prob_acum_AR"], 2, "Mezcla de operaciones", minimo=0, maximo=1)
     if probabilidad[1] != 1:
         raise ValueError("Mezcla de operaciones: la probabilidad acumulada debe terminar en 1.")
     config["vector_prob_acum_AR"] = np.array(probabilidad, dtype=float)
 
-    escalar_celdas = int(np.prod(vector_configuracion))
     # Si no se indica la cantidad de tareas se usa el 10 % de la capacidad de la estantería
     largo = diccionario.get("escalar_largo_secuencia")
     if largo is None or largo == "":

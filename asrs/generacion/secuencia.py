@@ -1,24 +1,22 @@
-"""Generación de secuencias de operaciones (almacenar/recuperar por clase)."""
+"""Generación de la lista de tareas: almacenar o recuperar un SKU."""
 import random as rnd
 import numpy as np
 import pandas as pd
 
+from asrs.utilidades import repartir_entero
+
 
 class GeneradorSecuencia:
-    def __init__(self, escalar_largo_de_secuencia, vector_probabilidad_acumudada_AR,
-                 vector_probabilidad_acumulada_A_clasificado, vector_probabilidad_acumulada_R_clasificado):
-        # Inicializa el generador de secuencias con una semilla, un largo de secuencia y vectores de probabilidad acumulada
-        # Si se proporciona una semilla, se utiliza para inicializar el generador de números aleatorios
-
-        # Establece los atributos de la instancia con los valores proporcionados
+    # La lista de tareas solo conoce SKUs. Agrupar los SKUs en clases, si hace falta, es decisión de cada política
+    def __init__(self, escalar_largo_de_secuencia, vector_probabilidad_acumulada_AR, vector_probabilidad_acumulada_sku):
+        # vector_probabilidad_acumulada_AR: probabilidad acumulada de [almacenar, recuperar]
+        # vector_probabilidad_acumulada_sku: probabilidad acumulada de la demanda de cada SKU, el SKU 1 es el primero
         self.escalar_largo_de_secuencia = escalar_largo_de_secuencia
-        self.vector_probabilidad_acumudada_AR = vector_probabilidad_acumudada_AR
-        self.vector_probabilidad_acumulada_A_clasificado = vector_probabilidad_acumulada_A_clasificado
-        self.vector_probabilidad_acumulada_R_clasificado = vector_probabilidad_acumulada_R_clasificado
+        self.vector_probabilidad_acumulada_AR = vector_probabilidad_acumulada_AR
+        self.vector_probabilidad_acumulada_sku = vector_probabilidad_acumulada_sku
 
     def probabilidadesSencillas(self, vector_probabilidades_acumuladas):
-
-        # Este método comobierte las probabilidades acumumladas en probabilidades sencillas
+        # Este método convierte las probabilidades acumuladas en probabilidades sencillas
         escalar_cantidad_elementos = len(vector_probabilidades_acumuladas)
         vector_probabilidades_sencillas = np.zeros(escalar_cantidad_elementos)
         vector_probabilidades_sencillas[0] = vector_probabilidades_acumuladas[0]
@@ -32,60 +30,27 @@ class GeneradorSecuencia:
     @staticmethod
     def repartir(escalar_total, vector_proporciones):
         # Reparte un total entero según proporciones con el método del mayor resto, la suma siempre es igual al total
-        vector_proporciones = np.asarray(vector_proporciones, dtype=float)
-        vector_cuotas = vector_proporciones * escalar_total
-        vector_base = np.floor(vector_cuotas + 1e-9).astype(int)
-        escalar_faltantes = int(escalar_total - vector_base.sum())
-        if escalar_faltantes > 0:
-            vector_orden = np.argsort(-(vector_cuotas - vector_base), kind='stable')
-            for escalar_indice in vector_orden[:escalar_faltantes]:
-                vector_base[escalar_indice] += 1
-        return vector_base
+        return repartir_entero(escalar_total, vector_proporciones)
 
     def generarSecuencia(self):
-        # Genera una secuencia de operaciones
-        vector_prop_sencillas_AR = self.probabilidadesSencillas(
-            self.vector_probabilidad_acumudada_AR)
-
+        # Genera la lista de tareas como pares (actividad, SKU): actividad 0 es almacenar y 1 es recuperar
+        # Las cantidades son exactas (mayor resto) y el azar solo decide el orden
         escalar_cantidad_almacenamientos, escalar_cantidad_recuperaciones = self.repartir(
-            self.escalar_largo_de_secuencia, vector_prop_sencillas_AR)
+            self.escalar_largo_de_secuencia, self.probabilidadesSencillas(self.vector_probabilidad_acumulada_AR))
 
-        vector_etiquetas_clase_almacenamiento = np.arange(
-            1, len(self.vector_probabilidad_acumulada_A_clasificado) + 1)
-        vector_etiquetas_clase_recuperacion = np.arange(
-            1, len(self.vector_probabilidad_acumulada_R_clasificado) + 1)
+        vector_proporciones_sku = self.probabilidadesSencillas(self.vector_probabilidad_acumulada_sku)
 
-        vector_cantidades_A = self.repartir(
-            escalar_cantidad_almacenamientos,
-            self.probabilidadesSencillas(self.vector_probabilidad_acumulada_A_clasificado))
-        vector_almacenamientos_clasificados = []
-        for escalar_etiqueta, escalar_repeticiones in zip(vector_etiquetas_clase_almacenamiento, vector_cantidades_A):
-            vector_almacenamientos_clasificados.extend(
-                [int(escalar_etiqueta)] * int(escalar_repeticiones))
+        # Cada tarea de cada tipo se reparte entre los SKUs según su demanda
+        matriz_lista_operaciones = []
+        for escalar_actividad, escalar_cantidad in ((0, escalar_cantidad_almacenamientos), (1, escalar_cantidad_recuperaciones)):
+            vector_cantidades = self.repartir(escalar_cantidad, vector_proporciones_sku) if escalar_cantidad else np.zeros(len(vector_proporciones_sku), dtype=int)
+            for escalar_sku, escalar_repeticiones in enumerate(vector_cantidades, start=1):
+                matriz_lista_operaciones.extend([(escalar_actividad, escalar_sku)] * int(escalar_repeticiones))
 
-        vector_cantidades_R = self.repartir(
-            escalar_cantidad_recuperaciones,
-            self.probabilidadesSencillas(self.vector_probabilidad_acumulada_R_clasificado))
-        vector_recuperaciones_clasificadas = []
-        for escalar_etiqueta, escalar_repeticiones in zip(vector_etiquetas_clase_recuperacion, vector_cantidades_R):
-            vector_recuperaciones_clasificadas.extend(
-                [int(escalar_etiqueta)] * int(escalar_repeticiones))
-
-        vector_ceros = [0] * len(vector_almacenamientos_clasificados)
-        vector_unos = [1] * len(vector_recuperaciones_clasificadas)
-
-        matriz_lista_almacenamientos = list(
-            zip(vector_ceros, vector_almacenamientos_clasificados))
-        matriz_lista_recuperaciones = list(
-            zip(vector_unos, vector_recuperaciones_clasificadas))
-        matriz_lista_operaciones = matriz_lista_almacenamientos
-        matriz_lista_operaciones.extend(matriz_lista_recuperaciones)
         rnd.shuffle(matriz_lista_operaciones)
         self.matriz_lista_operaciones_sorteada = matriz_lista_operaciones
-        # Devuelve la matriz de operaciones
         return self.matriz_lista_operaciones_sorteada
 
     def __repr__(self):
         # Convierte la matriz de operaciones a un DataFrame de pandas y la devuelve como una cadena
-        # Esto proporciona una representación legible de la matriz de operaciones
-        return pd.DataFrame(self.matriz_lista_operaciones_sorteada, columns=['Actividad', 'Clase']).to_string(index=False)
+        return pd.DataFrame(self.matriz_lista_operaciones_sorteada, columns=['Actividad', 'SKU']).to_string(index=False)

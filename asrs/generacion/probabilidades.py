@@ -1,4 +1,4 @@
-"""Generación de probabilidades acumuladas."""
+"""Distribuciones de demanda por SKU."""
 import numpy as np
 
 
@@ -21,3 +21,10 @@ class _GeneradorProbAcumuladas:
 
         # Devuelve el vector de probabilidades acumuladas.
         return vector_probabilidad_acumulada
+
+
+def demanda_hausman(escalar_cantidad_skus, escalar_sigma):
+    # Demanda de cada SKU según la curva de Hausman: F(i) = (i / n) ** sigma
+    # El SKU 1 es el más demandado. Con sigma = 1 la demanda es uniforme y cuanto menor es sigma, más se concentra en pocos SKUs
+    vector_acumulada = _GeneradorProbAcumuladas().hausman(escalar_cantidad_skus, escalar_sigma)
+    return np.diff(np.concatenate(([0.0], vector_acumulada)))
