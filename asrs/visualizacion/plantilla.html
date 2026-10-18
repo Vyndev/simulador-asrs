@@ -42,24 +42,46 @@
   input[type=range] { width: 150px; accent-color: var(--acento); }
 
   /* parámetros */
-  .parametros { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; }
-  .acciones { display: flex; flex-wrap: wrap; gap: 8px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px; position: sticky; top: 0; z-index: 2; }
-  .acciones .primario { flex: 1; }
-  details.grupo { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; }
-  details.grupo summary { cursor: pointer; padding: 9px 12px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; }
-  details.grupo summary::-webkit-details-marker { display: none; }
-  details.grupo summary::after { content: '+'; color: var(--suave); font-weight: 400; }
-  details.grupo[open] summary::after { content: '–'; }
-  .cuerpo-grupo { padding: 2px 12px 12px; display: grid; gap: 8px; }
+  .parametros { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 2px; }
+  .acciones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px; position: sticky; top: 0; z-index: 2; }
+  .acciones .primario { grid-column: 1 / -1; padding: 8px 12px; }
+  .acciones button:not(.primario) { padding: 5px 6px; font-size: 13px; }
+  #formulario { display: flex; flex-direction: column; gap: 10px; }
+  .resumen-param { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 6px; }
+  .ficha-res { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 8px; padding: 4px 8px; font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ficha-res small { display: block; color: var(--suave); font-weight: 400; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
+  .ficha-res.mal { border-color: var(--omitida); color: var(--omitida); }
+  .pestanas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; background: var(--vacio); border-radius: 10px; padding: 3px; }
+  .pestanas button { border: 0; background: transparent; border-radius: 8px; padding: 7px 4px; color: var(--suave); font-size: 13.5px; }
+  .pestanas button:hover { color: var(--texto); }
+  .pestanas button.activa { background: var(--tarjeta); color: var(--texto); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.18); }
+  .panel-pestana { display: flex; flex-direction: column; gap: 10px; }
+  .panel-pestana[hidden] { display: none; }
+  .seccion { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px 12px; }
+  .seccion > h3, .seccion > summary { margin: 0 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--suave); }
+  .seccion > summary { cursor: pointer; margin: 0; list-style: none; display: flex; justify-content: space-between; }
+  .seccion > summary::-webkit-details-marker { display: none; }
+  .seccion > summary::after { content: '+'; font-weight: 400; }
+  details.seccion[open] > summary { margin-bottom: 8px; } details.seccion[open] > summary::after { content: '–'; }
+  .seccion.inactivo > .cuerpo-seccion { opacity: .5; }
+  .cuerpo-seccion { display: grid; gap: 10px; }
   .campo { display: grid; grid-template-columns: minmax(0, 1fr) 92px; align-items: center; gap: 10px; font-size: 14px; }
   .campo .etq { color: var(--texto); }
-  .campo .etq small { color: var(--suave); margin-left: 4px; }
+  .campo .etq small, .trio-tit small { color: var(--suave); margin-left: 5px; font-size: 12px; font-weight: 400; }
+  .trio { display: grid; gap: 4px; }
+  .trio-tit { font-size: 13.5px; font-weight: 600; }
+  .trio-campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .trio-campos.dos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trio-campos label, .bloque { display: grid; gap: 2px; color: var(--texto); }
+  .trio-campos small, .bloque small { color: var(--suave); font-size: 12px; }
+  .bloque small em { font-style: normal; opacity: .85; }
   .nota { color: var(--suave); font-size: 12.5px; margin: 0; }
+  .aviso-clases:empty { display: none; } .aviso-clases { color: var(--omitida); }
   .tabla-clases { display: grid; grid-template-columns: 26px 78px minmax(0, 1fr); gap: 6px 8px; align-items: center; font-size: 13.5px; }
-  .grafico-demanda { display: flex; align-items: flex-end; gap: 1px; height: 64px; padding: 4px; background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; }
-  .grafico-demanda i { flex: 1; min-width: 1px; border-radius: 2px 2px 0 0; }
   .tabla-clases .enc { color: var(--suave); font-size: 12px; }
   .tabla-clases .pct { color: var(--suave); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  .grafico-demanda { display: flex; align-items: flex-end; gap: 1px; height: 64px; padding: 4px; background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; }
+  .grafico-demanda i { flex: 1; min-width: 1px; border-radius: 2px 2px 0 0; }
   .ficha { display: inline-flex; width: 22px; height: 22px; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #10151c; }
   .botones-fila { display: flex; gap: 8px; }
   .politica { display: flex; gap: 8px; align-items: flex-start; color: var(--texto); font-size: 14px; }
@@ -777,56 +799,83 @@ function descargar(nombre, contenido, tipo) {
 let CONFIG_DEFECTO = null, ULTIMA_CONFIG = null;
 const entradas = [];            // campos numéricos simples del formulario
 let clasesUI = [];              // proporción de SKUs de cada clase de la política basada en clases, en %
-const num = (clave, indice, etiqueta, opc = {}) => ({ clave, indice, etiqueta, ...opc });
+const campo = (clave, indice, etiqueta, opc = {}) => ({ clave, indice, etiqueta, ...opc });
 
-const GRUPOS = [
-  { titulo: 'Estantería', abierto: true, campos: [
-    num('vector_configuracion_estanteria', 0, 'Filas', { entero: true, min: 1, max: 200, ayuda: 'Niveles de altura' }),
-    num('vector_configuracion_estanteria', 1, 'Columnas', { entero: true, min: 1, max: 200 }),
-    num('vector_configuracion_estanteria', 2, 'Capas de profundidad', { entero: true, min: 1, max: 12, ayuda: 'Ítems que caben uno detrás de otro en cada canal' }),
-    num('vector_cotas_estanteria', 0, 'Alto de cada fila', { unidad: 'm', min: 0.1, paso: 0.1 }),
-    num('vector_cotas_estanteria', 1, 'Ancho de cada columna', { unidad: 'm', min: 0.1, paso: 0.1 }),
-    num('vector_cotas_estanteria', 2, 'Profundidad de cada celda', { unidad: 'm', min: 0.1, paso: 0.1 }),
-    { nota: 'El total de celdas no puede superar 6000.' }
+// Los parámetros se agrupan por lo que el usuario está decidiendo: el almacén, la demanda, las políticas y la ejecución
+const PESTANAS = [
+  { id: 'almacen', nombre: 'Almacén', secciones: [
+    { titulo: 'Estantería', items: [
+      { trio: 'Dimensiones', campos: [
+        campo('vector_configuracion_estanteria', 0, 'Filas', { entero: true, min: 1, max: 200, ayuda: 'Niveles de altura' }),
+        campo('vector_configuracion_estanteria', 1, 'Columnas', { entero: true, min: 1, max: 200 }),
+        campo('vector_configuracion_estanteria', 2, 'Capas', { entero: true, min: 1, max: 12, ayuda: 'Ítems que caben uno detrás de otro en cada canal' })] },
+      { trio: 'Medidas de cada celda', unidad: 'm', campos: [
+        campo('vector_cotas_estanteria', 0, 'Alto', { min: 0.1, paso: 0.1 }),
+        campo('vector_cotas_estanteria', 1, 'Ancho', { min: 0.1, paso: 0.1 }),
+        campo('vector_cotas_estanteria', 2, 'Fondo', { min: 0.1, paso: 0.1 })] },
+      { nota: 'El total de celdas no puede superar 6000.', id: 'notaCeldas' }
+    ] },
+    { titulo: 'Grúa', items: [
+      { trio: 'Velocidad', unidad: 'm/s', campos: [
+        campo('vector_velocidad_grua', 0, 'Filas', { min: 0.01, paso: 0.1 }),
+        campo('vector_velocidad_grua', 1, 'Columnas', { min: 0.01, paso: 0.1 }),
+        campo('vector_velocidad_grua', 2, 'Canales (z)', { min: 0.01, paso: 0.1 })] },
+      { fila: campo('escalar_tiempo_carga_descarga', null, 'Tiempo de carga o descarga', { unidad: 's', min: 0, paso: 0.5 }) },
+      { fila: campo('escalar_separacion_riel_grua', null, 'Separación del riel', { unidad: 'm', min: 0, paso: 0.1, ayuda: 'Distancia entre la cara de la estantería y el riel de la grúa' }) }
+    ] },
+    { titulo: 'Ocupación inicial', items: [
+      { fila: campo('escalar_nivel_ocupacion', null, 'Estantería ocupada al empezar', { unidad: '%', factor: 100, min: 0, max: 100, paso: 1, ayuda: 'Se llena con cada política antes de la lista de tareas' }) }
+    ] },
+    { titulo: 'Avanzado: posición y referencia', plegable: true, items: [
+      { trio: 'Posición de la estantería', unidad: 'm', campos: [
+        campo('vector_posicion_estanteria', 0, 'Vertical', { paso: 0.1, ayuda: 'Desplaza la estantería respecto al E/S' }),
+        campo('vector_posicion_estanteria', 1, 'Horizontal', { paso: 0.1 }),
+        campo('vector_posicion_estanteria', 2, 'Profundidad', { paso: 0.1 })] },
+      { trio: 'Centro de la celda', unidad: '0 a 1', campos: [
+        campo('vector_centro_celda_estanteria', 0, 'Vertical', { min: 0, max: 1, paso: 0.05, ayuda: 'Punto de referencia dentro de la celda' }),
+        campo('vector_centro_celda_estanteria', 1, 'Horizontal', { min: 0, max: 1, paso: 0.05 }),
+        campo('vector_centro_celda_estanteria', 2, 'Profundidad', { min: 0, max: 1, paso: 0.05 })] }
+    ] }
   ] },
-  { titulo: 'Estantería: posición y referencia', campos: [
-    num('vector_posicion_estanteria', 0, 'Posición vertical', { unidad: 'm', paso: 0.1, ayuda: 'Desplaza la estantería respecto al E/S' }),
-    num('vector_posicion_estanteria', 1, 'Posición horizontal', { unidad: 'm', paso: 0.1 }),
-    num('vector_posicion_estanteria', 2, 'Posición en profundidad', { unidad: 'm', paso: 0.1 }),
-    num('vector_centro_celda_estanteria', 0, 'Centro de celda (vertical)', { min: 0, max: 1, paso: 0.05, ayuda: 'Punto de referencia dentro de la celda, de 0 a 1' }),
-    num('vector_centro_celda_estanteria', 1, 'Centro de celda (horizontal)', { min: 0, max: 1, paso: 0.05 }),
-    num('vector_centro_celda_estanteria', 2, 'Centro de celda (profundidad)', { min: 0, max: 1, paso: 0.05 })
+  { id: 'demanda', nombre: 'Demanda', secciones: [
+    { titulo: 'Productos (SKU)', especial: 'skus' },
+    { titulo: 'Lista de tareas', especial: 'tareas' }
   ] },
-  { titulo: 'Grúa y E/S', abierto: true, campos: [
-    num('vector_velocidad_grua', 0, 'Velocidad en filas', { unidad: 'm/s', min: 0.01, paso: 0.1 }),
-    num('vector_velocidad_grua', 1, 'Velocidad en columnas', { unidad: 'm/s', min: 0.01, paso: 0.1 }),
-    num('vector_velocidad_grua', 2, 'Velocidad en canales (z)', { unidad: 'm/s', min: 0.01, paso: 0.1 }),
-    num('escalar_tiempo_carga_descarga', null, 'Tiempo de carga o descarga', { unidad: 's', min: 0, paso: 0.5 }),
-    num('escalar_separacion_riel_grua', null, 'Separación del riel', { unidad: 'm', min: 0, paso: 0.1, ayuda: 'Distancia entre la cara de la estantería y el riel de la grúa' })
+  { id: 'politicas', nombre: 'Políticas', secciones: [
+    { titulo: 'Políticas a comparar', especial: 'politicas' },
+    { titulo: 'Clases de la política basada en clases', especial: 'clases', id: 'seccionClases' }
   ] },
-  { titulo: 'Ocupación inicial', abierto: true, campos: [
-    num('escalar_nivel_ocupacion', null, 'Estantería ocupada al empezar', { unidad: '%', factor: 100, min: 0, max: 100, paso: 1, ayuda: 'Se llena con cada política antes de la lista de tareas' })
-  ] },
-  { titulo: 'Productos (SKU) y demanda', abierto: true, especial: 'skus' },
-  { titulo: 'Clases de la política basada en clases', abierto: true, especial: 'clases' },
-  { titulo: 'Lista de tareas', abierto: true, especial: 'tareas' },
-  { titulo: 'Políticas a comparar', abierto: true, especial: 'politicas' },
-  { titulo: 'Réplicas y semilla', campos: [
-    num('escalar_semilla', null, 'Semilla', { entero: true, min: 0, max: 2147483647, ayuda: 'La réplica i usa semilla + i; misma semilla, mismo resultado' }),
-    num('escalar_replicas_animadas', null, 'Réplicas animadas', { entero: true, min: 1, max: 10, ayuda: 'Las que se pueden ver en la carrera' }),
-    num('escalar_cantidad_replicas', null, 'Réplicas para la estadística', { entero: true, min: 0, max: 2000, ayuda: '0 para omitir la estadística' }),
-    { nota: 'Las réplicas de la estadística se ejecutan en paralelo y pueden tardar, según el tamaño de la estantería.' }
+  { id: 'ejecucion', nombre: 'Ejecución', secciones: [
+    { titulo: 'Réplicas y semilla', items: [
+      { fila: campo('escalar_semilla', null, 'Semilla', { entero: true, min: 0, max: 2147483647, ayuda: 'La réplica i usa semilla + i; misma semilla, mismo resultado' }) },
+      { fila: campo('escalar_replicas_animadas', null, 'Réplicas animadas', { entero: true, min: 1, max: 10, ayuda: 'Las que se pueden ver en la carrera' }) },
+      { fila: campo('escalar_cantidad_replicas', null, 'Réplicas para la estadística', { entero: true, min: 0, max: 2000, ayuda: '0 para omitir la estadística' }) },
+      { nota: 'Las réplicas de la estadística se ejecutan en paralelo y pueden tardar según el tamaño de la estantería.' }
+    ] }
   ] }
 ];
 
-function crearCampo(c) {
-  const fila = document.createElement('label'); fila.className = 'campo'; if (c.ayuda) fila.title = c.ayuda;
-  fila.innerHTML = '<span class="etq">' + c.etiqueta + (c.unidad ? '<small>' + c.unidad + '</small>' : '') + '</span>';
+function crearInput(c) {
   const inp = document.createElement('input'); inp.type = 'number'; inp.step = c.paso || (c.entero ? 1 : 'any');
   if (c.min !== undefined) inp.min = c.min; if (c.max !== undefined) inp.max = c.max;
-  inp.addEventListener('input', () => inp.classList.remove('invalido'));
-  fila.appendChild(inp); entradas.push({ c, inp });
+  inp.addEventListener('input', () => { inp.classList.remove('invalido'); actualizarResumen(); });
+  entradas.push({ c, inp });
+  return inp;
+}
+function crearFila(c) {
+  const fila = document.createElement('label'); fila.className = 'campo'; if (c.ayuda) fila.title = c.ayuda;
+  fila.innerHTML = '<span class="etq">' + c.etiqueta + (c.unidad ? '<small>' + c.unidad + '</small>' : '') + '</span>';
+  fila.appendChild(crearInput(c));
   return fila;
+}
+// Tres valores relacionados en una sola línea, cada uno con su etiqueta encima
+function crearTrio(t) {
+  const caja = document.createElement('div'); caja.className = 'trio';
+  caja.innerHTML = '<span class="trio-tit">' + t.trio + (t.unidad ? '<small>' + t.unidad + '</small>' : '') + '</span>';
+  const fila = document.createElement('div'); fila.className = 'trio-campos';
+  t.campos.forEach(c => { c.nombreError = t.trio + ' (' + c.etiqueta + ')'; const l = document.createElement('label'); if (c.ayuda) l.title = c.ayuda; l.innerHTML = '<small>' + c.etiqueta + '</small>'; l.appendChild(crearInput(c)); fila.appendChild(l); });
+  caja.appendChild(fila);
+  return caja;
 }
 
 // Reparto entero por mayor resto: misma regla que usa Python, para que la vista previa coincida con la simulación
@@ -873,7 +922,7 @@ function dibujarClases() {
 // Gráfico de la demanda por SKU, coloreado por la clase que le asigna la política basada en clases, y resumen de cada clase
 function actualizarVistaPrevia() {
   const demanda = demandaDelFormulario(), graf = el('graficoDemanda'), resumen = el('resumenDemanda');
-  if (!demanda) { graf.innerHTML = ''; resumen.textContent = 'Revisa la cantidad de SKUs, el sesgo o la demanda personalizada.'; clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = ''; }); return; }
+  if (!demanda) { graf.innerHTML = ''; resumen.textContent = 'Revisa la cantidad de SKUs, el sesgo o la demanda personalizada.'; clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = ''; }); actualizarResumen(); return; }
   const clase = clasesUI.length && clasesUI.every(p => p > 0) ? agruparSkus(demanda, clasesUI) : null;
   const maximo = Math.max(...demanda);
   graf.innerHTML = demanda.map((d, i) => '<i title="SKU ' + (i + 1) + ': ' + (100 * d).toFixed(1) + ' % de la demanda" style="height:' + Math.max(3, 100 * d / maximo) + '%;background:' + (clase ? colorGrupo(clase[i]) : 'var(--acento)') + '"></i>').join('');
@@ -885,42 +934,95 @@ function actualizarVistaPrevia() {
     const skus = clase.reduce((a, c, k) => a + (c === i + 1 ? 1 : 0), 0), dem = clase.reduce((a, c, k) => a + (c === i + 1 ? demanda[k] : 0), 0);
     r.textContent = skus + ' SKUs · ' + Math.round(100 * dem) + ' % demanda';
   });
+  actualizarResumen();
+}
+
+// Resumen siempre visible: lo esencial de la configuración y los avisos más comunes
+function actualizarResumen() {
+  const v = (clave, i) => { const x = entradas.find(e => e.c.clave === clave && e.c.indice === i); return x ? Number(x.inp.value) : NaN; };
+  const f = v('vector_configuracion_estanteria', 0), c = v('vector_configuracion_estanteria', 1), k = v('vector_configuracion_estanteria', 2);
+  const celdas = f * c * k, demanda = demandaDelFormulario(), skus = demanda ? demanda.length : null;
+  const tareas = el('tareasAuto').checked ? Math.round(celdas * 0.1) : Number(el('tareasN').value);
+  const politicas = document.querySelectorAll('[data-politica]:checked').length;
+  const fichas = [
+    ['Estantería', isFinite(celdas) ? f + '×' + c + '×' + k : '—', isFinite(celdas) && celdas > 6000],
+    ['SKUs', skus === null ? '—' : String(skus), skus !== null && isFinite(f * c) && skus > f * c],
+    ['Tareas', isFinite(tareas) ? String(tareas) : '—', false],
+    ['Políticas', String(politicas), politicas === 0]
+  ];
+  el('resumenParam').innerHTML = fichas.map(([n, val, mal]) => '<span class="ficha-res' + (mal ? ' mal' : '') + '" title="' + n + (n === 'Estantería' && isFinite(celdas) ? ': ' + celdas + ' celdas' : '') + '"><small>' + n + '</small>' + val + '</span>').join('');
+  const nota = el('notaCeldas');
+  if (nota) nota.textContent = isFinite(celdas) ? (celdas + ' celdas · ' + (f * c) + ' canales' + (celdas > 6000 ? ' (el máximo es 6000)' : '')) : 'El total de celdas no puede superar 6000.';
+}
+
+function activarPestana(id) {
+  document.querySelectorAll('.pestanas button').forEach(b => b.classList.toggle('activa', b.dataset.pestana === id));
+  document.querySelectorAll('.panel-pestana').forEach(p => { p.hidden = p.dataset.pestana !== id; });
+  try { localStorage.setItem('asrs_pestana', id); } catch (e) {}
+}
+// Si algún campo es inválido, se abre la pestaña que lo contiene y se enfoca
+function mostrarPrimerError() {
+  const malo = document.querySelector('#formulario .invalido'); if (!malo) return;
+  const panel = malo.closest('.panel-pestana'); if (panel) activarPestana(panel.dataset.pestana);
+  const det = malo.closest('details'); if (det) det.open = true;
+  malo.focus();
+}
+// La sección de clases solo importa si se compara la política basada en clases
+function actualizarClasesActivas() {
+  const usa = !!document.querySelector('[data-politica="basada_en_clases"]:checked');
+  el('seccionClases').classList.toggle('inactivo', !usa);
+  el('avisoClases').textContent = usa ? '' : 'Esta política no está seleccionada, así que estas clases no se usan.';
 }
 
 function construirFormulario() {
   const cont = el('formulario'); cont.innerHTML = ''; entradas.length = 0;
-  GRUPOS.forEach(g => {
-    const det = document.createElement('details'); det.className = 'grupo'; if (g.abierto) det.open = true;
-    det.innerHTML = '<summary>' + g.titulo + '</summary>';
-    const cuerpo = document.createElement('div'); cuerpo.className = 'cuerpo-grupo';
-    if (g.especial === 'skus') {
-      cuerpo.innerHTML = '<p class="nota">La lista de tareas pide SKUs. La demanda de cada SKU sigue la curva de Hausman o una lista propia.</p>' +
-        '<label class="campo" title="Productos distintos"><span class="etq">Cantidad de SKUs</span><input type="number" id="nSkus" min="1" max="200" step="1"></label>' +
-        '<label class="campo" title="1 es demanda uniforme; cuanto menor es, más se concentra en pocos SKUs"><span class="etq">Sesgo de la demanda <small>σ de Hausman</small></span><input type="number" id="sigma" min="0.05" max="1" step="0.05"></label>' +
-        '<label class="etq" for="demandaPersonalizada" style="font-size:14px;color:var(--texto)">Demanda personalizada <small style="color:var(--suave)">opcional</small></label>' +
-        '<input type="text" id="demandaPersonalizada" placeholder="Pesos separados por comas, p. ej. 40, 25, 15, 10, 10">' +
-        '<p class="nota">Si la rellenas, reemplaza a la cantidad y al sesgo. El SKU 1 es el primero de la lista.</p>' +
-        '<div class="grafico-demanda" id="graficoDemanda"></div><p class="nota" id="resumenDemanda"></p>';
-    } else if (g.especial === 'clases') {
-      cuerpo.innerHTML = '<p class="nota">Solo la usa la política basada en clases: agrupa los SKUs por demanda, la clase A con los más demandados, y reserva a cada clase una zona. Los valores son pesos y se normalizan.</p>' +
-        '<div class="tabla-clases" id="tablaClases"></div><div class="botones-fila"><button id="btnMasClase">Añadir clase</button><button id="btnMenosClase">Quitar última</button></div>';
-    } else if (g.especial === 'tareas') {
-      cuerpo.innerHTML = '<label class="politica"><input type="checkbox" id="tareasAuto"><span>Cantidad automática<small>10 % de las celdas de la estantería</small></span></label>' +
-        '<label class="campo" title="Almacenamientos y recuperaciones en total"><span class="etq">Cantidad de tareas</span><input type="number" id="tareasN" min="1" max="5000" step="1"></label>' +
-        '<label class="campo" title="El resto son recuperaciones"><span class="etq">Almacenamientos <small>%</small></span><input type="number" id="pctAlmacenar" min="0" max="100" step="1"></label>';
-    } else if (g.especial === 'politicas') {
-      cuerpo.innerHTML = POLITICAS.map(p => '<label class="politica" title="' + p.ayuda + '"><input type="checkbox" data-politica="' + p.clave + '"><span>' + p.nombre + '<small>' + p.ayuda + '</small></span></label>').join('') +
-        '<p class="nota">La política que elijas decide dónde se almacena y también dónde se reubica. La recuperación es siempre FCFS.</p>';
-    } else {
-      g.campos.forEach(c => cuerpo.appendChild(c.nota ? Object.assign(document.createElement('p'), { className: 'nota', textContent: c.nota }) : crearCampo(c)));
-    }
-    det.appendChild(cuerpo); cont.appendChild(det);
+  const resumen = document.createElement('div'); resumen.className = 'resumen-param'; resumen.id = 'resumenParam'; cont.appendChild(resumen);
+  const nav = document.createElement('nav'); nav.className = 'pestanas'; nav.setAttribute('role', 'tablist'); cont.appendChild(nav);
+  PESTANAS.forEach(p => {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = p.nombre; b.dataset.pestana = p.id; b.setAttribute('role', 'tab');
+    b.onclick = () => activarPestana(p.id); nav.appendChild(b);
+    const panel = document.createElement('div'); panel.className = 'panel-pestana'; panel.dataset.pestana = p.id; panel.hidden = true; cont.appendChild(panel);
+    p.secciones.forEach(s => {
+      const sec = document.createElement(s.plegable ? 'details' : 'section'); sec.className = 'seccion'; if (s.id) sec.id = s.id;
+      const titulo = document.createElement(s.plegable ? 'summary' : 'h3'); titulo.textContent = s.titulo; sec.appendChild(titulo);
+      const cuerpo = document.createElement('div'); cuerpo.className = 'cuerpo-seccion';
+      if (s.especial === 'skus') {
+        cuerpo.innerHTML = '<p class="nota">La lista de tareas pide SKUs. La demanda de cada SKU sigue la curva de Hausman o una lista propia.</p>' +
+          '<div class="trio-campos dos"><label title="Productos distintos"><small>Cantidad de SKUs</small><input type="number" id="nSkus" min="1" max="200" step="1"></label>' +
+          '<label title="1 es demanda uniforme; cuanto menor es, más se concentra en pocos SKUs"><small>Sesgo σ de Hausman</small><input type="number" id="sigma" min="0.05" max="1" step="0.05"></label></div>' +
+          '<label class="bloque"><small>Demanda personalizada <em>(opcional, reemplaza a los dos de arriba)</em></small>' +
+          '<input type="text" id="demandaPersonalizada" placeholder="Pesos separados por comas, p. ej. 40, 25, 15, 10, 10"></label>' +
+          '<div class="grafico-demanda" id="graficoDemanda"></div><p class="nota" id="resumenDemanda"></p>';
+      } else if (s.especial === 'clases') {
+        cuerpo.innerHTML = '<p class="nota">Agrupa los SKUs por demanda (la clase A con los más demandados) y reserva una zona a cada clase. Los valores son pesos y se normalizan.</p>' +
+          '<p class="nota aviso-clases" id="avisoClases"></p>' +
+          '<div class="tabla-clases" id="tablaClases"></div><div class="botones-fila"><button type="button" id="btnMasClase">Añadir clase</button><button type="button" id="btnMenosClase">Quitar última</button></div>';
+      } else if (s.especial === 'tareas') {
+        cuerpo.innerHTML = '<label class="politica"><input type="checkbox" id="tareasAuto"><span>Cantidad automática<small>10 % de las celdas de la estantería</small></span></label>' +
+          '<div class="trio-campos dos"><label title="Almacenamientos y recuperaciones en total"><small>Cantidad de tareas</small><input type="number" id="tareasN" min="1" max="5000" step="1"></label>' +
+          '<label title="El resto son recuperaciones"><small>% almacenar</small><input type="number" id="pctAlmacenar" min="0" max="100" step="1"></label></div>';
+      } else if (s.especial === 'politicas') {
+        cuerpo.innerHTML = POLITICAS.map(q => '<label class="politica" title="' + q.ayuda + '"><input type="checkbox" data-politica="' + q.clave + '"><span>' + q.nombre + '<small>' + q.ayuda + '</small></span></label>').join('') +
+          '<p class="nota">La política elegida decide dónde se almacena y también dónde se reubica. La recuperación es siempre FCFS.</p>';
+      } else {
+        s.items.forEach(it => {
+          if (it.trio) cuerpo.appendChild(crearTrio(it));
+          else if (it.fila) cuerpo.appendChild(crearFila(it.fila));
+          else { const n = document.createElement('p'); n.className = 'nota'; n.textContent = it.nota; if (it.id) n.id = it.id; cuerpo.appendChild(n); }
+        });
+      }
+      sec.appendChild(cuerpo); panel.appendChild(sec);
+    });
   });
   el('btnMasClase').onclick = () => { if (clasesUI.length < 8) { clasesUI.push(20); dibujarClases(); } };
   el('btnMenosClase').onclick = () => { if (clasesUI.length > 1) { clasesUI.pop(); dibujarClases(); } };
-  el('tareasAuto').onchange = () => { el('tareasN').disabled = el('tareasAuto').checked; actualizarAuto(); };
+  el('tareasAuto').onchange = () => { el('tareasN').disabled = el('tareasAuto').checked; actualizarAuto(); actualizarResumen(); };
   ['nSkus', 'sigma', 'demandaPersonalizada'].forEach(id => el(id).addEventListener('input', () => { el(id).classList.remove('invalido'); actualizarVistaPrevia(); }));
+  el('tareasN').addEventListener('input', actualizarResumen);
+  document.querySelectorAll('[data-politica]').forEach(c => c.addEventListener('change', () => { actualizarClasesActivas(); actualizarResumen(); }));
   entradas.forEach(({ c, inp }) => { if (c.clave === 'vector_configuracion_estanteria') inp.addEventListener('input', actualizarAuto); });
+  let inicial = 'almacen'; try { inicial = localStorage.getItem('asrs_pestana') || 'almacen'; } catch (e) {}
+  activarPestana(PESTANAS.some(p => p.id === inicial) ? inicial : 'almacen');
 }
 
 function actualizarAuto() {
@@ -938,11 +1040,11 @@ function ponerFormulario(cfg) {
   el('nSkus').value = cfg.escalar_numero_skus; el('sigma').value = cfg.escalar_sigma_hausman;
   el('demandaPersonalizada').value = cfg.vector_demanda_sku_personalizada ? cfg.vector_demanda_sku_personalizada.join(', ') : '';
   clasesUI = cfg.vector_proporcion_skus_por_clase.map(p => Math.round(p * 1000) / 10);
-  dibujarClases();
   el('pctAlmacenar').value = Math.round((cfg.vector_prob_acum_AR[0] || 0) * 1000) / 10;
   const celdas = cfg.vector_configuracion_estanteria.reduce((a, b) => a * b, 1), auto = Math.round(celdas * 0.1) === cfg.escalar_largo_secuencia;
   el('tareasAuto').checked = auto; el('tareasN').value = cfg.escalar_largo_secuencia; el('tareasN').disabled = auto;
   document.querySelectorAll('[data-politica]').forEach(c => { c.checked = (cfg.vector_politicas_asignacion || []).includes(c.dataset.politica); });
+  dibujarClases(); actualizarClasesActivas(); actualizarResumen();
 }
 
 function leerFormulario() {
@@ -950,7 +1052,7 @@ function leerFormulario() {
   let primerError = null;
   entradas.forEach(({ c, inp }) => {
     const txt = inp.value.trim(), v = txt === '' ? NaN : Number(txt) / (c.factor || 1);
-    if (!isFinite(v)) { inp.classList.add('invalido'); primerError = primerError || (c.etiqueta + ': falta el valor.'); return; }
+    if (!isFinite(v)) { inp.classList.add('invalido'); primerError = primerError || ((c.nombreError || c.etiqueta) + ': falta el valor.'); return; }
     if (c.indice === null) cfg[c.clave] = v; else cfg[c.clave][c.indice] = v;
   });
   // demanda: lista personalizada o curva de Hausman
@@ -965,11 +1067,11 @@ function leerFormulario() {
   if (!txtDemanda && !(cfg.escalar_sigma_hausman > 0)) { el('sigma').classList.add('invalido'); primerError = primerError || 'Sesgo de la demanda: debe estar entre 0 y 1.'; }
   cfg.vector_proporcion_skus_por_clase = clasesUI.slice();
   const pct = Number(el('pctAlmacenar').value);
-  if (el('pctAlmacenar').value === '' || !isFinite(pct) || pct < 0 || pct > 100) { el('pctAlmacenar').classList.add('invalido'); primerError = primerError || 'Almacenamientos: debe estar entre 0 y 100 %.'; }
+  if (el('pctAlmacenar').value === '' || !isFinite(pct) || pct < 0 || pct > 100) { el('pctAlmacenar').classList.add('invalido'); primerError = primerError || '% almacenar: debe estar entre 0 y 100.'; }
   cfg.vector_prob_acum_AR = [pct / 100, 1];
   if (el('tareasAuto').checked) delete cfg.escalar_largo_secuencia; else cfg.escalar_largo_secuencia = Number(el('tareasN').value);
   cfg.vector_politicas_asignacion = Array.from(document.querySelectorAll('[data-politica]:checked')).map(c => c.dataset.politica);
-  if (primerError) throw new Error(primerError);
+  if (primerError) { mostrarPrimerError(); throw new Error(primerError); }
   return cfg;
 }
 
@@ -1057,7 +1159,10 @@ async function iniciar() {
     };
     el('btnParametros').onclick = () => { const cerrado = el('app').classList.toggle('cerrado'); el('btnParametros').textContent = cerrado ? 'Mostrar parámetros' : 'Ocultar parámetros'; };
     escenaVacia('Ajusta los parámetros y pulsa <b>Simular</b>.');
-    simular();   // la primera ejecución usa los valores iniciales
+    // Si ya hay una simulación corriendo (por ejemplo, se recargó la página) se reconecta a ella; si no, la primera usa los valores iniciales
+    let activo = null;
+    try { activo = (await (await fetch('/api/activo')).json()).id; } catch (e) {}
+    if (activo) { trabajoActual = activo; ULTIMA_CONFIG = CONFIG_DEFECTO; el('btnSimular').disabled = true; consultar(); } else { simular(); }
   } else if (DATOS_INICIALES) {
     // archivo autónomo: solo reproduce los datos incrustados
     cargarDatos(DATOS_INICIALES);

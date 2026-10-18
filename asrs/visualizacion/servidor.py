@@ -109,6 +109,11 @@ class Estado:
     def buscar(self, txt_id):
         return self.trabajos.get(txt_id)
 
+    def activo(self):
+        # Trabajo que se está ejecutando, si lo hay: permite que una página recargada se reconecte en lugar de iniciar otro
+        with self.cerrojo:
+            return next((t for t in self.trabajos.values() if t.estado in ('en_cola', 'ejecutando')), None)
+
 
 def configuracion_por_defecto():
     # Valores iniciales del formulario: la configuración del proyecto con una estadística corta para que la primera ejecución sea ágil
@@ -126,12 +131,15 @@ def crear_manejador(estado):
 
         def _responder(self, codigo, cuerpo, txt_tipo):
             datos = cuerpo.encode('utf-8') if isinstance(cuerpo, str) else cuerpo
-            self.send_response(codigo)
-            self.send_header('Content-Type', txt_tipo)
-            self.send_header('Content-Length', str(len(datos)))
-            self.send_header('Cache-Control', 'no-store')
-            self.end_headers()
-            self.wfile.write(datos)
+            try:
+                self.send_response(codigo)
+                self.send_header('Content-Type', txt_tipo)
+                self.send_header('Content-Length', str(len(datos)))
+                self.send_header('Cache-Control', 'no-store')
+                self.end_headers()
+                self.wfile.write(datos)
+            except ConnectionError:
+                pass   # el navegador cerró la conexión (por ejemplo, al recargar la página), no hay a quién responder
 
         def _json(self, codigo, objeto):
             self._responder(codigo, json.dumps(objeto, separators=(',', ':')), 'application/json; charset=utf-8')
@@ -142,6 +150,9 @@ def crear_manejador(estado):
                 self._responder(200, leer_plantilla(), 'text/html; charset=utf-8')
             elif ruta == '/api/config':
                 self._json(200, configuracion_por_defecto())
+            elif ruta == '/api/activo':
+                trabajo = estado.activo()
+                self._json(200, {"id": trabajo.id if trabajo else None})
             elif ruta.startswith('/api/trabajo/'):
                 trabajo = estado.buscar(ruta.rsplit('/', 1)[-1])
                 if trabajo is None:

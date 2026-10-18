@@ -331,6 +331,7 @@ class PruebasServidor(unittest.TestCase):
                 except urllib.error.HTTPError as error:
                     return error.code, json.loads(error.read())
 
+            self.assertEqual(pedir("/api/activo"), (200, {"id": None}))
             codigo, defecto = pedir("/api/config")
             self.assertEqual(codigo, 200)
             self.assertEqual(defecto["vector_configuracion_estanteria"], [18, 20, 2])
