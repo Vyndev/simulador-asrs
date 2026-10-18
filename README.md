@@ -119,3 +119,11 @@ Dependencias entre capas (solo hacia abajo): `simulacion` → `control` → `pol
 ## Modelo de réplicas
 
 Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de llenado y una de operación. Cada política parte de una estantería vacía, la llena con esa misma secuencia bajo su propia lógica y procesa la secuencia de operación (comparación pareada). Las métricas del llenado se descartan.
+
+## Aprendizaje por refuerzo (DQN y PPO)
+
+Experimento aparte del simulador, que no necesita estas librerías: `pip install -r requirements-rl.txt` y luego `python entrenar_rl.py --algoritmo ambos --pasos 5000`.
+
+El agente decide en qué canal almacenar cada ítem (dentro del canal se aplica la regla de minimización de varianza). Las recuperaciones son FCFS y las reubicaciones las decide la política más cercana a la grúa. La recompensa es el tiempo que invierte la grúa, así que el retorno del episodio es el tiempo total de la lista. El episodio parte de una estantería llena con la política aleatoria, igual para el agente y las políticas clásicas, y se evalúa en estados que el agente no vio. DQN toma el mejor valor Q entre los canales con espacio y PPO usa su máscara de acciones (`MaskablePPO` de sb3-contrib).
+
+Primera corrida (5000 pasos, 18×20×2, 72 tareas, 6 estados de prueba): unos 75 a 85 pasos por segundo, cerca de 1 minuto por algoritmo. Con tan poco entrenamiento ninguno mejora a la mejor política clásica (más cercana a la grúa): DQN queda 19 % por encima y PPO 16 %, a nivel del azar. Hacen falta entrenamientos más largos para saber si pueden superarla.

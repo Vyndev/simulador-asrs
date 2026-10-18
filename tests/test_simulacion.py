@@ -214,6 +214,55 @@ class PruebasDatosReales(unittest.TestCase):
             config_desde_json({**datos, "texto_origen_tareas": "otro"})
 
 
+try:
+    import gymnasium  # noqa: F401
+    HAY_GYMNASIUM = True
+except ImportError:
+    HAY_GYMNASIUM = False
+
+
+@unittest.skipUnless(HAY_GYMNASIUM, "faltan las librerías de aprendizaje por refuerzo (requirements-rl.txt)")
+class PruebasEntornoRL(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.config = cargar_configuracion()
+        cls.config["vector_configuracion_estanteria"] = np.array([6, 8, 2])
+        cls.config["escalar_largo_secuencia"] = 20
+
+    def _episodio(self, entorno, escalar_estado, elegir):
+        entorno.reset(options={"estado": escalar_estado})
+        retorno, terminado = 0.0, entorno.escalar_indice >= len(entorno.S)
+        while not terminado:
+            _, recompensa, terminado, _, _ = entorno.step(elegir(entorno))
+            retorno += recompensa
+        return retorno
+
+    def test_el_retorno_es_el_tiempo_total_y_es_reproducible(self):
+        from asrs.rl.entorno import ESCALAR_SEGUNDOS_POR_UNIDAD, EntornoAsignacion
+        entorno = EntornoAsignacion(self.config, 77, 2)
+        primero = lambda e: int(np.flatnonzero(e.action_masks())[0])
+        retorno = self._episodio(entorno, 0, primero)
+        self.assertAlmostEqual(-retorno * ESCALAR_SEGUNDOS_POR_UNIDAD, entorno.tiempo_total(), places=3)
+        self.assertEqual(self._episodio(entorno, 0, primero), retorno)
+
+    def test_acciones_invalidas_se_penalizan_y_no_rompen(self):
+        from asrs.rl.entorno import EntornoAsignacion
+        entorno = EntornoAsignacion(self.config, 77, 2)
+        entorno.reset(options={"estado": 1})
+        vector_invalidos = np.flatnonzero(~entorno.action_masks())
+        if not len(vector_invalidos):
+            self.skipTest("todos los canales tienen espacio")
+        _, recompensa, _, _, _ = entorno.step(int(vector_invalidos[0]))
+        self.assertEqual(entorno.escalar_invalidas, 1)
+        self.assertLess(recompensa, -0.99)
+
+    def test_las_clasicas_parten_del_mismo_estado(self):
+        from asrs.rl.evaluacion import evaluar_politica_clasica
+        a = evaluar_politica_clasica(self.config, "mas_cercana_es", 77, [0, 1])["tiempos"]
+        b = evaluar_politica_clasica(self.config, "mas_cercana_es", 77, [0, 1])["tiempos"]
+        self.assertTrue(np.allclose(a, b))
+
+
 class PruebasPoliticas(unittest.TestCase):
     def test_todas_las_politicas_registradas_se_construyen(self):
         simulacion = Simulacion()

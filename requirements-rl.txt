@@ -1,0 +1,6 @@
+# Solo para el aprendizaje por refuerzo (entrenar_rl.py); el simulador no los necesita
+# torch en versión CPU: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch
+gymnasium
+stable-baselines3
+sb3-contrib

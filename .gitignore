@@ -15,3 +15,6 @@ visualizacion.html
 # Sistema operativo
 .DS_Store
 Thumbs.db
+
+# Modelos entrenados
+modelos/
