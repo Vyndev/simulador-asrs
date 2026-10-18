@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carrera de políticas ASRS</title>
+<style>
+  :root {
+    --fondo: #f6f7f9; --tarjeta: #ffffff; --borde: #dde1e7; --texto: #1c2430; --suave: #5b6675;
+    --vacio: #e6e9ee; --acento: #2563eb; --oro: #c9962b; --plata: #8791a0; --bronce: #a8683b;
+    --clase1: #3b82f6; --clase2: #f59e0b; --clase3: #a855f7; --pendiente: #cfd5de;
+    --almacenar: #0d9488; --recuperar: #db2777; --omitida: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #12161c; --tarjeta: #1a2029; --borde: #2c3542; --texto: #e6eaf0; --suave: #93a0b2;
+      --vacio: #262e3a; --acento: #5b9bff; --oro: #e3b341; --plata: #a1abb9; --bronce: #cd8a57;
+      --clase1: #5b9bff; --clase2: #fbbf24; --clase3: #c084fc; --pendiente: #323c4a;
+      --almacenar: #2dd4bf; --recuperar: #f472b6; --omitida: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1500px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  .sub { color: var(--suave); margin: 0 0 16px; }
+  .controles { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+  button, select { font: inherit; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--acento); }
+  button.primario { background: var(--acento); border-color: var(--acento); color: #fff; font-weight: 600; min-width: 96px; }
+  label { color: var(--suave); display: flex; align-items: center; gap: 8px; }
+  input[type=range] { width: 150px; accent-color: var(--acento); }
+  .reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
+  .reloj small { color: var(--suave); font-weight: 400; font-size: 13px; }
+  .leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--suave); font-size: 13px; margin: 0 0 14px; }
+  .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+  .punto { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .marcador { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .marcador h2, .resultados h2 { font-size: 14px; margin: 0 0 8px; color: var(--suave); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .fila { display: grid; grid-template-columns: 34px 170px 1fr 120px; align-items: center; gap: 10px; padding: 3px 0; }
+  .fila .lugar { font-weight: 700; color: var(--suave); text-align: center; }
+  .fila .barra { height: 12px; background: var(--vacio); border-radius: 6px; overflow: hidden; }
+  .fila .barra i { display: block; height: 100%; width: 0; background: var(--acento); border-radius: 6px; }
+  .fila .valor { text-align: right; font-variant-numeric: tabular-nums; color: var(--suave); }
+  .fila.termino .barra i { background: var(--almacenar); }
+  .paneles { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+  .panel { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
+  .panel.termino { border-color: var(--almacenar); }
+  .panel .cabecera { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .panel h3 { margin: 0; font-size: 16px; }
+  .insignia { font-weight: 700; font-size: 13px; padding: 2px 10px; border-radius: 999px; background: var(--vacio); color: var(--suave); }
+  .insignia.l1 { background: var(--oro); color: #fff; } .insignia.l2 { background: var(--plata); color: #fff; } .insignia.l3 { background: var(--bronce); color: #fff; }
+  canvas { width: 100%; height: auto; display: block; }
+  .estado { min-height: 62px; margin-bottom: 6px; }
+  .estado .linea { display: flex; align-items: center; gap: 10px; }
+  .estado .tipo { font-weight: 800; font-size: 20px; letter-spacing: .05em; color: var(--suave); }
+  .estado .tipo.almacenar { color: var(--almacenar); } .estado .tipo.recuperar { color: var(--recuperar); }
+  .estado .tipo.omitida { color: var(--omitida); }
+  .estado .chip { display: none; width: 30px; height: 30px; border-radius: 7px; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; color: #10151c; }
+  .estado .accion { display: block; color: var(--suave); font-size: 13px; min-height: 18px; margin-top: 2px; }
+  .tareas { display: grid; grid-template-columns: repeat(36, 1fr); gap: 2px; margin: 10px 0 8px; }
+  .tareas i { height: 9px; border-radius: 2px; background: var(--pendiente); }
+  .tareas i.a { background: var(--almacenar); opacity: .35; } .tareas i.r { background: var(--recuperar); opacity: .35; }
+  .tareas i.hecha { opacity: 1; } .tareas i.actual { opacity: 1; outline: 2px solid var(--texto); outline-offset: 1px; }
+  .tareas i.omitida { background: transparent; outline: 1px solid var(--omitida); outline-offset: -1px; opacity: 1; }
+  .pie { display: flex; justify-content: space-between; color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .resultados { display: none; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
+  .resultados.visible { display: block; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--borde); }
+  th { color: var(--suave); font-weight: 600; font-size: 13px; }
+  td.num, th.num { text-align: right; }
+  @media (max-width: 640px) { .fila { grid-template-columns: 26px 110px 1fr 76px; gap: 6px; } .reloj { margin-left: 0; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Carrera de políticas de asignación</h1>
+  <p class="sub">Todas las políticas ejecutan la misma lista de tareas sobre un mismo reloj de simulación. Gana la que termina primero.</p>
+
+  <div class="controles">
+    <button id="jugar" class="primario">Iniciar</button>
+    <button id="reiniciar">Reiniciar</button>
+    <button id="final">Ir al final</button>
+    <label>Réplica <select id="replica"></select></label>
+    <label>Velocidad <input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></label>
+    <div class="reloj"><small>Tiempo simulado</small> <span id="reloj">0</span> s</div>
+  </div>
+
+  <div class="leyenda" id="leyenda"></div>
+
+  <section class="marcador"><h2>Marcador</h2><div id="marcador"></div></section>
+  <section class="paneles" id="paneles"></section>
+
+  <section class="resultados" id="resultados">
+    <h2>Resultado final</h2>
+    <table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table>
+  </section>
+</main>
+
+<script>
+const DATOS = /*DATOS*/null;
+
+const NOMBRES = {
+  Aleatoria: 'Aleatoria', BasadaEnClases: 'Basada en clases', FullTurnover: 'Full-turnover',
+  MasCercanaAlES: 'Más cercana al E/S', MasCercanaALaGrua: 'Más cercana a la grúa'
+};
+const [FILAS, COLUMNAS, CAPAS] = DATOS.configuracion;
+const [VEL_FILA, VEL_COLUMNA] = DATOS.velocidad;
+const [COTA_FILA, COTA_COLUMNA, COTA_PROF] = DATOS.cotas, Z_RIEL = DATOS.z_riel;
+const CW = 16, CH = 11, MARGEN_X = 10, MARGEN_Y = 20, FRANJA = 44;
+const BASE = MARGEN_Y + FILAS * CH;                                    // borde inferior de la estantería
+const MARCO = { x: 2, y: MARGEN_Y - 6, w: MARGEN_X + COLUMNAS * CW + 2, h: FILAS * CH + 6 + FRANJA };   // todo ocurre dentro de este marco
+const ANCHO = MARCO.x + MARCO.w + 26, ALTO = MARCO.y + MARCO.h + 4;
+const BLOQUE_ES = { x: MARGEN_X, y: BASE + 7, w: 60, h: 30 };          // E/S: bloque en la esquina inferior izquierda, dentro del marco
+const ES_X = BLOQUE_ES.x + 45, ES_Y = BLOQUE_ES.y + BLOQUE_ES.h / 2;    // posición de la grúa cuando está en el E/S
+const letra = c => c ? String.fromCharCode(64 + c) : '';
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const colorClase = c => css('--clase' + c) || '#888';
+const fmt = n => Math.round(n).toLocaleString('es');
+
+let replicaActual = 0, paneles = [], t = 0, jugando = false, ultimo = 0, lugarSiguiente = 1, totalTareas = 0;
+
+class Panel {
+  constructor(datos, tarjeta) {
+    this.d = datos;
+    this.tarjeta = tarjeta;
+    this.canvas = tarjeta.querySelector('canvas');
+    this.canvas.width = ANCHO * DPR; this.canvas.height = ALTO * DPR;
+    this.ctx = this.canvas.getContext('2d');
+    this.ctx.scale(DPR, DPR);
+    this.ticks = tarjeta.querySelectorAll('.tareas i');
+    this.insignia = tarjeta.querySelector('.insignia');
+    this.pie = tarjeta.querySelector('.pie');
+    this.elTipo = tarjeta.querySelector('.estado .tipo');
+    this.elChip = tarjeta.querySelector('.estado .chip');
+    this.elAccion = tarjeta.querySelector('.estado .accion');
+    this.reiniciar();
+  }
+  reiniciar() {
+    this.estante = Int8Array.from(this.d.inicial);
+    this.io = []; this.mano = 0; this.idx = 0; this.mov = null; this.salioDelES = false;
+    this.anims = []; this.destino = null; this.destinoES = null;
+    this.tarea = -1; this.hechas = 0;
+    this.tipoTarea = ''; this.claseTarea = 0; this.textoAccion = 'La grúa espera en el E/S';
+    this.fin = null; this.lugar = 0;
+    this.tarjeta.classList.remove('termino');
+    this.insignia.textContent = ''; this.insignia.className = 'insignia';
+    this.ticks.forEach((tk, i) => { tk.className = SECUENCIA[i][0] === 0 ? 'a' : 'r'; });
+  }
+  celda(e) { return 'fila ' + (e[2] + 1) + ', col. ' + (e[3] + 1) + ', ' + (e[4] === 0 ? 'fondo' : 'frente'); }
+
+  // Geometría del dibujo: el origen del plano (fila 1, columna 1) está abajo a la izquierda
+  px(y) { return MARGEN_X + (y / COTA_COLUMNA + 0.5) * CW; }
+  py(x) { return MARGEN_Y + (FILAS - x / COTA_FILA - 0.5) * CH; }
+  puntoVisual(x, y, enES) { return enES ? [ES_X, ES_Y] : [this.px(y), this.py(x)]; }
+
+  aplicar(e) {
+    const tipo = e[1];
+    if (tipo === 'T') {
+      if (this.tarea >= 0 && this.ticks[this.tarea].className.indexOf('omitida') < 0) {
+        this.ticks[this.tarea].classList.remove('actual'); this.ticks[this.tarea].classList.add('hecha'); this.hechas++;
+      } else if (this.tarea >= 0) { this.hechas++; }
+      this.tarea++;
+      const tk = this.ticks[this.tarea];
+      if (e[4] === 1) tk.classList.add('actual'); else tk.classList.add('omitida');
+      this.tipoTarea = e[4] === 1 ? (e[2] === 0 ? 'ALMACENAR' : 'RECUPERAR') : 'OMITIDA';
+      this.claseTarea = e[3];
+      this.textoAccion = e[4] === 1 ? '' : (e[2] === 0 ? 'No hay espacio libre para almacenar' : 'No hay ítems de esa clase');
+    } else if (tipo === 'A') {
+      this.io.push(e[2]); this.anims.push({ tipo: 'entra', clase: e[2], t0: performance.now() });
+      this.textoAccion = 'Llega el ítem ' + letra(e[2]) + ' a la ENTRADA del E/S';
+    } else if (tipo === 'M') {
+      this.mov = { t0: e[0], dur: e[2], x0: e[3], y0: e[4], x1: e[5], y1: e[6], txy: e[7], z0: e[8], z1: e[9], ini: e[10], fin: e[11] };
+      // El paso entre el E/S y la estantería dura 0 s en el modelo, el recorrido que sale del E/S se dibuja desde el andén
+      // y el que regresa a la esquina para entregar se dibuja terminando en el andén
+      this.mov.desdeES = this.salioDelES; this.salioDelES = false;
+      if (e[10] === 1 && e[11] === 0) this.salioDelES = true;
+      if (e[11] === 0) {
+        const ev = this.d.eventos;
+        for (let k = this.idx + 1; k < ev.length; k++) if (ev[k][1] === 'M') { this.mov.haciaES = ev[k][10] === 0 && ev[k][11] === 1; break; }
+      }
+      // Celda destino: si el desplazamiento termina dentro de un canal, se resalta la celda y la capa (fondo o frente)
+      // El color indica qué ocurrirá allí: dejar un ítem (turquesa) o retirarlo (rosa)
+      if (e[11] === 0 && e[9] < Z_RIEL - 0.05) {
+        const f = Math.round(e[5] / COTA_FILA), c = Math.round(e[6] / COTA_COLUMNA), k = Math.round(e[9] / COTA_PROF), ev = this.d.eventos;
+        let siguiente = 'P';
+        for (let j = this.idx + 1; j < ev.length; j++) if (ev[j][1] === 'P' || ev[j][1] === 'D') { siguiente = ev[j][1]; break; }
+        this.destino = { f, c, k, tipo: siguiente, clase: siguiente === 'D' ? this.mano : this.estante[(f * COLUMNAS + c) * CAPAS + k], fin: 0 };
+      }
+      // Si el recorrido termina en el andén y la grúa lleva un ítem, el andén es el destino (salida)
+      if (this.mov.haciaES && this.mano) this.destinoES = { clase: this.mano, fin: 0 };
+      if (e[7] > 0) this.textoAccion = 'Se desplaza (x e y a la vez)';
+      else if (e[8] !== e[9]) this.textoAccion = e[9] > e[8] ? 'Sale del canal (eje z)' : 'Entra al canal (eje z)';
+    } else if (tipo === 'P') {
+      const i = (e[2] * COLUMNAS + e[3]) * CAPAS + e[4]; this.mano = this.estante[i]; this.estante[i] = 0;
+      if (this.destino) this.destino.fin = performance.now();
+      this.textoAccion = 'Retira el ítem ' + letra(this.mano) + ' de ' + this.celda(e);
+    } else if (tipo === 'D') {
+      const i = (e[2] * COLUMNAS + e[3]) * CAPAS + e[4]; this.estante[i] = this.mano;
+      if (this.destino) this.destino.fin = performance.now();
+      this.textoAccion = 'Deja el ítem ' + letra(this.mano) + ' en ' + this.celda(e); this.mano = 0;
+    } else if (tipo === 'J') {
+      const clase = this.io.splice(e[2], 1)[0] || 0; this.mano = clase;
+      this.textoAccion = 'La grúa toma el ítem ' + letra(clase) + ' de la ENTRADA';
+    } else if (tipo === 'I') {
+      this.io.push(this.mano); this.textoAccion = 'Deja el ítem ' + letra(this.mano) + ' en la ENTRADA (reubicación temporal)'; this.mano = 0;
+    } else if (tipo === 'S') {
+      this.anims.push({ tipo: 'sale', clase: this.mano, t0: performance.now() });
+      if (this.destinoES) this.destinoES.fin = performance.now();
+      this.textoAccion = 'Entrega el ítem ' + letra(this.mano) + ' a la SALIDA del E/S'; this.mano = 0;
+    } else if (tipo === 'F') {
+      if (this.tarea >= 0 && this.ticks[this.tarea].className.indexOf('omitida') < 0) {
+        this.ticks[this.tarea].classList.remove('actual'); this.ticks[this.tarea].classList.add('hecha');
+      }
+      this.hechas = totalTareas; this.fin = e[0]; this.lugar = lugarSiguiente++;
+      this.tipoTarea = 'TERMINADO'; this.claseTarea = 0; this.textoAccion = 'Lista completa, la grúa vuelve al reposo';
+      this.tarjeta.classList.add('termino');
+      this.insignia.textContent = this.lugar + '.º';
+      this.insignia.className = 'insignia' + (this.lugar <= 3 ? ' l' + this.lugar : '');
+    }
+  }
+  avanzar(tiempo) {
+    const ev = this.d.eventos;
+    while (this.idx < ev.length && ev[this.idx][0] <= tiempo) { this.aplicar(ev[this.idx]); this.idx++; }
+  }
+
+  // Un desplazamiento tiene dos fases: x e y simultáneos, cada eje a su propia velocidad (el tiempo Chebyshev es el del eje más lento), y luego z en secuencia
+  // Cuando la grúa está en el E/S se dibuja en la estación del E/S, no sobre la celda de la esquina
+  estadoGrua(tiempo) {
+    const m = this.mov;
+    if (!m) return { X: ES_X, Y: ES_Y, z: Z_RIEL, fase: 0, m: null, dt: 0, enES: true };
+    const dt = Math.max(0, tiempo - m.t0);
+    const tx = Math.abs(m.x1 - m.x0) / VEL_FILA, ty = Math.abs(m.y1 - m.y0) / VEL_COLUMNA;   // tiempo que tarda cada eje
+    const fx = tx > 0 ? Math.min(1, dt / tx) : 1, fy = ty > 0 ? Math.min(1, dt / ty) : 1;
+    const tz = m.dur - m.txy;
+    let z = m.z1, fase = 0;
+    if (m.z1 !== m.z0) {
+      z = m.z0 + (m.z1 - m.z0) * (tz > 0 ? Math.min(1, Math.max(0, (dt - m.txy) / tz)) : 1);
+      if (dt >= m.txy && dt < m.dur) fase = 1;
+    }
+    const A = this.puntoVisual(m.x0, m.y0, m.ini || m.desdeES), B = this.puntoVisual(m.x1, m.y1, m.fin || m.haciaES);
+    const terminado = dt >= m.dur;
+    // en pantalla la columna es el eje horizontal y la fila el vertical
+    return { X: A[0] + (B[0] - A[0]) * fy, Y: A[1] + (B[1] - A[1]) * fx, z, fase, m, dt, A, B, tx, ty, enES: terminado ? !!m.fin : false };
+  }
+
+  chip(g, x, y, tam, clase) {
+    g.fillStyle = colorClase(clase); g.fillRect(x, y, tam, tam);
+    g.fillStyle = '#10151c'; g.font = '700 ' + Math.round(tam * 0.72) + 'px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(letra(clase), x + tam / 2, y + tam / 2 + 0.5);
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+  }
+  dibujar(tiempo) {
+    const g = this.ctx, e = this.estadoGrua(tiempo), ahora = performance.now();
+    const colorAlm = css('--almacenar'), colorRec = css('--recuperar');
+    g.clearRect(0, 0, ANCHO, ALTO);
+
+    // marco único: la estantería y, debajo, la franja con el E/S y el medidor de profundidad
+    g.beginPath(); g.roundRect(MARCO.x, MARCO.y, MARCO.w, MARCO.h, 6);
+    g.fillStyle = css('--vacio'); g.globalAlpha = 0.35; g.fill(); g.globalAlpha = 1;
+    g.strokeStyle = css('--suave'); g.lineWidth = 1.5; g.stroke();
+
+    // celdas: la fila 1 está abajo; la mitad izquierda de cada celda es el fondo del canal y la derecha el frente
+    for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) for (let k = 0; k < CAPAS; k++) {
+      const v = this.estante[(f * COLUMNAS + c) * CAPAS + k];
+      g.fillStyle = v ? colorClase(v) : css('--vacio');
+      const w = (CW - 2) / CAPAS;
+      g.fillRect(MARGEN_X + c * CW + 1 + k * w, MARGEN_Y + (FILAS - 1 - f) * CH + 1, w - (k < CAPAS - 1 ? 0.5 : 0), CH - 2);
+    }
+    // marcas de ejes: filas a la derecha del marco, columnas arriba
+    g.fillStyle = css('--suave'); g.font = '8px system-ui, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'left';
+    for (let f = 0; f < FILAS; f++) if (f === 0 || (f + 1) % 5 === 0 || f === FILAS - 1) g.fillText(f + 1, MARCO.x + MARCO.w + 4, MARGEN_Y + (FILAS - f - 0.5) * CH);
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % 5 === 0) g.fillText(c + 1, MARGEN_X + (c + 0.5) * CW, MARGEN_Y - 9);
+    g.textAlign = 'left';
+
+    // E/S: bloque en la esquina inferior izquierda del marco; su etiqueta indica si entra o sale un ítem
+    const entra = this.anims.find(a => a.tipo === 'entra'), sale = this.anims.find(a => a.tipo === 'sale');
+    const pulso = 0.55 + 0.45 * Math.sin(ahora / 170);
+    g.beginPath(); g.roundRect(BLOQUE_ES.x, BLOQUE_ES.y, BLOQUE_ES.w, BLOQUE_ES.h, 5);
+    g.fillStyle = css('--acento'); g.globalAlpha = 0.18; g.fill(); g.globalAlpha = 1;
+    g.strokeStyle = css('--acento'); g.lineWidth = 2; g.stroke();
+    if (entra || sale || this.destinoES) {
+      g.beginPath(); g.roundRect(BLOQUE_ES.x - 2, BLOQUE_ES.y - 2, BLOQUE_ES.w + 4, BLOQUE_ES.h + 4, 7);
+      g.strokeStyle = entra ? colorAlm : colorRec; g.lineWidth = 3; g.globalAlpha = pulso; g.stroke(); g.globalAlpha = 1;
+    }
+    g.fillStyle = entra ? colorAlm : (sale || this.destinoES) ? colorRec : css('--acento');
+    g.font = '800 11px system-ui, sans-serif'; g.textBaseline = 'alphabetic';
+    g.fillText(entra ? 'ENTRA' : (sale || this.destinoES) ? 'SALE' : 'E/S', BLOQUE_ES.x + 6, BLOQUE_ES.y + 13);
+
+    // el ítem cruza el borde izquierdo del marco al entrar o salir del E/S
+    this.anims = this.anims.filter(a => ahora - a.t0 < 1000);
+    const ease = s => s < 0.5 ? 2 * s * s : 1 - Math.pow(-2 * s + 2, 2) / 2;
+    this.anims.forEach(a => {
+      const k = (ahora - a.t0) / 1000, dentro = BLOQUE_ES.x + 6, fuera = MARCO.x - 22;
+      const x = a.tipo === 'entra' ? fuera + (dentro - fuera) * ease(Math.min(1, k / 0.45)) : dentro + (fuera - dentro) * ease(Math.max(0, Math.min(1, (k - 0.25) / 0.6)));
+      g.globalAlpha = a.tipo === 'entra' ? (k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3) : (k < 0.2 ? 1 : 1 - (k - 0.2) / 0.8);
+      this.chip(g, x, BLOQUE_ES.y + 14, 14, a.clase); g.globalAlpha = 1;
+    });
+    if (this.destinoES && this.destinoES.fin && ahora - this.destinoES.fin > 500) this.destinoES = null;
+
+    // medidor de profundidad (eje z) en la franja inferior: riel, frente y fondo
+    const gx = BLOQUE_ES.x + BLOQUE_ES.w + 36, gw = MARCO.x + MARCO.w - 8 - gx, gy = BASE + 15, gh = 14;
+    const zx = z => gx + (Z_RIEL - z) / Z_RIEL * gw, zFondo = CAPAS * COTA_PROF;
+    g.fillStyle = css('--suave'); g.font = '700 8px system-ui, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'right';
+    g.fillText('PROF.', gx - 4, gy + gh / 2);
+    g.fillStyle = css('--pendiente'); g.fillRect(gx, gy, zx(zFondo) - gx, gh);
+    for (let k = CAPAS - 1; k >= 0; k--) { g.fillStyle = k % 2 === 0 ? css('--vacio') : css('--borde'); g.fillRect(zx((k + 1) * COTA_PROF), gy, zx(k * COTA_PROF) - zx((k + 1) * COTA_PROF), gh); }
+    g.fillStyle = css('--suave'); g.font = '8px system-ui, sans-serif'; g.textAlign = 'center';
+    g.fillText('riel', (gx + zx(zFondo)) / 2, gy + gh / 2 + 0.5);
+    g.fillText('frente', (zx(CAPAS * COTA_PROF) + zx((CAPAS - 1) * COTA_PROF)) / 2, gy + gh / 2 + 0.5);
+    g.fillText('fondo', (zx(COTA_PROF) + zx(0)) / 2, gy + gh / 2 + 0.5);
+    g.strokeStyle = 'rgba(0,0,0,0.6)'; g.lineWidth = 5; g.beginPath(); g.moveTo(zx(e.z), gy - 4); g.lineTo(zx(e.z), gy + gh + 4); g.stroke();
+    g.strokeStyle = e.fase === 1 ? css('--acento') : css('--texto'); g.lineWidth = 2.5; g.beginPath(); g.moveTo(zx(e.z), gy - 4); g.lineTo(zx(e.z), gy + gh + 4); g.stroke();
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+
+    // celda destino: se rellena la capa (fondo o frente) y se rodea con un anillo, turquesa si se deja un ítem y rosa si se retira
+    const d = this.destino;
+    if (d) {
+      const x = MARGEN_X + d.c * CW, y = MARGEN_Y + (FILAS - 1 - d.f) * CH, col = d.tipo === 'D' ? colorAlm : colorRec, w = (CW - 2) / CAPAS;
+      if (d.fin) {
+        const s = (ahora - d.fin) / 500;
+        if (s >= 1) this.destino = null;
+        else { g.globalAlpha = 1 - s; g.strokeStyle = col; g.lineWidth = 2.5; g.strokeRect(x - 1.5 - s * 8, y - 1.5 - s * 5, CW + 3 + s * 16, CH + 3 + s * 10); g.globalAlpha = 1; }
+      } else {
+        g.globalAlpha = 0.6; g.fillStyle = col; g.fillRect(x + 1 + d.k * w, y + 1, w, CH - 2);
+        g.strokeStyle = 'rgba(0,0,0,0.7)'; g.lineWidth = 5.5; g.strokeRect(x - 1.5, y - 1.5, CW + 3, CH + 3);   // halo oscuro para que el anillo se vea sobre cualquier color
+        g.globalAlpha = 0.75 + 0.25 * Math.sin(ahora / 170); g.strokeStyle = col; g.lineWidth = 3; g.strokeRect(x - 1.5, y - 1.5, CW + 3, CH + 3); g.globalAlpha = 1;
+      }
+    }
+
+    // trayectoria Chebyshev del desplazamiento xy en curso: los dos ejes salen a la vez, cada uno a su velocidad
+    // el camino es una diagonal hasta que llega el eje más rápido (codo) y luego sigue recto por el otro eje
+    // termina en una punta de flecha junto al borde del destino, así no tapa el anillo de la celda ni el bloque E/S
+    const m = e.m;
+    if (m && e.dt < m.dur && m.txy > 0) {
+      const [X0, Y0] = e.A, [X, Y] = e.B, tm = Math.min(e.tx, e.ty);
+      const fy = e.ty === 0 ? 1 : Math.min(1, tm / e.ty), fx = e.tx === 0 ? 1 : Math.min(1, tm / e.tx);
+      const codo = [X0 + (X - X0) * fy, Y0 + (Y - Y0) * fx];
+      let dx = X - codo[0], dy = Y - codo[1], largo = Math.hypot(dx, dy);
+      if (largo < 0.5) { dx = codo[0] - X0; dy = codo[1] - Y0; largo = Math.hypot(dx, dy) || 1; }
+      const dir = [dx / largo, dy / largo], recorte = 9;
+      const fin = [X - dir[0] * recorte, Y - dir[1] * recorte], perp = [-dir[1], dir[0]];
+      [['rgba(0,0,0,0.65)', 5, []], ['#ffffff', 2.2, [6, 4]]].forEach(([color, ancho, guion]) => {
+        g.strokeStyle = color; g.lineWidth = ancho; g.setLineDash(guion);
+        g.beginPath(); g.moveTo(X0, Y0); g.lineTo(codo[0], codo[1]); g.lineTo(fin[0], fin[1]); g.stroke();
+        g.setLineDash([]);
+      });
+      g.beginPath(); g.moveTo(fin[0] + dir[0] * 4, fin[1] + dir[1] * 4);
+      g.lineTo(fin[0] - dir[0] * 4 + perp[0] * 4.5, fin[1] - dir[1] * 4 + perp[1] * 4.5);
+      g.lineTo(fin[0] - dir[0] * 4 - perp[0] * 4.5, fin[1] - dir[1] * 4 - perp[1] * 4.5); g.closePath();
+      g.fillStyle = '#ffffff'; g.strokeStyle = 'rgba(0,0,0,0.65)'; g.lineWidth = 1.5; g.stroke(); g.fill();
+      g.beginPath(); g.arc(codo[0], codo[1], 2.5, 0, Math.PI * 2); g.fill(); g.stroke();
+    }
+
+    // grúa: anillo (relleno mientras se mueve en z) y, si está dentro de la estantería, cruz sobre su fila y columna
+    const cx = e.X, cy = e.Y, dentro = cy < BASE + 1;
+    if (dentro) {
+      g.strokeStyle = css('--texto'); g.globalAlpha = 0.22; g.lineWidth = 1;
+      g.beginPath(); g.moveTo(MARGEN_X - 4, cy); g.lineTo(MARGEN_X + COLUMNAS * CW, cy); g.moveTo(cx, MARGEN_Y - 4); g.lineTo(cx, BASE); g.stroke(); g.globalAlpha = 1;
+    }
+    g.beginPath(); g.arc(cx, cy, 6, 0, Math.PI * 2);
+    if (e.fase === 1) { g.fillStyle = css('--acento'); g.fill(); }
+    else if (!dentro) { g.fillStyle = '#ffffff'; g.fill(); }
+    g.strokeStyle = dentro ? css('--texto') : '#10151c'; g.lineWidth = 2; g.stroke();
+    if (this.mano) {
+      const bx = cx + 8, by = Math.max(cy - 17, MARCO.y + 2);
+      this.chip(g, bx, by, 14, this.mano);
+      g.strokeStyle = css('--texto'); g.lineWidth = 1.5; g.strokeRect(bx, by, 14, 14);
+    }
+  }
+  actualizarPie(tiempo) {
+    const t = this.fin !== null ? this.fin : tiempo;
+    const hechas = this.fin !== null ? totalTareas : this.hechas;
+    // rótulo grande de la tarea en curso: acción y clase del ítem
+    this.elTipo.textContent = this.tipoTarea || 'EN ESPERA';
+    this.elTipo.className = 'tipo ' + ({ ALMACENAR: 'almacenar', RECUPERAR: 'recuperar', OMITIDA: 'omitida', TERMINADO: 'fin' }[this.tipoTarea] || '');
+    this.elChip.style.display = this.claseTarea ? 'inline-flex' : 'none';
+    this.elChip.textContent = letra(this.claseTarea); this.elChip.style.background = this.claseTarea ? colorClase(this.claseTarea) : '';
+    this.elAccion.textContent = this.textoAccion;
+    this.pie.innerHTML = '<span>Tareas ' + hechas + '/' + totalTareas + '</span><span>' +
+      (this.fin !== null ? 'Terminó en ' + fmt(this.fin) + ' s' : fmt(t) + ' s') + '</span>';
+  }
+  progreso() { return this.fin !== null ? totalTareas : this.hechas; }
+}
+
+let SECUENCIA = [];
+
+function construir() {
+  const r = DATOS.replicas[replicaActual];
+  SECUENCIA = r.secuencia; totalTareas = SECUENCIA.length;
+  const cont = document.getElementById('paneles'); cont.innerHTML = '';
+  paneles = r.politicas.map(p => {
+    const tarjeta = document.createElement('article'); tarjeta.className = 'panel';
+    tarjeta.innerHTML = '<div class="cabecera"><h3>' + (NOMBRES[p.nombre] || p.nombre) + '</h3><span class="insignia"></span></div>' +
+      '<div class="estado"><div class="linea"><span class="tipo"></span><span class="chip"></span></div><span class="accion"></span></div><canvas></canvas><div class="tareas">' + SECUENCIA.map(() => '<i></i>').join('') + '</div><div class="pie"></div>';
+    cont.appendChild(tarjeta);
+    return new Panel(p, tarjeta);
+  });
+  const marc = document.getElementById('marcador'); marc.innerHTML = '';
+  paneles.forEach((p, i) => {
+    const f = document.createElement('div'); f.className = 'fila'; f.dataset.i = i;
+    f.innerHTML = '<span class="lugar">–</span><span>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</span><span class="barra"><i></i></span><span class="valor"></span>';
+    marc.appendChild(f);
+  });
+  document.getElementById('resultados').classList.remove('visible');
+  reiniciar();
+}
+
+function reiniciar() {
+  t = 0; lugarSiguiente = 1; jugando = false;
+  document.getElementById('jugar').textContent = 'Iniciar';
+  paneles.forEach(p => p.reiniciar());
+  paso(0);
+}
+
+function marcador() {
+  const filas = Array.from(document.querySelectorAll('.fila'));
+  const orden = paneles.map((p, i) => i).sort((a, b) => {
+    const A = paneles[a], B = paneles[b];
+    if (A.fin !== null && B.fin !== null) return A.fin - B.fin;
+    if (A.fin !== null) return -1; if (B.fin !== null) return 1;
+    return B.progreso() - A.progreso();
+  });
+  const cont = document.getElementById('marcador');
+  orden.forEach((i, pos) => {
+    const f = filas.find(x => +x.dataset.i === i), p = paneles[i];
+    f.querySelector('.lugar').textContent = p.fin !== null ? p.lugar + '.º' : (pos + 1);
+    f.querySelector('.barra i').style.width = (100 * p.progreso() / totalTareas) + '%';
+    f.querySelector('.valor').textContent = p.fin !== null ? fmt(p.fin) + ' s' : p.progreso() + '/' + totalTareas;
+    f.classList.toggle('termino', p.fin !== null);
+    cont.appendChild(f);
+  });
+}
+
+function resultados() {
+  const orden = paneles.slice().sort((a, b) => a.fin - b.fin), mejor = orden[0].fin;
+  document.getElementById('tabla').innerHTML = orden.map((p, i) =>
+    '<tr><td>' + (i + 1) + '.º</td><td>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</td><td class="num">' + fmt(p.fin) +
+    '</td><td class="num">' + (i === 0 ? '–' : '+' + fmt(p.fin - mejor) + ' s (+' + (100 * (p.fin - mejor) / mejor).toFixed(0) + ' %)') +
+    '</td><td class="num">' + p.d.reubicaciones + '</td></tr>').join('');
+  document.getElementById('resultados').classList.add('visible');
+}
+
+let ultimoMarcador = 0;
+function paso(dt) {
+  t += dt;
+  paneles.forEach(p => { p.avanzar(t); p.dibujar(t); p.actualizarPie(t); });
+  document.getElementById('reloj').textContent = fmt(t);
+  const ahora = performance.now();
+  if (ahora - ultimoMarcador > 150 || dt === 0) { marcador(); ultimoMarcador = ahora; }
+  if (paneles.every(p => p.fin !== null)) {
+    marcador(); resultados();
+    jugando = false; document.getElementById('jugar').textContent = 'Repetir';
+  }
+}
+
+function velocidadReal() { return Math.round(Math.pow(10, 1 + document.getElementById('velocidad').value / 100 * 2.6)); }
+function mostrarVelocidad() { document.getElementById('velocidadTexto').textContent = fmt(velocidadReal()) + ' s/s'; }
+
+function bucle(ms) {
+  if (!jugando) return;
+  const dt = Math.min((ms - ultimo) / 1000, 0.1) * velocidadReal();
+  ultimo = ms; paso(dt);
+  if (jugando) requestAnimationFrame(bucle);
+}
+
+document.getElementById('jugar').onclick = () => {
+  if (paneles.every(p => p.fin !== null)) reiniciar();
+  jugando = !jugando;
+  document.getElementById('jugar').textContent = jugando ? 'Pausar' : 'Continuar';
+  if (jugando) { ultimo = performance.now(); requestAnimationFrame(bucle); }
+};
+document.getElementById('reiniciar').onclick = reiniciar;
+document.getElementById('final').onclick = () => {
+  jugando = false; document.getElementById('jugar').textContent = 'Repetir';
+  paneles.forEach(p => p.reiniciar()); lugarSiguiente = 1; t = 0;
+  // se avanza en pasos pequeños para que los lugares de llegada respeten el orden de tiempo
+  while (!paneles.every(p => p.fin !== null)) { t += 1; paneles.forEach(p => p.avanzar(t)); }
+  paso(0);
+};
+document.getElementById('velocidad').oninput = mostrarVelocidad;
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'SELECT') { e.preventDefault(); document.getElementById('jugar').click(); } });
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => paso(0));
+
+const selReplica = document.getElementById('replica');
+DATOS.replicas.forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = (i + 1) + ' (semilla ' + r.semilla + ')'; selReplica.appendChild(o); });
+selReplica.onchange = () => { replicaActual = +selReplica.value; construir(); };
+
+const ley = document.getElementById('leyenda');
+for (let c = 1; c <= DATOS.clases; c++) ley.insertAdjacentHTML('beforeend', '<span><i class="punto" style="background:var(--clase' + c + ')"></i>Clase ' + letra(c) + '</span>');
+ley.insertAdjacentHTML('beforeend',
+  '<span><i class="punto" style="background:var(--vacio)"></i>Celda libre</span>' +
+  '<span><i class="punto" style="background:var(--acento)"></i>E/S: bloque en la esquina inferior izquierda, por donde entran y salen los ítems</span>' +
+  '<span><i class="punto" style="background:var(--almacenar)"></i>Turquesa: destino donde se deja un ítem, o entrada al E/S</span>' +
+  '<span><i class="punto" style="background:var(--recuperar)"></i>Rosa: celda de la que se retira un ítem, o salida hacia el E/S</span>' +
+  '<span><i class="punto" style="background:var(--acento)"></i>E/S: entrada y salida de ítems, fuera de la estantería</span>' +
+  '<span>Origen (fila 1, col. 1) abajo a la izquierda. Cada celda: mitad izquierda = fondo, mitad derecha = frente</span>' +
+  '<span>Línea discontinua: trayectoria Chebyshev (x e y a la vez, cada eje a su velocidad; el punto marca donde llega el eje más rápido); anillo relleno: moviéndose en z</span>' +
+  '<span><i class="punto" style="background:var(--almacenar)"></i>Tarea de almacenar</span>' +
+  '<span><i class="punto" style="background:var(--recuperar)"></i>Tarea de recuperar</span>');
+
+mostrarVelocidad();
+construir();
+</script>
+</body>
+</html>

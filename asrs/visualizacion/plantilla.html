@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carrera de políticas ASRS</title>
+<style>
+  :root {
+    --fondo: #f6f7f9; --tarjeta: #ffffff; --borde: #dde1e7; --texto: #1c2430; --suave: #5b6675;
+    --vacio: #e6e9ee; --hueco: #cfd5de; --acento: #2563eb; --oro: #c9962b; --plata: #8791a0; --bronce: #a8683b;
+    --clase1: #3b82f6; --clase2: #f59e0b; --clase3: #a855f7; --pendiente: #cfd5de;
+    --almacenar: #0d9488; --recuperar: #db2777; --omitida: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fondo: #12161c; --tarjeta: #1a2029; --borde: #2c3542; --texto: #e6eaf0; --suave: #93a0b2;
+      --vacio: #262e3a; --hueco: #171d26; --acento: #5b9bff; --oro: #e3b341; --plata: #a1abb9; --bronce: #cd8a57;
+      --clase1: #5b9bff; --clase2: #fbbf24; --clase3: #c084fc; --pendiente: #323c4a;
+      --almacenar: #2dd4bf; --recuperar: #f472b6; --omitida: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fondo); color: var(--texto); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1500px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 2px; }
+  .sub { color: var(--suave); margin: 0 0 16px; }
+  .controles { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+  button, select { font: inherit; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  button:hover, select:hover { border-color: var(--acento); }
+  button.primario { background: var(--acento); border-color: var(--acento); color: #fff; font-weight: 600; min-width: 96px; }
+  label { color: var(--suave); display: flex; align-items: center; gap: 8px; }
+  input[type=range] { width: 150px; accent-color: var(--acento); }
+  .reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
+  .reloj small { color: var(--suave); font-weight: 400; font-size: 13px; }
+  .leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--suave); font-size: 13px; margin: 0 0 14px; }
+  .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+  .punto { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .marcador { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .marcador h2, .resultados h2 { font-size: 14px; margin: 0 0 8px; color: var(--suave); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .fila { display: grid; grid-template-columns: 34px 170px 1fr 120px; align-items: center; gap: 10px; padding: 3px 0; }
+  .fila .lugar { font-weight: 700; color: var(--suave); text-align: center; }
+  .fila .barra { height: 12px; background: var(--vacio); border-radius: 6px; overflow: hidden; }
+  .fila .barra i { display: block; height: 100%; width: 0; background: var(--acento); border-radius: 6px; }
+  .fila .valor { text-align: right; font-variant-numeric: tabular-nums; color: var(--suave); }
+  .fila.termino .barra i { background: var(--almacenar); }
+  .paneles { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+  .panel { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
+  .panel.termino { border-color: var(--almacenar); }
+  .panel .cabecera { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .panel h3 { margin: 0; font-size: 16px; }
+  .insignia { font-weight: 700; font-size: 13px; padding: 2px 10px; border-radius: 999px; background: var(--vacio); color: var(--suave); }
+  .insignia.l1 { background: var(--oro); color: #fff; } .insignia.l2 { background: var(--plata); color: #fff; } .insignia.l3 { background: var(--bronce); color: #fff; }
+  canvas { width: 100%; height: auto; display: block; }
+  .estado { min-height: 62px; margin-bottom: 6px; }
+  .estado .linea { display: flex; align-items: center; gap: 10px; }
+  .estado .tipo { font-weight: 800; font-size: 20px; letter-spacing: .05em; color: var(--suave); }
+  .estado .tipo.almacenar { color: var(--almacenar); } .estado .tipo.recuperar { color: var(--recuperar); }
+  .estado .tipo.omitida { color: var(--omitida); }
+  .estado .chip { display: none; width: 30px; height: 30px; border-radius: 7px; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; color: #10151c; }
+  .estado .accion { display: block; color: var(--suave); font-size: 13px; min-height: 18px; margin-top: 2px; }
+  .tareas { display: grid; grid-template-columns: repeat(36, 1fr); gap: 2px; margin: 10px 0 8px; }
+  .tareas i { height: 9px; border-radius: 2px; background: var(--pendiente); }
+  .tareas i.a { background: var(--almacenar); opacity: .35; } .tareas i.r { background: var(--recuperar); opacity: .35; }
+  .tareas i.hecha { opacity: 1; } .tareas i.actual { opacity: 1; outline: 2px solid var(--texto); outline-offset: 1px; }
+  .tareas i.omitida { background: transparent; outline: 1px solid var(--omitida); outline-offset: -1px; opacity: 1; }
+  .pie { display: flex; justify-content: space-between; color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .resultados { display: none; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
+  .resultados.visible { display: block; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--borde); }
+  th { color: var(--suave); font-weight: 600; font-size: 13px; }
+  td.num, th.num { text-align: right; }
+  @media (max-width: 640px) { .fila { grid-template-columns: 26px 110px 1fr 76px; gap: 6px; } .reloj { margin-left: 0; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Carrera de políticas de asignación</h1>
+  <p class="sub">Todas las políticas ejecutan la misma lista de tareas sobre un mismo reloj de simulación. Gana la que termina primero.</p>
+
+  <div class="controles">
+    <button id="jugar" class="primario">Iniciar</button>
+    <button id="reiniciar">Reiniciar</button>
+    <button id="final">Ir al final</button>
+    <label>Réplica <select id="replica"></select></label>
+    <label>Velocidad <input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></label>
+    <div class="reloj"><small>Tiempo simulado</small> <span id="reloj">0</span> s</div>
+  </div>
+
+  <div class="leyenda" id="leyenda"></div>
+
+  <section class="marcador"><h2>Marcador</h2><div id="marcador"></div></section>
+  <section class="paneles" id="paneles"></section>
+
+  <section class="resultados" id="resultados">
+    <h2>Resultado final</h2>
+    <table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table>
+  </section>
+</main>
+
+<script>
+const DATOS = /*DATOS*/null;
+
+const NOMBRES = {
+  Aleatoria: 'Aleatoria', BasadaEnClases: 'Basada en clases', FullTurnover: 'Full-turnover',
+  MasCercanaAlES: 'Más cercana al E/S', MasCercanaALaGrua: 'Más cercana a la grúa'
+};
+const [FILAS, COLUMNAS, CAPAS] = DATOS.configuracion;
+const [VEL_FILA, VEL_COLUMNA] = DATOS.velocidad;
+const [COTA_FILA, COTA_COLUMNA, COTA_PROF] = DATOS.cotas, Z_RIEL = DATOS.z_riel;
+// Medidas en metros: una celda mide COL_M (columna) x FIL_M (fila) x PRO_M (profundidad)
+const COL_M = COTA_COLUMNA, FIL_M = COTA_FILA, PRO_M = COTA_PROF;
+const LARGO = COLUMNAS * COL_M, ALTURA = FILAS * FIL_M, FONDO = CAPAS * PRO_M;
+// E/S: plataforma a nivel del suelo, en el pasillo, pasado el extremo izquierdo de la estantería (abajo a la izquierda)
+const PLATAFORMA = { x0: -3.2, x1: -1.1, y0: Z_RIEL - 0.8, y1: Z_RIEL + 0.8, h: 0.5 };
+const ES_X = (PLATAFORMA.x0 + PLATAFORMA.x1) / 2;
+// Proyección isométrica: X = columnas (hacia la derecha), Y = profundidad (hacia el pasillo), H = altura
+// La escala vertical y la de profundidad se comprimen para que la estantería (muy alta y muy profunda) quepa en el panel
+const ESC = 13, ESC_V = 5.2, DY = 0.55, C30 = Math.cos(Math.PI / 6);
+const proy0 = (X, Y, H) => [(X - Y * DY) * C30 * ESC, (X + Y * DY) * 0.5 * ESC - H * ESC_V];
+const LIM = { x0: -5.4, x1: LARGO + 0.5, y0: 0, y1: Z_RIEL + 1.2, h0: 0, h1: ALTURA + 1.6 };
+let minSX = 1e9, minSY = 1e9, maxSX = -1e9, maxSY = -1e9;
+[LIM.x0, LIM.x1].forEach(X => [LIM.y0, LIM.y1].forEach(Y => [LIM.h0, LIM.h1].forEach(H => {
+  const [a, b] = proy0(X, Y, H); minSX = Math.min(minSX, a); maxSX = Math.max(maxSX, a); minSY = Math.min(minSY, b); maxSY = Math.max(maxSY, b);
+})));
+const PAD = 10, OX = PAD - minSX, OY = PAD - minSY;
+const ANCHO = Math.ceil(maxSX - minSX + 2 * PAD), ALTO = Math.ceil(maxSY - minSY + 2 * PAD + 12);
+const proy = (X, Y, H) => { const [a, b] = proy0(X, Y, H); return [a + OX, b + OY]; };
+// Orden de dibujo (de lo lejano a lo cercano): se proyecta cada hueco sobre la dirección de la vista
+const DIR_VISTA = [DY, 1, DY * ESC / ESC_V];
+const ORDEN_HUECOS = (() => {
+  const lista = [];
+  for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) for (let k = 0; k < CAPAS; k++) {
+    const X = (c + 0.5) * COL_M, Y = (k + 0.5) * PRO_M, H = (f + 0.5) * FIL_M;
+    lista.push({ f, c, k, clave: X * DIR_VISTA[0] + Y * DIR_VISTA[1] + H * DIR_VISTA[2] });
+  }
+  return lista.sort((a, b) => a.clave - b.clave);
+})();
+const RANGO = new Int32Array(FILAS * COLUMNAS * CAPAS);
+ORDEN_HUECOS.forEach((h, i) => { RANGO[(h.f * COLUMNAS + h.c) * CAPAS + h.k] = i; });
+const letra = c => c ? String.fromCharCode(64 + c) : '';
+const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const colorClase = c => css('--clase' + c) || '#888';
+const fmt = n => Math.round(n).toLocaleString('es');
+
+let replicaActual = 0, paneles = [], t = 0, jugando = false, ultimo = 0, lugarSiguiente = 1, totalTareas = 0;
+
+const tonos = new Map();
+// Aclara u oscurece un color (#rgb, #rrggbb o rgb()) multiplicando sus canales
+function tono(color, factor) {
+  const clave = color + '|' + factor;
+  if (tonos.has(clave)) return tonos.get(clave);
+  let r = 128, g = 128, b = 128, m;
+  if ((m = /^#([0-9a-f]{3})$/i.exec(color))) { r = parseInt(m[1][0] + m[1][0], 16); g = parseInt(m[1][1] + m[1][1], 16); b = parseInt(m[1][2] + m[1][2], 16); }
+  else if ((m = /^#([0-9a-f]{6})$/i.exec(color))) { r = parseInt(m[1].slice(0, 2), 16); g = parseInt(m[1].slice(2, 4), 16); b = parseInt(m[1].slice(4, 6), 16); }
+  else if ((m = /rgba?\(\s*(\d+)[ ,]+(\d+)[ ,]+(\d+)/i.exec(color))) { r = +m[1]; g = +m[2]; b = +m[3]; }
+  const k = v => Math.max(0, Math.min(255, Math.round(v * factor)));
+  const res = 'rgb(' + k(r) + ',' + k(g) + ',' + k(b) + ')';
+  tonos.set(clave, res);
+  return res;
+}
+
+class Panel {
+  constructor(datos, tarjeta) {
+    this.d = datos;
+    this.tarjeta = tarjeta;
+    this.canvas = tarjeta.querySelector('canvas');
+    this.canvas.width = ANCHO * DPR; this.canvas.height = ALTO * DPR;
+    this.ctx = this.canvas.getContext('2d');
+    this.ctx.scale(DPR, DPR);
+    // Tres capas fuera de pantalla: el fondo (suelo y huecos) y el marco (cara lateral y tapa) solo se pintan al iniciar o al cambiar el tema
+    // La capa de ítems se repinta por partes: cuando cambia un hueco solo se redibujan ese hueco y sus vecinos
+    const nuevaCapa = () => { const cv = document.createElement('canvas'); cv.width = ANCHO * DPR; cv.height = ALTO * DPR; const cx = cv.getContext('2d'); cx.scale(DPR, DPR); return [cv, cx]; };
+    [this.capaFondo, this.gF] = nuevaCapa(); [this.capaItems, this.gI] = nuevaCapa(); [this.capaMarco, this.gM] = nuevaCapa();
+    this.ticks = tarjeta.querySelectorAll('.tareas i');
+    this.insignia = tarjeta.querySelector('.insignia');
+    this.pie = tarjeta.querySelector('.pie');
+    this.elTipo = tarjeta.querySelector('.estado .tipo');
+    this.elChip = tarjeta.querySelector('.estado .chip');
+    this.elAccion = tarjeta.querySelector('.estado .accion');
+    this.reiniciar();
+  }
+  reiniciar() {
+    this.estante = Int8Array.from(this.d.inicial);
+    this.io = []; this.mano = 0; this.idx = 0; this.mov = null; this.salioDelES = false;
+    this.anims = []; this.destino = null; this.destinoES = null; this.sucioFondo = true; this.sucioItems = true; this.cambios = [];
+    this.tarea = -1; this.hechas = 0;
+    this.tipoTarea = ''; this.claseTarea = 0; this.textoAccion = 'La grúa espera en el E/S';
+    this.fin = null; this.lugar = 0;
+    this.tarjeta.classList.remove('termino');
+    this.insignia.textContent = ''; this.insignia.className = 'insignia';
+    this.ticks.forEach((tk, i) => { tk.className = SECUENCIA[i][0] === 0 ? 'a' : 'r'; });
+  }
+  celda(e) { return 'fila ' + (e[2] + 1) + ', col. ' + (e[3] + 1) + ', ' + (e[4] === 0 ? 'fondo' : 'frente'); }
+
+  aplicar(e) {
+    const tipo = e[1];
+    if (tipo === 'T') {
+      if (this.tarea >= 0 && this.ticks[this.tarea].className.indexOf('omitida') < 0) {
+        this.ticks[this.tarea].classList.remove('actual'); this.ticks[this.tarea].classList.add('hecha'); this.hechas++;
+      } else if (this.tarea >= 0) { this.hechas++; }
+      this.tarea++;
+      const tk = this.ticks[this.tarea];
+      if (e[4] === 1) tk.classList.add('actual'); else tk.classList.add('omitida');
+      this.tipoTarea = e[4] === 1 ? (e[2] === 0 ? 'ALMACENAR' : 'RECUPERAR') : 'OMITIDA';
+      this.claseTarea = e[3];
+      this.textoAccion = e[4] === 1 ? '' : (e[2] === 0 ? 'No hay espacio libre para almacenar' : 'No hay ítems de esa clase');
+    } else if (tipo === 'A') {
+      this.io.push(e[2]); this.anims.push({ tipo: 'entra', clase: e[2], t0: performance.now() });
+      this.textoAccion = 'Llega el ítem ' + letra(e[2]) + ' a la ENTRADA del E/S';
+    } else if (tipo === 'M') {
+      this.mov = { t0: e[0], dur: e[2], x0: e[3], y0: e[4], x1: e[5], y1: e[6], txy: e[7], z0: e[8], z1: e[9], ini: e[10], fin: e[11] };
+      // El paso entre el E/S y la estantería dura 0 s en el modelo: el recorrido que sale del E/S se dibuja desde la plataforma
+      // y el que regresa a la esquina para entregar se dibuja terminando en la plataforma
+      this.mov.desdeES = this.salioDelES; this.salioDelES = false;
+      if (e[10] === 1 && e[11] === 0) this.salioDelES = true;
+      if (e[11] === 0) {
+        const ev = this.d.eventos;
+        for (let k = this.idx + 1; k < ev.length; k++) if (ev[k][1] === 'M') { this.mov.haciaES = ev[k][10] === 0 && ev[k][11] === 1; break; }
+      }
+      // Celda destino: si el desplazamiento termina dentro de un canal, se resalta ese hueco
+      // El color indica qué ocurrirá allí: dejar un ítem (turquesa) o retirarlo (rosa)
+      if (e[11] === 0 && e[9] < Z_RIEL - 0.05) {
+        const f = Math.round(e[5] / COTA_FILA), c = Math.round(e[6] / COTA_COLUMNA), k = Math.round(e[9] / COTA_PROF), ev = this.d.eventos;
+        let siguiente = 'P';
+        for (let j = this.idx + 1; j < ev.length; j++) if (ev[j][1] === 'P' || ev[j][1] === 'D') { siguiente = ev[j][1]; break; }
+        this.destino = { f, c, k, tipo: siguiente, clase: siguiente === 'D' ? this.mano : this.estante[(f * COLUMNAS + c) * CAPAS + k], fin: 0 };
+      }
+      // Si el recorrido termina en el E/S y la grúa lleva un ítem, la plataforma es el destino (salida)
+      if (this.mov.haciaES && this.mano) this.destinoES = { clase: this.mano, fin: 0 };
+      if (e[7] > 0) this.textoAccion = 'Se desplaza (x e y a la vez)';
+      else if (e[8] !== e[9]) this.textoAccion = e[9] > e[8] ? 'Sale del canal (eje z)' : 'Entra al canal (eje z)';
+    } else if (tipo === 'P') {
+      const i = (e[2] * COLUMNAS + e[3]) * CAPAS + e[4]; this.mano = this.estante[i]; this.estante[i] = 0; this.cambios.push([e[2], e[3], e[4]]);
+      if (this.destino) this.destino.fin = performance.now();
+      this.textoAccion = 'Retira el ítem ' + letra(this.mano) + ' de ' + this.celda(e);
+    } else if (tipo === 'D') {
+      const i = (e[2] * COLUMNAS + e[3]) * CAPAS + e[4]; this.estante[i] = this.mano; this.cambios.push([e[2], e[3], e[4]]);
+      if (this.destino) this.destino.fin = performance.now();
+      this.textoAccion = 'Deja el ítem ' + letra(this.mano) + ' en ' + this.celda(e); this.mano = 0;
+    } else if (tipo === 'J') {
+      const clase = this.io.splice(e[2], 1)[0] || 0; this.mano = clase;
+      this.textoAccion = 'La grúa toma el ítem ' + letra(clase) + ' de la ENTRADA';
+    } else if (tipo === 'I') {
+      this.io.push(this.mano); this.textoAccion = 'Deja el ítem ' + letra(this.mano) + ' en la ENTRADA (reubicación temporal)'; this.mano = 0;
+    } else if (tipo === 'S') {
+      this.anims.push({ tipo: 'sale', clase: this.mano, t0: performance.now() });
+      if (this.destinoES) this.destinoES.fin = performance.now();
+      this.textoAccion = 'Entrega el ítem ' + letra(this.mano) + ' a la SALIDA del E/S'; this.mano = 0;
+    } else if (tipo === 'F') {
+      if (this.tarea >= 0 && this.ticks[this.tarea].className.indexOf('omitida') < 0) {
+        this.ticks[this.tarea].classList.remove('actual'); this.ticks[this.tarea].classList.add('hecha');
+      }
+      this.hechas = totalTareas; this.fin = e[0]; this.lugar = lugarSiguiente++;
+      this.tipoTarea = 'TERMINADO'; this.claseTarea = 0; this.textoAccion = 'Lista completa, la grúa vuelve al reposo';
+      this.tarjeta.classList.add('termino');
+      this.insignia.textContent = this.lugar + '.º';
+      this.insignia.className = 'insignia' + (this.lugar <= 3 ? ' l' + this.lugar : '');
+    }
+  }
+  avanzar(tiempo) {
+    const ev = this.d.eventos;
+    while (this.idx < ev.length && ev[this.idx][0] <= tiempo) { this.aplicar(ev[this.idx]); this.idx++; }
+  }
+
+  // Posición de la grúa en el mundo (metros). Un desplazamiento tiene dos fases:
+  // x e y simultáneos, cada eje a su propia velocidad (el tiempo Chebyshev es el del eje más lento), y luego z en secuencia
+  // H es la altura del carro, X la posición a lo largo del pasillo y Y hasta dónde llega la horquilla hacia el fondo
+  estadoGrua(tiempo) {
+    const reposo = { H: 0.8, X: ES_X };
+    const m = this.mov;
+    if (!m) return { H: reposo.H, X: reposo.X, Y: Z_RIEL, z: Z_RIEL, fase: 0, m: null, dt: 0, enES: true };
+    const dt = Math.max(0, tiempo - m.t0);
+    const tx = Math.abs(m.x1 - m.x0) / VEL_FILA, ty = Math.abs(m.y1 - m.y0) / VEL_COLUMNA;   // tiempo que tarda cada eje
+    const fx = tx > 0 ? Math.min(1, dt / tx) : 1, fy = ty > 0 ? Math.min(1, dt / ty) : 1;
+    const tz = m.dur - m.txy;
+    let z = m.z1, fase = 0;
+    if (m.z1 !== m.z0) {
+      z = m.z0 + (m.z1 - m.z0) * (tz > 0 ? Math.min(1, Math.max(0, (dt - m.txy) / tz)) : 1);
+      if (dt >= m.txy && dt < m.dur) fase = 1;
+    }
+    const centro = (xm, ym) => ({ H: xm + FIL_M / 2, X: ym + COL_M / 2 });
+    const A = (m.ini || m.desdeES) ? reposo : centro(m.x0, m.y0), B = (m.fin || m.haciaES) ? reposo : centro(m.x1, m.y1);
+    // la punta de la horquilla queda en el centro del hueco cuando está dentro del canal
+    const Y = z + (PRO_M / 2) * Math.max(0, Math.min(1, (Z_RIEL - z) / 1.6));
+    return { H: A.H + (B.H - A.H) * fx, X: A.X + (B.X - A.X) * fy, Y, z, fase, m, dt, A, B, tx, ty, enES: dt >= m.dur ? !!m.fin : false };
+  }
+
+  // ---- dibujo ----
+  poligono(g, puntos, relleno, borde, ancho) {
+    g.beginPath(); puntos.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath();
+    if (relleno) { g.fillStyle = relleno; g.fill(); }
+    if (borde) { g.strokeStyle = borde; g.lineWidth = ancho || 1; g.stroke(); }
+  }
+  // Caja con sus tres caras visibles: arriba, la que mira al pasillo (+Y) y la que mira al extremo derecho (+X)
+  caja(g, x0, x1, y0, y1, h0, h1, color, borde) {
+    this.poligono(g, [proy(x0, y0, h1), proy(x1, y0, h1), proy(x1, y1, h1), proy(x0, y1, h1)], tono(color, 1.2), borde, 0.6);
+    this.poligono(g, [proy(x0, y1, h0), proy(x1, y1, h0), proy(x1, y1, h1), proy(x0, y1, h1)], color, borde, 0.6);
+    this.poligono(g, [proy(x1, y0, h0), proy(x1, y1, h0), proy(x1, y1, h1), proy(x1, y0, h1)], tono(color, 0.7), borde, 0.6);
+  }
+  armazon(g, x0, x1, y0, y1, h0, h1, color, ancho) {
+    const P = [[x0, y0, h0], [x1, y0, h0], [x1, y1, h0], [x0, y1, h0], [x0, y0, h1], [x1, y0, h1], [x1, y1, h1], [x0, y1, h1]].map(p => proy(p[0], p[1], p[2]));
+    g.strokeStyle = color; g.lineWidth = ancho; g.lineJoin = 'round';
+    [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]].forEach(([a, b]) => { g.beginPath(); g.moveTo(P[a][0], P[a][1]); g.lineTo(P[b][0], P[b][1]); g.stroke(); });
+  }
+  // Fondo: suelo, pasillo, un hueco oscuro por celda y las marcas de los ejes. Marco: cara lateral y tapa de la estantería
+  pintarFondo() {
+    const g = this.gF; g.clearRect(0, 0, ANCHO, ALTO);
+    this.poligono(g, [proy(LIM.x0 + 1.6, 0, 0), proy(LARGO + 0.2, 0, 0), proy(LARGO + 0.2, Z_RIEL + 0.9, 0), proy(LIM.x0 + 1.6, Z_RIEL + 0.9, 0)], css('--vacio'), css('--borde'), 1);
+    this.poligono(g, [proy(LIM.x0 + 1.6, FONDO, 0), proy(LARGO + 0.2, FONDO, 0), proy(LARGO + 0.2, Z_RIEL + 0.9, 0), proy(LIM.x0 + 1.6, Z_RIEL + 0.9, 0)], css('--pendiente'), null);
+    const hueco = css('--hueco'), borde = css('--borde');
+    for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) {
+      const X0 = c * COL_M, X1 = X0 + COL_M, H0 = f * FIL_M, H1 = H0 + FIL_M;
+      this.poligono(g, [proy(X0, FONDO, H0), proy(X1, FONDO, H0), proy(X1, FONDO, H1), proy(X0, FONDO, H1)], hueco, borde, 0.6);
+    }
+    g.fillStyle = css('--suave'); g.font = '8px system-ui, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'center';
+    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % 5 === 0) { const q = proy((c + 0.5) * COL_M, Z_RIEL + 0.9, 0); g.fillText(c + 1, q[0], q[1] + 8); }
+    g.textAlign = 'right';
+    for (let f = 0; f < FILAS; f++) if (f === 0 || (f + 1) % 5 === 0 || f === FILAS - 1) { const q = proy(-0.2, FONDO, (f + 0.5) * FIL_M); g.fillText(f + 1, q[0] - 4, q[1]); }
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    const m = this.gM; m.clearRect(0, 0, ANCHO, ALTO);
+    this.poligono(m, [proy(LARGO, 0, 0), proy(LARGO, FONDO, 0), proy(LARGO, FONDO, ALTURA), proy(LARGO, 0, ALTURA)], tono(css('--borde'), 0.9), css('--suave'), 1);
+    this.poligono(m, [proy(0, 0, ALTURA), proy(LARGO, 0, ALTURA), proy(LARGO, FONDO, ALTURA), proy(0, FONDO, ALTURA)], tono(css('--borde'), 1.15), css('--suave'), 1);
+  }
+  // Caja del ítem que ocupa un hueco, si lo hay
+  itemEn(g, f, c, k) {
+    const v = this.estante[(f * COLUMNAS + c) * CAPAS + k];
+    if (!v) return;
+    const ix = 0.12 * COL_M, iy = 0.14 * PRO_M, ih = 0.16 * FIL_M;
+    this.caja(g, c * COL_M + ix, (c + 1) * COL_M - ix, k * PRO_M + iy, (k + 1) * PRO_M - iy, f * FIL_M + ih, (f + 1) * FIL_M - ih, colorClase(v), 'rgba(0,0,0,0.35)');
+  }
+  pintarItems() {
+    const g = this.gI; g.clearRect(0, 0, ANCHO, ALTO);
+    ORDEN_HUECOS.forEach(h => this.itemEn(g, h.f, h.c, h.k));
+  }
+  // Redibuja un hueco y sus vecinos (de lo lejano a lo cercano) dentro del rectángulo que ocupa su caja
+  repintarHueco(f, c, k) {
+    const g = this.gI, ix = 0.12 * COL_M, iy = 0.14 * PRO_M, ih = 0.16 * FIL_M;
+    const x0 = c * COL_M + ix, x1 = (c + 1) * COL_M - ix, y0 = k * PRO_M + iy, y1 = (k + 1) * PRO_M - iy, h0 = f * FIL_M + ih, h1 = (f + 1) * FIL_M - ih;
+    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+    [x0, x1].forEach(X => [y0, y1].forEach(Y => [h0, h1].forEach(H => { const q = proy(X, Y, H); minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]); minY = Math.min(minY, q[1]); maxY = Math.max(maxY, q[1]); })));
+    minX -= 2; minY -= 2; maxX += 2; maxY += 2;
+    const candidatos = [];
+    for (let cc = Math.max(0, c - 3); cc <= Math.min(COLUMNAS - 1, c + 3); cc++) for (let ff = Math.max(0, f - 3); ff <= Math.min(FILAS - 1, f + 3); ff++) for (let kk = 0; kk < CAPAS; kk++) {
+      if (this.estante[(ff * COLUMNAS + cc) * CAPAS + kk]) candidatos.push([RANGO[(ff * COLUMNAS + cc) * CAPAS + kk], ff, cc, kk]);
+    }
+    candidatos.sort((a, b) => a[0] - b[0]);
+    g.save(); g.beginPath(); g.rect(minX, minY, maxX - minX, maxY - minY); g.clip(); g.clearRect(minX, minY, maxX - minX, maxY - minY);
+    candidatos.forEach(q => this.itemEn(g, q[1], q[2], q[3]));
+    g.restore();
+  }
+
+  dibujar(tiempo) {
+    const g = this.ctx, e = this.estadoGrua(tiempo), ahora = performance.now();
+    const colorAlm = css('--almacenar'), colorRec = css('--recuperar');
+    if (this.sucioFondo) { this.pintarFondo(); this.sucioFondo = false; }
+    if (this.sucioItems || this.cambios.length > 40) { this.pintarItems(); this.sucioItems = false; this.cambios = []; }
+    else if (this.cambios.length) { this.cambios.forEach(q => this.repintarHueco(q[0], q[1], q[2])); this.cambios = []; }
+    g.clearRect(0, 0, ANCHO, ALTO);
+    g.drawImage(this.capaFondo, 0, 0, ANCHO, ALTO);
+    g.drawImage(this.capaItems, 0, 0, ANCHO, ALTO);
+    g.drawImage(this.capaMarco, 0, 0, ANCHO, ALTO);
+
+    // plataforma del E/S: su color y su etiqueta dicen si entra o sale un ítem
+    const entra = this.anims.find(a => a.tipo === 'entra'), sale = this.anims.find(a => a.tipo === 'sale');
+    const activo = entra ? colorAlm : (sale || this.destinoES) ? colorRec : null;
+    const pulso = 0.6 + 0.4 * Math.sin(ahora / 170);
+    this.caja(g, PLATAFORMA.x0, PLATAFORMA.x1, PLATAFORMA.y0, PLATAFORMA.y1, 0, PLATAFORMA.h, activo ? tono(activo, 0.9) : css('--acento'), 'rgba(0,0,0,0.4)');
+    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;   // rodillos
+    for (let i = 1; i < 6; i++) { const X = PLATAFORMA.x0 + (PLATAFORMA.x1 - PLATAFORMA.x0) * i / 6, a = proy(X, PLATAFORMA.y0, PLATAFORMA.h), b = proy(X, PLATAFORMA.y1, PLATAFORMA.h); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
+    if (activo) { g.globalAlpha = pulso; this.armazon(g, PLATAFORMA.x0 - 0.1, PLATAFORMA.x1 + 0.1, PLATAFORMA.y0 - 0.1, PLATAFORMA.y1 + 0.1, 0, PLATAFORMA.h + 0.1, activo, 3); g.globalAlpha = 1; }
+    const et = proy(ES_X, Z_RIEL, 1.6);
+    g.font = '800 11px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    const texto = entra ? 'ENTRA' : (sale || this.destinoES) ? 'SALE' : 'E/S';
+    g.lineWidth = 3.5; g.strokeStyle = 'rgba(0,0,0,0.7)'; g.strokeText(texto, et[0], et[1]);
+    g.fillStyle = activo || '#ffffff'; g.fillText(texto, et[0], et[1]); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    if (this.destinoES && this.destinoES.fin && ahora - this.destinoES.fin > 500) this.destinoES = null;
+
+    // el ítem llega o se va por el extremo izquierdo del pasillo
+    this.anims = this.anims.filter(a => ahora - a.t0 < 1000);
+    const ease = s => s < 0.5 ? 2 * s * s : 1 - Math.pow(-2 * s + 2, 2) / 2;
+    this.anims.forEach(a => {
+      const k = (ahora - a.t0) / 1000, dentro = ES_X, fuera = LIM.x0 + 0.5;
+      const X = a.tipo === 'entra' ? fuera + (dentro - fuera) * ease(Math.min(1, k / 0.45)) : dentro + (fuera - dentro) * ease(Math.max(0, Math.min(1, (k - 0.25) / 0.6)));
+      g.globalAlpha = a.tipo === 'entra' ? (k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3) : (k < 0.2 ? 1 : 1 - (k - 0.2) / 0.8);
+      this.caja(g, X - 0.4, X + 0.4, Z_RIEL - 0.35, Z_RIEL + 0.35, PLATAFORMA.h, PLATAFORMA.h + 0.8, colorClase(a.clase), 'rgba(0,0,0,0.45)');
+      g.globalAlpha = 1;
+    });
+
+    // rieles del pasillo: uno en el suelo y otro arriba
+    g.strokeStyle = css('--suave'); g.lineWidth = 1.5;
+    [0, ALTURA + 0.7].forEach(H => { const a = proy(LIM.x0 + 1.6, Z_RIEL, H), b = proy(LARGO + 0.2, Z_RIEL, H); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); });
+
+    // celda destino: el hueco se enmarca con un armazón pulsante, turquesa si se deja un ítem y rosa si se retira
+    const d = this.destino;
+    if (d) {
+      const col = d.tipo === 'D' ? colorAlm : colorRec;
+      const x0 = d.c * COL_M, y0 = d.k * PRO_M, h0 = d.f * FIL_M;
+      if (d.fin) {
+        const s = (ahora - d.fin) / 500;
+        if (s >= 1) this.destino = null;
+        else { g.globalAlpha = 1 - s; this.armazon(g, x0 - s * 0.6, x0 + COL_M + s * 0.6, y0 - s * 0.3, y0 + PRO_M + s * 0.3, h0 - s * 0.5, h0 + FIL_M + s * 0.5, col, 2.5); g.globalAlpha = 1; }
+      } else {
+        this.armazon(g, x0, x0 + COL_M, y0, y0 + PRO_M, h0, h0 + FIL_M, 'rgba(0,0,0,0.7)', 5);
+        g.globalAlpha = 0.75 + 0.25 * Math.sin(ahora / 170); this.armazon(g, x0, x0 + COL_M, y0, y0 + PRO_M, h0, h0 + FIL_M, col, 2.6); g.globalAlpha = 1;
+      }
+    }
+
+    // trayectoria Chebyshev en el plano del pasillo: los dos ejes salen a la vez, cada uno a su velocidad
+    // el camino es una diagonal hasta que llega el eje más rápido (codo) y luego sigue recto por el otro eje
+    // termina en una punta de flecha antes del destino para no taparlo
+    const m = e.m;
+    if (m && e.dt < m.dur && m.txy > 0) {
+      const tm = Math.min(e.tx, e.ty);
+      const fh = e.tx === 0 ? 1 : Math.min(1, tm / e.tx), fX = e.ty === 0 ? 1 : Math.min(1, tm / e.ty);
+      const p0 = proy(e.A.X, Z_RIEL, e.A.H), pc = proy(e.A.X + (e.B.X - e.A.X) * fX, Z_RIEL, e.A.H + (e.B.H - e.A.H) * fh), p1 = proy(e.B.X, Z_RIEL, e.B.H);
+      let dx = p1[0] - pc[0], dy = p1[1] - pc[1], largo = Math.hypot(dx, dy);
+      if (largo < 0.5) { dx = pc[0] - p0[0]; dy = pc[1] - p0[1]; largo = Math.hypot(dx, dy) || 1; }
+      const dir = [dx / largo, dy / largo], fin = [p1[0] - dir[0] * 8, p1[1] - dir[1] * 8], perp = [-dir[1], dir[0]];
+      [['rgba(0,0,0,0.65)', 5, []], ['#ffffff', 2.2, [6, 4]]].forEach(([color, ancho, guion]) => {
+        g.strokeStyle = color; g.lineWidth = ancho; g.setLineDash(guion);
+        g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(pc[0], pc[1]); g.lineTo(fin[0], fin[1]); g.stroke(); g.setLineDash([]);
+      });
+      g.beginPath(); g.moveTo(fin[0] + dir[0] * 4, fin[1] + dir[1] * 4);
+      g.lineTo(fin[0] - dir[0] * 4 + perp[0] * 4.5, fin[1] - dir[1] * 4 + perp[1] * 4.5);
+      g.lineTo(fin[0] - dir[0] * 4 - perp[0] * 4.5, fin[1] - dir[1] * 4 - perp[1] * 4.5); g.closePath();
+      g.fillStyle = '#ffffff'; g.strokeStyle = 'rgba(0,0,0,0.65)'; g.lineWidth = 1.5; g.stroke(); g.fill();
+      g.beginPath(); g.arc(pc[0], pc[1], 2.5, 0, Math.PI * 2); g.fill(); g.stroke();
+    }
+
+    // grúa: mástil sobre el riel, carro a la altura de la fila y horquilla que entra al canal
+    const mastil = [proy(e.X, Z_RIEL, 0), proy(e.X, Z_RIEL, ALTURA + 0.7)];
+    g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 5; g.beginPath(); g.moveTo(mastil[0][0], mastil[0][1]); g.lineTo(mastil[1][0], mastil[1][1]); g.stroke();
+    g.strokeStyle = css('--texto'); g.lineWidth = 2.5; g.beginPath(); g.moveTo(mastil[0][0], mastil[0][1]); g.lineTo(mastil[1][0], mastil[1][1]); g.stroke();
+    if (e.Y < Z_RIEL - 0.02) this.caja(g, e.X - 0.13, e.X + 0.13, e.Y, Z_RIEL, e.H - 0.15, e.H + 0.05, e.fase === 1 ? css('--acento') : '#cbd5e1', 'rgba(0,0,0,0.5)');   // horquilla
+    if (this.mano) this.caja(g, e.X - 0.34, e.X + 0.34, e.Y - 0.3, e.Y + 0.3, e.H + 0.05, e.H + 0.75, colorClase(this.mano), 'rgba(0,0,0,0.6)');
+    this.caja(g, e.X - 0.55, e.X + 0.55, Z_RIEL - 0.35, Z_RIEL + 0.35, e.H - 0.5, e.H - 0.1, e.fase === 1 ? css('--acento') : '#f8fafc', 'rgba(0,0,0,0.6)');   // carro
+    if (this.mano && e.Y >= Z_RIEL - 0.02) this.caja(g, e.X - 0.34, e.X + 0.34, Z_RIEL - 0.3, Z_RIEL + 0.3, e.H - 0.1, e.H + 0.6, colorClase(this.mano), 'rgba(0,0,0,0.6)');
+  }
+  actualizarPie(tiempo) {
+    const t = this.fin !== null ? this.fin : tiempo;
+    const hechas = this.fin !== null ? totalTareas : this.hechas;
+    // rótulo grande de la tarea en curso: acción y clase del ítem
+    this.elTipo.textContent = this.tipoTarea || 'EN ESPERA';
+    this.elTipo.className = 'tipo ' + ({ ALMACENAR: 'almacenar', RECUPERAR: 'recuperar', OMITIDA: 'omitida', TERMINADO: 'fin' }[this.tipoTarea] || '');
+    this.elChip.style.display = this.claseTarea ? 'inline-flex' : 'none';
+    this.elChip.textContent = letra(this.claseTarea); this.elChip.style.background = this.claseTarea ? colorClase(this.claseTarea) : '';
+    this.elAccion.textContent = this.textoAccion;
+    this.pie.innerHTML = '<span>Tareas ' + hechas + '/' + totalTareas + '</span><span>' +
+      (this.fin !== null ? 'Terminó en ' + fmt(this.fin) + ' s' : fmt(t) + ' s') + '</span>';
+  }
+  progreso() { return this.fin !== null ? totalTareas : this.hechas; }
+}
+
+let SECUENCIA = [];
+
+function construir() {
+  const r = DATOS.replicas[replicaActual];
+  SECUENCIA = r.secuencia; totalTareas = SECUENCIA.length;
+  const cont = document.getElementById('paneles'); cont.innerHTML = '';
+  paneles = r.politicas.map(p => {
+    const tarjeta = document.createElement('article'); tarjeta.className = 'panel';
+    tarjeta.innerHTML = '<div class="cabecera"><h3>' + (NOMBRES[p.nombre] || p.nombre) + '</h3><span class="insignia"></span></div>' +
+      '<div class="estado"><div class="linea"><span class="tipo"></span><span class="chip"></span></div><span class="accion"></span></div><canvas></canvas><div class="tareas">' + SECUENCIA.map(() => '<i></i>').join('') + '</div><div class="pie"></div>';
+    cont.appendChild(tarjeta);
+    return new Panel(p, tarjeta);
+  });
+  const marc = document.getElementById('marcador'); marc.innerHTML = '';
+  paneles.forEach((p, i) => {
+    const f = document.createElement('div'); f.className = 'fila'; f.dataset.i = i;
+    f.innerHTML = '<span class="lugar">–</span><span>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</span><span class="barra"><i></i></span><span class="valor"></span>';
+    marc.appendChild(f);
+  });
+  document.getElementById('resultados').classList.remove('visible');
+  reiniciar();
+}
+
+function reiniciar() {
+  t = 0; lugarSiguiente = 1; jugando = false;
+  document.getElementById('jugar').textContent = 'Iniciar';
+  paneles.forEach(p => p.reiniciar());
+  paso(0);
+}
+
+function marcador() {
+  const filas = Array.from(document.querySelectorAll('.fila'));
+  const orden = paneles.map((p, i) => i).sort((a, b) => {
+    const A = paneles[a], B = paneles[b];
+    if (A.fin !== null && B.fin !== null) return A.fin - B.fin;
+    if (A.fin !== null) return -1; if (B.fin !== null) return 1;
+    return B.progreso() - A.progreso();
+  });
+  const cont = document.getElementById('marcador');
+  orden.forEach((i, pos) => {
+    const f = filas.find(x => +x.dataset.i === i), p = paneles[i];
+    f.querySelector('.lugar').textContent = p.fin !== null ? p.lugar + '.º' : (pos + 1);
+    f.querySelector('.barra i').style.width = (100 * p.progreso() / totalTareas) + '%';
+    f.querySelector('.valor').textContent = p.fin !== null ? fmt(p.fin) + ' s' : p.progreso() + '/' + totalTareas;
+    f.classList.toggle('termino', p.fin !== null);
+    cont.appendChild(f);
+  });
+}
+
+function resultados() {
+  const orden = paneles.slice().sort((a, b) => a.fin - b.fin), mejor = orden[0].fin;
+  document.getElementById('tabla').innerHTML = orden.map((p, i) =>
+    '<tr><td>' + (i + 1) + '.º</td><td>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</td><td class="num">' + fmt(p.fin) +
+    '</td><td class="num">' + (i === 0 ? '–' : '+' + fmt(p.fin - mejor) + ' s (+' + (100 * (p.fin - mejor) / mejor).toFixed(0) + ' %)') +
+    '</td><td class="num">' + p.d.reubicaciones + '</td></tr>').join('');
+  document.getElementById('resultados').classList.add('visible');
+}
+
+let ultimoMarcador = 0;
+function paso(dt) {
+  t += dt;
+  paneles.forEach(p => { p.avanzar(t); p.dibujar(t); p.actualizarPie(t); });
+  document.getElementById('reloj').textContent = fmt(t);
+  const ahora = performance.now();
+  if (ahora - ultimoMarcador > 150 || dt === 0) { marcador(); ultimoMarcador = ahora; }
+  if (paneles.every(p => p.fin !== null)) {
+    marcador(); resultados();
+    jugando = false; document.getElementById('jugar').textContent = 'Repetir';
+  }
+}
+
+function velocidadReal() { return Math.round(Math.pow(10, 1 + document.getElementById('velocidad').value / 100 * 2.6)); }
+function mostrarVelocidad() { document.getElementById('velocidadTexto').textContent = fmt(velocidadReal()) + ' s/s'; }
+
+function bucle(ms) {
+  if (!jugando) return;
+  const dt = Math.min((ms - ultimo) / 1000, 0.1) * velocidadReal();
+  ultimo = ms; paso(dt);
+  if (jugando) requestAnimationFrame(bucle);
+}
+
+document.getElementById('jugar').onclick = () => {
+  if (paneles.every(p => p.fin !== null)) reiniciar();
+  jugando = !jugando;
+  document.getElementById('jugar').textContent = jugando ? 'Pausar' : 'Continuar';
+  if (jugando) { ultimo = performance.now(); requestAnimationFrame(bucle); }
+};
+document.getElementById('reiniciar').onclick = reiniciar;
+document.getElementById('final').onclick = () => {
+  jugando = false; document.getElementById('jugar').textContent = 'Repetir';
+  paneles.forEach(p => p.reiniciar()); lugarSiguiente = 1; t = 0;
+  // se avanza en pasos pequeños para que los lugares de llegada respeten el orden de tiempo
+  while (!paneles.every(p => p.fin !== null)) { t += 1; paneles.forEach(p => p.avanzar(t)); }
+  paso(0);
+};
+document.getElementById('velocidad').oninput = mostrarVelocidad;
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'SELECT') { e.preventDefault(); document.getElementById('jugar').click(); } });
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { paneles.forEach(p => { p.sucioFondo = true; p.sucioItems = true; }); paso(0); });
+
+const selReplica = document.getElementById('replica');
+DATOS.replicas.forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = (i + 1) + ' (semilla ' + r.semilla + ')'; selReplica.appendChild(o); });
+selReplica.onchange = () => { replicaActual = +selReplica.value; construir(); };
+
+const ley = document.getElementById('leyenda');
+for (let c = 1; c <= DATOS.clases; c++) ley.insertAdjacentHTML('beforeend', '<span><i class="punto" style="background:var(--clase' + c + ')"></i>Clase ' + letra(c) + '</span>');
+ley.insertAdjacentHTML('beforeend',
+  '<span>Vista isométrica: fila 1 y columna 1 abajo a la izquierda, cada celda tiene dos lugares en profundidad (fondo y frente)</span>' +
+  '<span><i class="punto" style="background:var(--acento)"></i>E/S: plataforma en el pasillo, por donde entran y salen los ítems</span>' +
+  '<span>Línea discontinua: trayectoria Chebyshev (x e y a la vez, cada eje a su velocidad; el punto marca donde llega el eje más rápido)</span>' +
+  '<span><i class="punto" style="background:var(--almacenar)"></i>Turquesa: hueco donde se deja un ítem, o entrada al E/S</span>' +
+  '<span><i class="punto" style="background:var(--recuperar)"></i>Rosa: hueco del que se retira un ítem, o salida hacia el E/S</span>' +
+  '<span><i class="punto" style="background:var(--almacenar)"></i>Tarea de almacenar</span>' +
+  '<span><i class="punto" style="background:var(--recuperar)"></i>Tarea de recuperar</span>');
+
+mostrarVelocidad();
+construir();
+</script>
+</body>
+</html>
