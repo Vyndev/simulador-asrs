@@ -2,7 +2,7 @@
 import numpy as np
 from statistics import stdev
 
-from asrs.cinematica import tiempo_recorrido
+from asrs.cinematica import tiempo_recorrido_escalar
 
 
 class Metricas:
@@ -86,17 +86,15 @@ self.vector_tiempo_reubicaciones_regulares_almacenamiento) > 1 else 0
     def tiempoDezplamiento(self, vector_posicion_inicial, vector_posicion_final, vector_velocidad, vector_aceleracion=None, vector_deceleracion=None):
         # Tiempo de un desplazamiento: el tramo xy (ejes simultáneos, cada uno con su perfil de velocidad) más el tramo z
         # Sin aceleración ni deceleración (None) cada eje se mueve a velocidad constante
-        vector_distancia = np.abs(
-            vector_posicion_final - vector_posicion_inicial)
-        vector_velocidad = np.asarray(vector_velocidad, dtype=float)
-        vector_aceleracion = np.zeros(3) if vector_aceleracion is None else np.asarray(vector_aceleracion, dtype=float)
-        vector_deceleracion = np.zeros(3) if vector_deceleracion is None else np.asarray(vector_deceleracion, dtype=float)
-
-        # Tiempo de cada eje con su perfil
-        vector_tiempos = tiempo_recorrido(vector_distancia, vector_velocidad, vector_aceleracion, vector_deceleracion)
+        # Se trabaja con números de Python: para tres ejes es mucho más rápido que operar con arreglos
+        d = np.abs(vector_posicion_final - vector_posicion_inicial).tolist()
+        v = np.asarray(vector_velocidad, dtype=float).tolist()
+        a = [0.0, 0.0, 0.0] if vector_aceleracion is None else np.asarray(vector_aceleracion, dtype=float).tolist()
+        e = [0.0, 0.0, 0.0] if vector_deceleracion is None else np.asarray(vector_deceleracion, dtype=float).tolist()
 
         # El tramo xy termina cuando llega el eje más lento (tiempo de Chebyshev) y después se recorre z
-        tiempo_total_ejecucion = float(np.max(vector_tiempos[:2]) + vector_tiempos[2])
+        escalar_xy = max(tiempo_recorrido_escalar(d[0], v[0], a[0], e[0]), tiempo_recorrido_escalar(d[1], v[1], a[1], e[1]))
+        tiempo_total_ejecucion = escalar_xy + tiempo_recorrido_escalar(d[2], v[2], a[2], e[2])
 
         # Retorna el tiempo total de ejecución
         return tiempo_total_ejecucion

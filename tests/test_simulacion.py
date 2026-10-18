@@ -59,6 +59,15 @@ class PruebasCinematica(unittest.TestCase):
         self.assertTrue(np.all(tiempo_recorrido(distancias, 1.5, 1, 1) >= tiempo_recorrido(distancias, 1.5) - 1e-12))
         self.assertEqual(float(tiempo_recorrido(0, 1.5, 1, 1)), 0.0)
 
+    def test_version_escalar_coincide_con_la_de_arreglos(self):
+        from asrs.cinematica import tiempo_recorrido, tiempo_recorrido_escalar
+        generador = np.random.default_rng(0)
+        for _ in range(500):
+            distancia, velocidad = generador.uniform(0, 30), generador.uniform(0.2, 3)
+            aceleracion, deceleracion = [generador.choice([0.0, generador.uniform(0.1, 5)]) for _ in range(2)]
+            self.assertAlmostEqual(tiempo_recorrido_escalar(distancia, velocidad, aceleracion, deceleracion),
+                                   float(tiempo_recorrido(distancia, velocidad, aceleracion, deceleracion)), places=9)
+
     def test_tiempo_chebyshev_toma_el_eje_mas_lento(self):
         from asrs.cinematica import tiempo_chebyshev_xy
         self.assertAlmostEqual(float(tiempo_chebyshev_xy(np.array([2.0, 10.0]), np.array([2.0, 2.0]), np.array([1.0, 1.0]), np.array([1.0, 1.0]))), 7.0)

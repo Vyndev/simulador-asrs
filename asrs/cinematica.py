@@ -1,4 +1,6 @@
 """Cinemática de la grúa: tiempo de recorrido de cada eje con aceleración y deceleración."""
+import math
+
 import numpy as np
 
 
@@ -38,3 +40,16 @@ def tiempo_chebyshev_xy(distancias_xy, velocidad_xy, aceleracion_xy=0, decelerac
     # Tiempo del tramo xy: los dos ejes se mueven a la vez, cada uno con su propio perfil, y el tramo termina cuando llega el más lento
     # distancias_xy: arreglo cuya última dimensión es 2 (filas, columnas)
     return np.max(tiempo_recorrido(distancias_xy, velocidad_xy, aceleracion_xy, deceleracion_xy), axis=-1)
+
+
+def tiempo_recorrido_escalar(distancia, velocidad, aceleracion=0.0, deceleracion=0.0):
+    # Mismo cálculo que tiempo_recorrido para un solo eje con números de Python
+    # Es mucho más rápido que la versión con arreglos y es la que usa la grúa, que calcula miles de desplazamientos
+    distancia = abs(distancia)
+    inversa_a = 1.0 / aceleracion if aceleracion > 0 else 0.0
+    inversa_d = 1.0 / deceleracion if deceleracion > 0 else 0.0
+    suma = inversa_a + inversa_d
+    distancia_minima = velocidad * velocidad * suma / 2
+    if distancia >= distancia_minima:
+        return velocidad * suma + (distancia - distancia_minima) / velocidad
+    return math.sqrt(2 * distancia / suma) * suma
