@@ -45,7 +45,8 @@ def copiar_estado(tupla_estado):
 class EntornoAsignacion(gym.Env):
     metadata = {"render_modes": []}
 
-    def __init__(self, config, escalar_semilla_base=0, escalar_estados=16, txt_politica_llenado='aleatoria', txt_politica_reubicacion='mas_cercana_grua'):
+    def __init__(self, config, escalar_semilla_base=0, escalar_estados=16, txt_politica_llenado='aleatoria', txt_politica_reubicacion='mas_cercana_grua',
+                 escalar_semilla_episodios=None):
         super().__init__()
         self.config = config
         self.escalar_semilla_base = escalar_semilla_base
@@ -53,7 +54,8 @@ class EntornoAsignacion(gym.Env):
         self.txt_politica_llenado = txt_politica_llenado
         self.txt_politica_reubicacion = txt_politica_reubicacion
         self.dic_estados = {}                       # estados iniciales ya generados, se crean la primera vez que se usan
-        self.generador = np.random.default_rng(escalar_semilla_base)
+        # Con varios entornos en paralelo cada uno sortea los estados con su propia semilla, aunque todos comparten los mismos estados posibles
+        self.generador = np.random.default_rng(escalar_semilla_base if escalar_semilla_episodios is None else escalar_semilla_episodios)
 
         escalar_filas, escalar_columnas, escalar_capas = (int(x) for x in config["vector_configuracion_estanteria"])
         self.escalar_filas, self.escalar_columnas, self.escalar_capas = escalar_filas, escalar_columnas, escalar_capas
@@ -170,3 +172,9 @@ class EntornoAsignacion(gym.Env):
     def tiempo_total(self):
         # Tiempo total de operación de la lista, la misma métrica que reportan las políticas clásicas
         return float(self.C.instancia_metricas.recuperarInformcion()[-1])
+
+
+def crear_entorno_monitoreado(config, escalar_semilla_base, escalar_estados, escalar_semilla_episodios):
+    # Función de nivel superior (no una lambda) para que se pueda enviar a los procesos de los entornos paralelos
+    from stable_baselines3.common.monitor import Monitor
+    return Monitor(EntornoAsignacion(config, escalar_semilla_base, escalar_estados, escalar_semilla_episodios=escalar_semilla_episodios))

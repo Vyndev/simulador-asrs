@@ -265,6 +265,15 @@ class PruebasEntornoRL(unittest.TestCase):
         self.assertEqual(entorno.escalar_invalidas, 1)
         self.assertLess(recompensa, -0.99)
 
+    def test_la_fabrica_de_entornos_paralelos_se_puede_enviar_a_otro_proceso(self):
+        import pickle
+        from functools import partial
+        from asrs.rl.entorno import crear_entorno_monitoreado
+        fabrica = pickle.loads(pickle.dumps(partial(crear_entorno_monitoreado, self.config, 77, 2, 5)))
+        entorno = fabrica()
+        observacion, _ = entorno.reset()
+        self.assertEqual(observacion.shape, entorno.observation_space.shape)
+
     def test_las_clasicas_parten_del_mismo_estado(self):
         from asrs.rl.evaluacion import evaluar_politica_clasica
         a = evaluar_politica_clasica(self.config, "mas_cercana_es", 77, [0, 1])["tiempos"]
