@@ -3,40 +3,85 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Carrera de políticas ASRS</title>
+<title>Simulador ASRS</title>
 <style>
   :root {
     --fondo: #f6f7f9; --tarjeta: #ffffff; --borde: #dde1e7; --texto: #1c2430; --suave: #5b6675;
     --vacio: #e6e9ee; --hueco: #cfd5de; --acento: #2563eb; --oro: #c9962b; --plata: #8791a0; --bronce: #a8683b;
     --clase1: #3b82f6; --clase2: #f59e0b; --clase3: #a855f7; --pendiente: #cfd5de;
-    --almacenar: #0d9488; --recuperar: #db2777; --omitida: #dc2626;
+    --almacenar: #0d9488; --recuperar: #db2777; --omitida: #dc2626; --error-fondo: #fde8e8; --exito: #15803d;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --fondo: #12161c; --tarjeta: #1a2029; --borde: #2c3542; --texto: #e6eaf0; --suave: #93a0b2;
       --vacio: #262e3a; --hueco: #171d26; --acento: #5b9bff; --oro: #e3b341; --plata: #a1abb9; --bronce: #cd8a57;
       --clase1: #5b9bff; --clase2: #fbbf24; --clase3: #c084fc; --pendiente: #323c4a;
-      --almacenar: #2dd4bf; --recuperar: #f472b6; --omitida: #f87171;
+      --almacenar: #2dd4bf; --recuperar: #f472b6; --omitida: #f87171; --error-fondo: #3a1d1f; --exito: #4ade80;
     }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--fondo); color: var(--texto); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  main { max-width: 1500px; margin: 0 auto; padding: 20px 16px 48px; }
+  .contenedor { max-width: 1600px; margin: 0 auto; padding: 20px 16px 48px; }
+  .encabezado { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
   h1 { font-size: 22px; margin: 0 0 2px; }
-  .sub { color: var(--suave); margin: 0 0 16px; }
-  .controles { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
-  button, select { font: inherit; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .sub { color: var(--suave); margin: 0; }
+  .app { display: grid; grid-template-columns: 350px minmax(0, 1fr); gap: 16px; align-items: start; }
+  .app.sin-parametros { grid-template-columns: minmax(0, 1fr); }
+  .app.sin-parametros .parametros { display: none; }
+  .app.cerrado { grid-template-columns: minmax(0, 1fr); }
+  .app.cerrado .parametros { display: none; }
+  button, select, input { font: inherit; color: var(--texto); }
+  button, select { background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
   button:hover, select:hover { border-color: var(--acento); }
   button.primario { background: var(--acento); border-color: var(--acento); color: #fff; font-weight: 600; min-width: 96px; }
+  button:disabled { opacity: .55; cursor: not-allowed; }
+  input[type=number], input[type=text] { background: var(--fondo); border: 1px solid var(--borde); border-radius: 6px; padding: 4px 8px; width: 100%; min-width: 0; }
+  input:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+  input.invalido { border-color: var(--omitida); }
   label { color: var(--suave); display: flex; align-items: center; gap: 8px; }
   input[type=range] { width: 150px; accent-color: var(--acento); }
+
+  /* parámetros */
+  .parametros { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; }
+  .acciones { display: flex; flex-wrap: wrap; gap: 8px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px; position: sticky; top: 0; z-index: 2; }
+  .acciones .primario { flex: 1; }
+  details.grupo { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; }
+  details.grupo summary { cursor: pointer; padding: 9px 12px; font-weight: 600; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+  details.grupo summary::-webkit-details-marker { display: none; }
+  details.grupo summary::after { content: '+'; color: var(--suave); font-weight: 400; }
+  details.grupo[open] summary::after { content: '–'; }
+  .cuerpo-grupo { padding: 2px 12px 12px; display: grid; gap: 8px; }
+  .campo { display: grid; grid-template-columns: minmax(0, 1fr) 92px; align-items: center; gap: 10px; font-size: 14px; }
+  .campo .etq { color: var(--texto); }
+  .campo .etq small { color: var(--suave); margin-left: 4px; }
+  .nota { color: var(--suave); font-size: 12.5px; margin: 0; }
+  .tabla-clases { display: grid; grid-template-columns: 26px 1fr 1fr 44px; gap: 6px 8px; align-items: center; font-size: 13.5px; }
+  .tabla-clases .enc { color: var(--suave); font-size: 12px; }
+  .tabla-clases .pct { color: var(--suave); text-align: right; font-variant-numeric: tabular-nums; font-size: 12.5px; }
+  .ficha { display: inline-flex; width: 22px; height: 22px; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #10151c; }
+  .botones-fila { display: flex; gap: 8px; }
+  .politica { display: flex; gap: 8px; align-items: flex-start; color: var(--texto); font-size: 14px; }
+  .politica input { margin-top: 3px; accent-color: var(--acento); }
+  .politica small { display: block; color: var(--suave); font-size: 12.5px; }
+
+  /* avisos y progreso */
+  .aviso { display: none; border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; border: 1px solid var(--borde); background: var(--tarjeta); }
+  .aviso.visible { display: block; }
+  .aviso.error { background: var(--error-fondo); border-color: var(--omitida); color: var(--omitida); }
+  .aviso.exito { border-color: var(--exito); }
+  .progreso { display: flex; align-items: center; gap: 12px; }
+  .progreso .barra { flex: 1; height: 10px; background: var(--vacio); border-radius: 5px; overflow: hidden; }
+  .progreso .barra i { display: block; height: 100%; width: 0; background: var(--acento); transition: width .25s; }
+
+  /* carrera */
+  .controles { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
   .reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
   .reloj small { color: var(--suave); font-weight: 400; font-size: 13px; }
   .leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--suave); font-size: 13px; margin: 0 0 14px; }
   .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
   .punto { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
   .marcador { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
-  .marcador h2, .resultados h2 { font-size: 14px; margin: 0 0 8px; color: var(--suave); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .marcador h2, .resultados h2, .estadistica h2 { font-size: 14px; margin: 0 0 8px; color: var(--suave); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
   .fila { display: grid; grid-template-columns: 34px 170px 1fr 120px; align-items: center; gap: 10px; padding: 3px 0; }
   .fila .lugar { font-weight: 700; color: var(--suave); text-align: center; }
   .fila .barra { height: 12px; background: var(--vacio); border-radius: 6px; overflow: hidden; }
@@ -44,6 +89,7 @@
   .fila .valor { text-align: right; font-variant-numeric: tabular-nums; color: var(--suave); }
   .fila.termino .barra i { background: var(--almacenar); }
   .paneles { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 14px; }
+  .vacio-escena { background: var(--tarjeta); border: 1px dashed var(--borde); border-radius: 12px; padding: 40px 16px; text-align: center; color: var(--suave); }
   .panel { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
   .panel.termino { border-color: var(--almacenar); }
   .panel .cabecera { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
@@ -58,94 +104,158 @@
   .estado .tipo.omitida { color: var(--omitida); }
   .estado .chip { display: none; width: 30px; height: 30px; border-radius: 7px; align-items: center; justify-content: center; font-weight: 800; font-size: 18px; color: #10151c; }
   .estado .accion { display: block; color: var(--suave); font-size: 13px; min-height: 18px; margin-top: 2px; }
-  .tareas { display: grid; grid-template-columns: repeat(36, 1fr); gap: 2px; margin: 10px 0 8px; }
+  .tareas { display: grid; gap: 2px; margin: 10px 0 8px; }
   .tareas i { height: 9px; border-radius: 2px; background: var(--pendiente); }
   .tareas i.a { background: var(--almacenar); opacity: .35; } .tareas i.r { background: var(--recuperar); opacity: .35; }
   .tareas i.hecha { opacity: 1; } .tareas i.actual { opacity: 1; outline: 2px solid var(--texto); outline-offset: 1px; }
   .tareas i.omitida { background: transparent; outline: 1px solid var(--omitida); outline-offset: -1px; opacity: 1; }
   .pie { display: flex; justify-content: space-between; color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
-  .resultados { display: none; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
-  .resultados.visible { display: block; }
+  .resultados, .estadistica { display: none; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
+  .resultados.visible, .estadistica.visible { display: block; }
+  .estadistica .cabecera-est { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .estadistica .cabecera-est h2 { margin: 0; }
+  .estadistica .nota { margin: 8px 0 0; }
   table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
   th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--borde); }
   th { color: var(--suave); font-weight: 600; font-size: 13px; }
   td.num, th.num { text-align: right; }
+  tr.mejor td { font-weight: 700; }
+  .celda-barra { position: relative; min-width: 110px; }
+  .celda-barra .b { position: absolute; left: 0; top: 50%; height: 14px; transform: translateY(-50%); background: var(--acento); opacity: .22; border-radius: 3px; }
+  .celda-barra .e { position: absolute; top: 50%; height: 2px; transform: translateY(-50%); background: var(--texto); opacity: .7; }
+  .celda-barra span { position: relative; }
+  .tabla-ancha { overflow-x: auto; }
+  @media (max-width: 980px) { .app { grid-template-columns: minmax(0, 1fr); } .parametros { position: static; max-height: none; } }
   @media (max-width: 640px) { .fila { grid-template-columns: 26px 110px 1fr 76px; gap: 6px; } .reloj { margin-left: 0; } }
 </style>
 </head>
 <body>
-<main>
-  <h1>Carrera de políticas de asignación</h1>
-  <p class="sub">Todas las políticas ejecutan la misma lista de tareas sobre un mismo reloj de simulación. Gana la que termina primero.</p>
+<div class="contenedor">
+  <header class="encabezado">
+    <div>
+      <h1>Simulador ASRS</h1>
+      <p class="sub">Todas las políticas de asignación ejecutan la misma lista de tareas sobre un mismo reloj. Gana la que termina primero.</p>
+    </div>
+    <button id="btnParametros" style="display:none">Ocultar parámetros</button>
+  </header>
 
-  <div class="controles">
-    <button id="jugar" class="primario">Iniciar</button>
-    <button id="reiniciar">Reiniciar</button>
-    <button id="final">Ir al final</button>
-    <label>Réplica <select id="replica"></select></label>
-    <label>Velocidad <input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></label>
-    <div class="reloj"><small>Tiempo simulado</small> <span id="reloj">0</span> s</div>
+  <div class="app sin-parametros" id="app">
+    <aside class="parametros" id="parametros">
+      <div class="acciones">
+        <button id="btnSimular" class="primario">Simular</button>
+        <button id="btnRestablecer" title="Vuelve a los valores iniciales">Restablecer</button>
+        <button id="btnGuardar" title="Descarga los parámetros en un archivo JSON">Guardar</button>
+        <button id="btnCargar" title="Carga parámetros desde un archivo JSON">Cargar</button>
+        <input type="file" id="archivoConfig" accept="application/json,.json" hidden>
+      </div>
+      <div id="formulario"></div>
+    </aside>
+
+    <main>
+      <div class="aviso" id="aviso"></div>
+
+      <div class="controles" id="controles">
+        <button id="jugar" class="primario">Iniciar</button>
+        <button id="reiniciar">Reiniciar</button>
+        <button id="final">Ir al final</button>
+        <label>Réplica <select id="replica"></select></label>
+        <label>Velocidad <input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></label>
+        <div class="reloj"><small>Tiempo simulado</small> <span id="reloj">0</span> s</div>
+      </div>
+
+      <div class="leyenda" id="leyenda"></div>
+
+      <section class="marcador"><h2>Marcador</h2><div id="marcador"></div></section>
+      <section class="paneles" id="paneles"></section>
+
+      <section class="resultados" id="resultados">
+        <h2>Resultado de esta réplica</h2>
+        <table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table>
+      </section>
+
+      <section class="estadistica" id="estadistica">
+        <div class="cabecera-est">
+          <h2 id="tituloEstadistica">Estadística</h2>
+          <div class="botones-fila">
+            <label>Métrica <select id="metrica"></select></label>
+            <button id="btnCsv">Descargar CSV</button>
+          </div>
+        </div>
+        <div class="tabla-ancha"><table><thead id="encEstadistica"></thead><tbody id="cuerpoEstadistica"></tbody></table></div>
+        <p class="nota" id="notaEstadistica"></p>
+      </section>
+    </main>
   </div>
-
-  <div class="leyenda" id="leyenda"></div>
-
-  <section class="marcador"><h2>Marcador</h2><div id="marcador"></div></section>
-  <section class="paneles" id="paneles"></section>
-
-  <section class="resultados" id="resultados">
-    <h2>Resultado final</h2>
-    <table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table>
-  </section>
-</main>
+</div>
 
 <script>
-const DATOS = /*DATOS*/null;
+const DATOS_INICIALES = /*DATOS*/null;
 
-const NOMBRES = {
-  Aleatoria: 'Aleatoria', BasadaEnClases: 'Basada en clases', FullTurnover: 'Full-turnover',
-  MasCercanaAlES: 'Más cercana al E/S', MasCercanaALaGrua: 'Más cercana a la grúa'
-};
-const [FILAS, COLUMNAS, CAPAS] = DATOS.configuracion;
-const [VEL_FILA, VEL_COLUMNA] = DATOS.velocidad;
-const [COTA_FILA, COTA_COLUMNA, COTA_PROF] = DATOS.cotas, Z_RIEL = DATOS.z_riel;
-// Medidas en metros: una celda mide COL_M (columna) x FIL_M (fila) x PRO_M (profundidad)
-const COL_M = COTA_COLUMNA, FIL_M = COTA_FILA, PRO_M = COTA_PROF;
-const LARGO = COLUMNAS * COL_M, ALTURA = FILAS * FIL_M, FONDO = CAPAS * PRO_M;
-// E/S: plataforma a nivel del suelo, en el pasillo, pasado el extremo izquierdo de la estantería (abajo a la izquierda)
-const PLATAFORMA = { x0: -3.2, x1: -1.1, y0: Z_RIEL - 0.8, y1: Z_RIEL + 0.8, h: 0.5 };
-const ES_X = (PLATAFORMA.x0 + PLATAFORMA.x1) / 2;
-// Proyección isométrica: X = columnas (hacia la derecha), Y = profundidad (hacia el pasillo), H = altura
-// La escala vertical y la de profundidad se comprimen para que la estantería (muy alta y muy profunda) quepa en el panel
-const ESC = 13, ESC_V = 5.2, DY = 0.55, C30 = Math.cos(Math.PI / 6);
-const proy0 = (X, Y, H) => [(X - Y * DY) * C30 * ESC, (X + Y * DY) * 0.5 * ESC - H * ESC_V];
-const LIM = { x0: -5.4, x1: LARGO + 0.5, y0: 0, y1: Z_RIEL + 1.2, h0: 0, h1: ALTURA + 1.6 };
-let minSX = 1e9, minSY = 1e9, maxSX = -1e9, maxSY = -1e9;
-[LIM.x0, LIM.x1].forEach(X => [LIM.y0, LIM.y1].forEach(Y => [LIM.h0, LIM.h1].forEach(H => {
-  const [a, b] = proy0(X, Y, H); minSX = Math.min(minSX, a); maxSX = Math.max(maxSX, a); minSY = Math.min(minSY, b); maxSY = Math.max(maxSY, b);
-})));
-const PAD = 10, OX = PAD - minSX, OY = PAD - minSY;
-const ANCHO = Math.ceil(maxSX - minSX + 2 * PAD), ALTO = Math.ceil(maxSY - minSY + 2 * PAD + 12);
-const proy = (X, Y, H) => { const [a, b] = proy0(X, Y, H); return [a + OX, b + OY]; };
-// Orden de dibujo (de lo lejano a lo cercano): se proyecta cada hueco sobre la dirección de la vista
-const DIR_VISTA = [DY, 1, DY * ESC / ESC_V];
-const ORDEN_HUECOS = (() => {
-  const lista = [];
-  for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) for (let k = 0; k < CAPAS; k++) {
-    const X = (c + 0.5) * COL_M, Y = (k + 0.5) * PRO_M, H = (f + 0.5) * FIL_M;
-    lista.push({ f, c, k, clave: X * DIR_VISTA[0] + Y * DIR_VISTA[1] + H * DIR_VISTA[2] });
-  }
-  return lista.sort((a, b) => a.clave - b.clave);
-})();
-const RANGO = new Int32Array(FILAS * COLUMNAS * CAPAS);
-ORDEN_HUECOS.forEach((h, i) => { RANGO[(h.f * COLUMNAS + h.c) * CAPAS + h.k] = i; });
+const POLITICAS = [
+  { clave: 'aleatoria', nombre: 'Aleatoria', ayuda: 'Canal al azar; dentro del canal, la celda libre más profunda.' },
+  { clave: 'basada_en_clases', nombre: 'Basada en clases', ayuda: 'Zonas fijas por clase; la clase A recibe las celdas más cercanas al E/S.' },
+  { clave: 'full_turnover', nombre: 'Full-turnover', ayuda: 'Zonas fijas por clase, ordenadas por demanda: la más demandada va más cerca.' },
+  { clave: 'mas_cercana_es', nombre: 'Más cercana al E/S', ayuda: 'La celda libre más cercana al punto de entrada y salida.' },
+  { clave: 'mas_cercana_grua', nombre: 'Más cercana a la grúa', ayuda: 'La celda libre más cercana a la grúa (al reubicar, a la celda del ítem que se retira).' }
+];
+const NOMBRES = { Aleatoria: 'Aleatoria', BasadaEnClases: 'Basada en clases', FullTurnover: 'Full-turnover', MasCercanaAlES: 'Más cercana al E/S', MasCercanaALaGrua: 'Más cercana a la grúa' };
+
 const letra = c => c ? String.fromCharCode(64 + c) : '';
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
-
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const colorClase = c => css('--clase' + c) || '#888';
+const PALETA_EXTRA = ['', '', '', '#34d399', '#f87171', '#22d3ee', '#fb923c', '#a3e635'];
+const colorClase = c => c <= 3 ? (css('--clase' + c) || '#888') : (PALETA_EXTRA[c - 1] || '#999');
 const fmt = n => Math.round(n).toLocaleString('es');
+const fmt1 = n => (Math.round(n * 10) / 10).toLocaleString('es');
+const el = id => document.getElementById(id);
 
-let replicaActual = 0, paneles = [], t = 0, jugando = false, ultimo = 0, lugarSiguiente = 1, totalTareas = 0;
+// ================= escena isométrica (se recalcula con cada simulación) =================
+let DATOS = null, SECUENCIA = [], totalTareas = 0;
+let FILAS, COLUMNAS, CAPAS, VEL_FILA, VEL_COLUMNA, COTA_FILA, COTA_COLUMNA, COTA_PROF, Z_RIEL, POS, CEN, RIEL;
+let COL_M, FIL_M, PRO_M, LARGO, ALTURA, FONDO, PLATAFORMA, ES_X, ESC, ESC_V, LIM, OX, OY, ANCHO, ALTO, DIR_VISTA, ORDEN_HUECOS, RANGO, DEN_Z;
+const DY = 0.55, C30 = Math.cos(Math.PI / 6);
+const proy0 = (X, Y, H) => [(X - Y * DY) * C30 * ESC, (X + Y * DY) * 0.5 * ESC - H * ESC_V];
+const proy = (X, Y, H) => { const [a, b] = proy0(X, Y, H); return [a + OX, b + OY]; };
+
+function limitesProyeccion() {
+  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
+  [LIM.x0, LIM.x1].forEach(X => [LIM.y0, LIM.y1].forEach(Y => [LIM.h0, LIM.h1].forEach(H => {
+    const [a, b] = proy0(X, Y, H); minX = Math.min(minX, a); maxX = Math.max(maxX, a); minY = Math.min(minY, b); maxY = Math.max(maxY, b);
+  })));
+  return { minX, minY, maxX, maxY };
+}
+
+function prepararEscena() {
+  [FILAS, COLUMNAS, CAPAS] = DATOS.configuracion;
+  [VEL_FILA, VEL_COLUMNA] = DATOS.velocidad;
+  [COTA_FILA, COTA_COLUMNA, COTA_PROF] = DATOS.cotas;
+  Z_RIEL = DATOS.z_riel; POS = DATOS.posicion || [0, 0, 0]; CEN = DATOS.centro || [0, 0, 0];
+  RIEL = Z_RIEL - POS[2];                                               // posición del pasillo medida desde el fondo de la estantería
+  COL_M = COTA_COLUMNA; FIL_M = COTA_FILA; PRO_M = COTA_PROF;
+  LARGO = COLUMNAS * COL_M; ALTURA = FILAS * FIL_M; FONDO = CAPAS * PRO_M;
+  // E/S: plataforma a nivel del suelo, en el pasillo, pasado el extremo izquierdo de la estantería (abajo a la izquierda)
+  PLATAFORMA = { x0: -3.2, x1: -1.1, y0: RIEL - 0.8, y1: RIEL + 0.8, h: 0.5 };
+  ES_X = (PLATAFORMA.x0 + PLATAFORMA.x1) / 2;
+  LIM = { x0: -5.4, x1: LARGO + 0.5, y0: Math.min(0, RIEL - 1.2), y1: Math.max(FONDO, RIEL) + 1.2, h0: 0, h1: ALTURA + 1.6 };
+  // Escala: celdas de frente casi cuadradas; después se ajusta para que la estantería quepa en un panel
+  ESC = 13; ESC_V = Math.max(1.2, (COL_M * C30 * ESC) / FIL_M);
+  const l0 = limitesProyeccion(), k = Math.min(2.2, 330 / (l0.maxX - l0.minX + 20), 400 / (l0.maxY - l0.minY + 32));
+  ESC *= k; ESC_V *= k;
+  const l = limitesProyeccion(), PAD = 10;
+  OX = PAD - l.minX; OY = PAD - l.minY;
+  ANCHO = Math.ceil(l.maxX - l.minX + 2 * PAD); ALTO = Math.ceil(l.maxY - l.minY + 2 * PAD + 12);
+  // Orden de dibujo (de lo lejano a lo cercano): se proyecta cada hueco sobre la dirección de la vista
+  DIR_VISTA = [DY, 1, DY * ESC / ESC_V];
+  const lista = [];
+  for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) for (let kk = 0; kk < CAPAS; kk++) {
+    lista.push({ f, c, k: kk, clave: (c + 0.5) * COL_M * DIR_VISTA[0] + (kk + 0.5) * PRO_M * DIR_VISTA[1] + (f + 0.5) * FIL_M * DIR_VISTA[2] });
+  }
+  ORDEN_HUECOS = lista.sort((a, b) => a.clave - b.clave);
+  RANGO = new Int32Array(FILAS * COLUMNAS * CAPAS);
+  ORDEN_HUECOS.forEach((h, i) => { RANGO[(h.f * COLUMNAS + h.c) * CAPAS + h.k] = i; });
+  // la horquilla llega al centro del hueco cuando está dentro del canal; esta distancia reparte la transición desde el pasillo
+  DEN_Z = Math.max(RIEL - ((CAPAS - 1) * PRO_M + CEN[2] * PRO_M), 1e-6);
+}
 
 const tonos = new Map();
 // Aclara u oscurece un color (#rgb, #rrggbb o rgb()) multiplicando sus canales
@@ -161,6 +271,8 @@ function tono(color, factor) {
   tonos.set(clave, res);
   return res;
 }
+
+let replicaActual = 0, paneles = [], t = 0, jugando = false, ultimo = 0, lugarSiguiente = 1;
 
 class Panel {
   constructor(datos, tarjeta) {
@@ -211,7 +323,8 @@ class Panel {
       this.io.push(e[2]); this.anims.push({ tipo: 'entra', clase: e[2], t0: performance.now() });
       this.textoAccion = 'Llega el ítem ' + letra(e[2]) + ' a la ENTRADA del E/S';
     } else if (tipo === 'M') {
-      this.mov = { t0: e[0], dur: e[2], x0: e[3], y0: e[4], x1: e[5], y1: e[6], txy: e[7], z0: e[8], z1: e[9], ini: e[10], fin: e[11] };
+      // las posiciones se pasan a coordenadas de la estantería (se resta su posición en el modelo)
+      this.mov = { t0: e[0], dur: e[2], x0: e[3] - POS[0], y0: e[4] - POS[1], x1: e[5] - POS[0], y1: e[6] - POS[1], txy: e[7], z0: e[8] - POS[2], z1: e[9] - POS[2], ini: e[10], fin: e[11] };
       // El paso entre el E/S y la estantería dura 0 s en el modelo: el recorrido que sale del E/S se dibuja desde la plataforma
       // y el que regresa a la esquina para entregar se dibuja terminando en la plataforma
       this.mov.desdeES = this.salioDelES; this.salioDelES = false;
@@ -222,11 +335,13 @@ class Panel {
       }
       // Celda destino: si el desplazamiento termina dentro de un canal, se resalta ese hueco
       // El color indica qué ocurrirá allí: dejar un ítem (turquesa) o retirarlo (rosa)
-      if (e[11] === 0 && e[9] < Z_RIEL - 0.05) {
-        const f = Math.round(e[5] / COTA_FILA), c = Math.round(e[6] / COTA_COLUMNA), k = Math.round(e[9] / COTA_PROF), ev = this.d.eventos;
-        let siguiente = 'P';
-        for (let j = this.idx + 1; j < ev.length; j++) if (ev[j][1] === 'P' || ev[j][1] === 'D') { siguiente = ev[j][1]; break; }
-        this.destino = { f, c, k, tipo: siguiente, clase: siguiente === 'D' ? this.mano : this.estante[(f * COLUMNAS + c) * CAPAS + k], fin: 0 };
+      if (e[11] === 0 && Math.abs(e[9] - Z_RIEL) > 0.05) {
+        const f = Math.round(this.mov.x1 / COTA_FILA - CEN[0]), c = Math.round(this.mov.y1 / COTA_COLUMNA - CEN[1]), k = Math.round(this.mov.z1 / COTA_PROF - CEN[2]), ev = this.d.eventos;
+        if (f >= 0 && f < FILAS && c >= 0 && c < COLUMNAS && k >= 0 && k < CAPAS) {
+          let siguiente = 'P';
+          for (let j = this.idx + 1; j < ev.length; j++) if (ev[j][1] === 'P' || ev[j][1] === 'D') { siguiente = ev[j][1]; break; }
+          this.destino = { f, c, k, tipo: siguiente, clase: siguiente === 'D' ? this.mano : this.estante[(f * COLUMNAS + c) * CAPAS + k], fin: 0 };
+        }
       }
       // Si el recorrido termina en el E/S y la grúa lleva un ítem, la plataforma es el destino (salida)
       if (this.mov.haciaES && this.mano) this.destinoES = { clase: this.mano, fin: 0 };
@@ -271,7 +386,7 @@ class Panel {
   estadoGrua(tiempo) {
     const reposo = { H: 0.8, X: ES_X };
     const m = this.mov;
-    if (!m) return { H: reposo.H, X: reposo.X, Y: Z_RIEL, z: Z_RIEL, fase: 0, m: null, dt: 0, enES: true };
+    if (!m) return { H: reposo.H, X: reposo.X, Y: RIEL, z: RIEL, fase: 0, m: null, dt: 0, enES: true };
     const dt = Math.max(0, tiempo - m.t0);
     const tx = Math.abs(m.x1 - m.x0) / VEL_FILA, ty = Math.abs(m.y1 - m.y0) / VEL_COLUMNA;   // tiempo que tarda cada eje
     const fx = tx > 0 ? Math.min(1, dt / tx) : 1, fy = ty > 0 ? Math.min(1, dt / ty) : 1;
@@ -281,10 +396,11 @@ class Panel {
       z = m.z0 + (m.z1 - m.z0) * (tz > 0 ? Math.min(1, Math.max(0, (dt - m.txy) / tz)) : 1);
       if (dt >= m.txy && dt < m.dur) fase = 1;
     }
-    const centro = (xm, ym) => ({ H: xm + FIL_M / 2, X: ym + COL_M / 2 });
+    // el punto de referencia de la celda puede estar desplazado dentro de ella (centro de celda): se dibuja en el centro del hueco
+    const centro = (xm, ym) => ({ H: xm - CEN[0] * FIL_M + FIL_M / 2, X: ym - CEN[1] * COL_M + COL_M / 2 });
     const A = (m.ini || m.desdeES) ? reposo : centro(m.x0, m.y0), B = (m.fin || m.haciaES) ? reposo : centro(m.x1, m.y1);
     // la punta de la horquilla queda en el centro del hueco cuando está dentro del canal
-    const Y = z + (PRO_M / 2) * Math.max(0, Math.min(1, (Z_RIEL - z) / 1.6));
+    const Y = z + (PRO_M / 2 - CEN[2] * PRO_M) * Math.max(0, Math.min(1, (RIEL - z) / DEN_Z));
     return { H: A.H + (B.H - A.H) * fx, X: A.X + (B.X - A.X) * fy, Y, z, fase, m, dt, A, B, tx, ty, enES: dt >= m.dur ? !!m.fin : false };
   }
 
@@ -308,17 +424,19 @@ class Panel {
   // Fondo: suelo, pasillo, un hueco oscuro por celda y las marcas de los ejes. Marco: cara lateral y tapa de la estantería
   pintarFondo() {
     const g = this.gF; g.clearRect(0, 0, ANCHO, ALTO);
-    this.poligono(g, [proy(LIM.x0 + 1.6, 0, 0), proy(LARGO + 0.2, 0, 0), proy(LARGO + 0.2, Z_RIEL + 0.9, 0), proy(LIM.x0 + 1.6, Z_RIEL + 0.9, 0)], css('--vacio'), css('--borde'), 1);
-    this.poligono(g, [proy(LIM.x0 + 1.6, FONDO, 0), proy(LARGO + 0.2, FONDO, 0), proy(LARGO + 0.2, Z_RIEL + 0.9, 0), proy(LIM.x0 + 1.6, Z_RIEL + 0.9, 0)], css('--pendiente'), null);
+    const yAcera = Math.max(FONDO, RIEL) + 0.9;
+    this.poligono(g, [proy(LIM.x0 + 1.6, 0, 0), proy(LARGO + 0.2, 0, 0), proy(LARGO + 0.2, yAcera, 0), proy(LIM.x0 + 1.6, yAcera, 0)], css('--vacio'), css('--borde'), 1);
+    this.poligono(g, [proy(LIM.x0 + 1.6, FONDO, 0), proy(LARGO + 0.2, FONDO, 0), proy(LARGO + 0.2, yAcera, 0), proy(LIM.x0 + 1.6, yAcera, 0)], css('--pendiente'), null);
     const hueco = css('--hueco'), borde = css('--borde');
     for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) {
       const X0 = c * COL_M, X1 = X0 + COL_M, H0 = f * FIL_M, H1 = H0 + FIL_M;
       this.poligono(g, [proy(X0, FONDO, H0), proy(X1, FONDO, H0), proy(X1, FONDO, H1), proy(X0, FONDO, H1)], hueco, borde, 0.6);
     }
+    const paso = n => n <= 12 ? 1 : (n <= 30 ? 5 : 10);
     g.fillStyle = css('--suave'); g.font = '8px system-ui, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'center';
-    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % 5 === 0) { const q = proy((c + 0.5) * COL_M, Z_RIEL + 0.9, 0); g.fillText(c + 1, q[0], q[1] + 8); }
+    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % paso(COLUMNAS) === 0 || c === COLUMNAS - 1) { const q = proy((c + 0.5) * COL_M, yAcera, 0); g.fillText(c + 1, q[0], q[1] + 8); }
     g.textAlign = 'right';
-    for (let f = 0; f < FILAS; f++) if (f === 0 || (f + 1) % 5 === 0 || f === FILAS - 1) { const q = proy(-0.2, FONDO, (f + 0.5) * FIL_M); g.fillText(f + 1, q[0] - 4, q[1]); }
+    for (let f = 0; f < FILAS; f++) if (f === 0 || (f + 1) % paso(FILAS) === 0 || f === FILAS - 1) { const q = proy(-0.2, FONDO, (f + 0.5) * FIL_M); g.fillText(f + 1, q[0] - 4, q[1]); }
     g.textAlign = 'left'; g.textBaseline = 'alphabetic';
     const m = this.gM; m.clearRect(0, 0, ANCHO, ALTO);
     this.poligono(m, [proy(LARGO, 0, 0), proy(LARGO, FONDO, 0), proy(LARGO, FONDO, ALTURA), proy(LARGO, 0, ALTURA)], tono(css('--borde'), 0.9), css('--suave'), 1);
@@ -371,7 +489,7 @@ class Panel {
     g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;   // rodillos
     for (let i = 1; i < 6; i++) { const X = PLATAFORMA.x0 + (PLATAFORMA.x1 - PLATAFORMA.x0) * i / 6, a = proy(X, PLATAFORMA.y0, PLATAFORMA.h), b = proy(X, PLATAFORMA.y1, PLATAFORMA.h); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
     if (activo) { g.globalAlpha = pulso; this.armazon(g, PLATAFORMA.x0 - 0.1, PLATAFORMA.x1 + 0.1, PLATAFORMA.y0 - 0.1, PLATAFORMA.y1 + 0.1, 0, PLATAFORMA.h + 0.1, activo, 3); g.globalAlpha = 1; }
-    const et = proy(ES_X, Z_RIEL, 1.6);
+    const et = proy(ES_X, RIEL, 1.6);
     g.font = '800 11px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     const texto = entra ? 'ENTRA' : (sale || this.destinoES) ? 'SALE' : 'E/S';
     g.lineWidth = 3.5; g.strokeStyle = 'rgba(0,0,0,0.7)'; g.strokeText(texto, et[0], et[1]);
@@ -385,13 +503,13 @@ class Panel {
       const k = (ahora - a.t0) / 1000, dentro = ES_X, fuera = LIM.x0 + 0.5;
       const X = a.tipo === 'entra' ? fuera + (dentro - fuera) * ease(Math.min(1, k / 0.45)) : dentro + (fuera - dentro) * ease(Math.max(0, Math.min(1, (k - 0.25) / 0.6)));
       g.globalAlpha = a.tipo === 'entra' ? (k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3) : (k < 0.2 ? 1 : 1 - (k - 0.2) / 0.8);
-      this.caja(g, X - 0.4, X + 0.4, Z_RIEL - 0.35, Z_RIEL + 0.35, PLATAFORMA.h, PLATAFORMA.h + 0.8, colorClase(a.clase), 'rgba(0,0,0,0.45)');
+      this.caja(g, X - 0.4, X + 0.4, RIEL - 0.35, RIEL + 0.35, PLATAFORMA.h, PLATAFORMA.h + 0.8, colorClase(a.clase), 'rgba(0,0,0,0.45)');
       g.globalAlpha = 1;
     });
 
     // rieles del pasillo: uno en el suelo y otro arriba
     g.strokeStyle = css('--suave'); g.lineWidth = 1.5;
-    [0, ALTURA + 0.7].forEach(H => { const a = proy(LIM.x0 + 1.6, Z_RIEL, H), b = proy(LARGO + 0.2, Z_RIEL, H); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); });
+    [0, ALTURA + 0.7].forEach(H => { const a = proy(LIM.x0 + 1.6, RIEL, H), b = proy(LARGO + 0.2, RIEL, H); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); });
 
     // celda destino: el hueco se enmarca con un armazón pulsante, turquesa si se deja un ítem y rosa si se retira
     const d = this.destino;
@@ -415,7 +533,7 @@ class Panel {
     if (m && e.dt < m.dur && m.txy > 0) {
       const tm = Math.min(e.tx, e.ty);
       const fh = e.tx === 0 ? 1 : Math.min(1, tm / e.tx), fX = e.ty === 0 ? 1 : Math.min(1, tm / e.ty);
-      const p0 = proy(e.A.X, Z_RIEL, e.A.H), pc = proy(e.A.X + (e.B.X - e.A.X) * fX, Z_RIEL, e.A.H + (e.B.H - e.A.H) * fh), p1 = proy(e.B.X, Z_RIEL, e.B.H);
+      const p0 = proy(e.A.X, RIEL, e.A.H), pc = proy(e.A.X + (e.B.X - e.A.X) * fX, RIEL, e.A.H + (e.B.H - e.A.H) * fh), p1 = proy(e.B.X, RIEL, e.B.H);
       let dx = p1[0] - pc[0], dy = p1[1] - pc[1], largo = Math.hypot(dx, dy);
       if (largo < 0.5) { dx = pc[0] - p0[0]; dy = pc[1] - p0[1]; largo = Math.hypot(dx, dy) || 1; }
       const dir = [dx / largo, dy / largo], fin = [p1[0] - dir[0] * 8, p1[1] - dir[1] * 8], perp = [-dir[1], dir[0]];
@@ -431,13 +549,13 @@ class Panel {
     }
 
     // grúa: mástil sobre el riel, carro a la altura de la fila y horquilla que entra al canal
-    const mastil = [proy(e.X, Z_RIEL, 0), proy(e.X, Z_RIEL, ALTURA + 0.7)];
+    const mastil = [proy(e.X, RIEL, 0), proy(e.X, RIEL, ALTURA + 0.7)];
     g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 5; g.beginPath(); g.moveTo(mastil[0][0], mastil[0][1]); g.lineTo(mastil[1][0], mastil[1][1]); g.stroke();
     g.strokeStyle = css('--texto'); g.lineWidth = 2.5; g.beginPath(); g.moveTo(mastil[0][0], mastil[0][1]); g.lineTo(mastil[1][0], mastil[1][1]); g.stroke();
-    if (e.Y < Z_RIEL - 0.02) this.caja(g, e.X - 0.13, e.X + 0.13, e.Y, Z_RIEL, e.H - 0.15, e.H + 0.05, e.fase === 1 ? css('--acento') : '#cbd5e1', 'rgba(0,0,0,0.5)');   // horquilla
+    if (e.Y < RIEL - 0.02) this.caja(g, e.X - 0.13, e.X + 0.13, e.Y, RIEL, e.H - 0.15, e.H + 0.05, e.fase === 1 ? css('--acento') : '#cbd5e1', 'rgba(0,0,0,0.5)');   // horquilla
     if (this.mano) this.caja(g, e.X - 0.34, e.X + 0.34, e.Y - 0.3, e.Y + 0.3, e.H + 0.05, e.H + 0.75, colorClase(this.mano), 'rgba(0,0,0,0.6)');
-    this.caja(g, e.X - 0.55, e.X + 0.55, Z_RIEL - 0.35, Z_RIEL + 0.35, e.H - 0.5, e.H - 0.1, e.fase === 1 ? css('--acento') : '#f8fafc', 'rgba(0,0,0,0.6)');   // carro
-    if (this.mano && e.Y >= Z_RIEL - 0.02) this.caja(g, e.X - 0.34, e.X + 0.34, Z_RIEL - 0.3, Z_RIEL + 0.3, e.H - 0.1, e.H + 0.6, colorClase(this.mano), 'rgba(0,0,0,0.6)');
+    this.caja(g, e.X - 0.55, e.X + 0.55, RIEL - 0.35, RIEL + 0.35, e.H - 0.5, e.H - 0.1, e.fase === 1 ? css('--acento') : '#f8fafc', 'rgba(0,0,0,0.6)');   // carro
+    if (this.mano && e.Y >= RIEL - 0.02) this.caja(g, e.X - 0.34, e.X + 0.34, RIEL - 0.3, RIEL + 0.3, e.H - 0.1, e.H + 0.6, colorClase(this.mano), 'rgba(0,0,0,0.6)');
   }
   actualizarPie(tiempo) {
     const t = this.fin !== null ? this.fin : tiempo;
@@ -454,32 +572,33 @@ class Panel {
   progreso() { return this.fin !== null ? totalTareas : this.hechas; }
 }
 
-let SECUENCIA = [];
-
+// ================= carrera =================
 function construir() {
   const r = DATOS.replicas[replicaActual];
   SECUENCIA = r.secuencia; totalTareas = SECUENCIA.length;
-  const cont = document.getElementById('paneles'); cont.innerHTML = '';
+  const columnasTareas = totalTareas <= 72 ? 36 : (totalTareas <= 300 ? 60 : 100);
+  const cont = el('paneles'); cont.innerHTML = '';
   paneles = r.politicas.map(p => {
     const tarjeta = document.createElement('article'); tarjeta.className = 'panel';
     tarjeta.innerHTML = '<div class="cabecera"><h3>' + (NOMBRES[p.nombre] || p.nombre) + '</h3><span class="insignia"></span></div>' +
-      '<div class="estado"><div class="linea"><span class="tipo"></span><span class="chip"></span></div><span class="accion"></span></div><canvas></canvas><div class="tareas">' + SECUENCIA.map(() => '<i></i>').join('') + '</div><div class="pie"></div>';
+      '<div class="estado"><div class="linea"><span class="tipo"></span><span class="chip"></span></div><span class="accion"></span></div><canvas></canvas>' +
+      '<div class="tareas" style="grid-template-columns:repeat(' + columnasTareas + ',1fr)">' + SECUENCIA.map(() => '<i></i>').join('') + '</div><div class="pie"></div>';
     cont.appendChild(tarjeta);
     return new Panel(p, tarjeta);
   });
-  const marc = document.getElementById('marcador'); marc.innerHTML = '';
+  const marc = el('marcador'); marc.innerHTML = '';
   paneles.forEach((p, i) => {
     const f = document.createElement('div'); f.className = 'fila'; f.dataset.i = i;
     f.innerHTML = '<span class="lugar">–</span><span>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</span><span class="barra"><i></i></span><span class="valor"></span>';
     marc.appendChild(f);
   });
-  document.getElementById('resultados').classList.remove('visible');
+  el('resultados').classList.remove('visible');
   reiniciar();
 }
 
 function reiniciar() {
   t = 0; lugarSiguiente = 1; jugando = false;
-  document.getElementById('jugar').textContent = 'Iniciar';
+  el('jugar').textContent = 'Iniciar';
   paneles.forEach(p => p.reiniciar());
   paso(0);
 }
@@ -492,7 +611,7 @@ function marcador() {
     if (A.fin !== null) return -1; if (B.fin !== null) return 1;
     return B.progreso() - A.progreso();
   });
-  const cont = document.getElementById('marcador');
+  const cont = el('marcador');
   orden.forEach((i, pos) => {
     const f = filas.find(x => +x.dataset.i === i), p = paneles[i];
     f.querySelector('.lugar').textContent = p.fin !== null ? p.lugar + '.º' : (pos + 1);
@@ -505,28 +624,29 @@ function marcador() {
 
 function resultados() {
   const orden = paneles.slice().sort((a, b) => a.fin - b.fin), mejor = orden[0].fin;
-  document.getElementById('tabla').innerHTML = orden.map((p, i) =>
+  el('tabla').innerHTML = orden.map((p, i) =>
     '<tr><td>' + (i + 1) + '.º</td><td>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</td><td class="num">' + fmt(p.fin) +
-    '</td><td class="num">' + (i === 0 ? '–' : '+' + fmt(p.fin - mejor) + ' s (+' + (100 * (p.fin - mejor) / mejor).toFixed(0) + ' %)') +
+    '</td><td class="num">' + (i === 0 || mejor === 0 ? '–' : '+' + fmt(p.fin - mejor) + ' s (+' + (100 * (p.fin - mejor) / mejor).toFixed(0) + ' %)') +
     '</td><td class="num">' + p.d.reubicaciones + '</td></tr>').join('');
-  document.getElementById('resultados').classList.add('visible');
+  el('resultados').classList.add('visible');
 }
 
 let ultimoMarcador = 0;
 function paso(dt) {
+  if (!paneles.length) return;
   t += dt;
   paneles.forEach(p => { p.avanzar(t); p.dibujar(t); p.actualizarPie(t); });
-  document.getElementById('reloj').textContent = fmt(t);
+  el('reloj').textContent = fmt(t);
   const ahora = performance.now();
   if (ahora - ultimoMarcador > 150 || dt === 0) { marcador(); ultimoMarcador = ahora; }
   if (paneles.every(p => p.fin !== null)) {
     marcador(); resultados();
-    jugando = false; document.getElementById('jugar').textContent = 'Repetir';
+    jugando = false; el('jugar').textContent = 'Repetir';
   }
 }
 
-function velocidadReal() { return Math.round(Math.pow(10, 1 + document.getElementById('velocidad').value / 100 * 2.6)); }
-function mostrarVelocidad() { document.getElementById('velocidadTexto').textContent = fmt(velocidadReal()) + ' s/s'; }
+function velocidadReal() { return Math.round(Math.pow(10, 1 + el('velocidad').value / 100 * 2.6)); }
+function mostrarVelocidad() { el('velocidadTexto').textContent = fmt(velocidadReal()) + ' s/s'; }
 
 function bucle(ms) {
   if (!jugando) return;
@@ -535,41 +655,341 @@ function bucle(ms) {
   if (jugando) requestAnimationFrame(bucle);
 }
 
-document.getElementById('jugar').onclick = () => {
+el('jugar').onclick = () => {
+  if (!paneles.length) return;
   if (paneles.every(p => p.fin !== null)) reiniciar();
   jugando = !jugando;
-  document.getElementById('jugar').textContent = jugando ? 'Pausar' : 'Continuar';
+  el('jugar').textContent = jugando ? 'Pausar' : 'Continuar';
   if (jugando) { ultimo = performance.now(); requestAnimationFrame(bucle); }
 };
-document.getElementById('reiniciar').onclick = reiniciar;
-document.getElementById('final').onclick = () => {
-  jugando = false; document.getElementById('jugar').textContent = 'Repetir';
+el('reiniciar').onclick = reiniciar;
+el('final').onclick = () => {
+  if (!paneles.length) return;
+  jugando = false; el('jugar').textContent = 'Repetir';
   paneles.forEach(p => p.reiniciar()); lugarSiguiente = 1; t = 0;
   // se avanza en pasos pequeños para que los lugares de llegada respeten el orden de tiempo
-  while (!paneles.every(p => p.fin !== null)) { t += 1; paneles.forEach(p => p.avanzar(t)); }
+  const maximo = Math.max(...paneles.map(p => p.d.eventos[p.d.eventos.length - 1][0]));
+  const salto = Math.max(1, maximo / 4000);
+  while (!paneles.every(p => p.fin !== null)) { t += salto; paneles.forEach(p => p.avanzar(t)); }
   paso(0);
 };
-document.getElementById('velocidad').oninput = mostrarVelocidad;
-document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'SELECT') { e.preventDefault(); document.getElementById('jugar').click(); } });
+el('velocidad').oninput = mostrarVelocidad;
+document.addEventListener('keydown', e => { if (e.code === 'Space' && !['SELECT', 'INPUT', 'TEXTAREA', 'BUTTON'].includes(e.target.tagName)) { e.preventDefault(); el('jugar').click(); } });
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { paneles.forEach(p => { p.sucioFondo = true; p.sucioItems = true; }); paso(0); });
 
-const selReplica = document.getElementById('replica');
-DATOS.replicas.forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = (i + 1) + ' (semilla ' + r.semilla + ')'; selReplica.appendChild(o); });
-selReplica.onchange = () => { replicaActual = +selReplica.value; construir(); };
+el('replica').onchange = () => { replicaActual = +el('replica').value; construir(); };
 
-const ley = document.getElementById('leyenda');
-for (let c = 1; c <= DATOS.clases; c++) ley.insertAdjacentHTML('beforeend', '<span><i class="punto" style="background:var(--clase' + c + ')"></i>Clase ' + letra(c) + '</span>');
-ley.insertAdjacentHTML('beforeend',
-  '<span>Vista isométrica: fila 1 y columna 1 abajo a la izquierda, cada celda tiene dos lugares en profundidad (fondo y frente)</span>' +
-  '<span><i class="punto" style="background:var(--acento)"></i>E/S: plataforma en el pasillo, por donde entran y salen los ítems</span>' +
-  '<span>Línea discontinua: trayectoria Chebyshev (x e y a la vez, cada eje a su velocidad; el punto marca donde llega el eje más rápido)</span>' +
-  '<span><i class="punto" style="background:var(--almacenar)"></i>Turquesa: hueco donde se deja un ítem, o entrada al E/S</span>' +
-  '<span><i class="punto" style="background:var(--recuperar)"></i>Rosa: hueco del que se retira un ítem, o salida hacia el E/S</span>' +
-  '<span><i class="punto" style="background:var(--almacenar)"></i>Tarea de almacenar</span>' +
-  '<span><i class="punto" style="background:var(--recuperar)"></i>Tarea de recuperar</span>');
+function construirLeyenda() {
+  const ley = el('leyenda'); ley.innerHTML = '';
+  for (let c = 1; c <= DATOS.clases; c++) ley.insertAdjacentHTML('beforeend', '<span><i class="punto" style="background:' + colorClase(c) + '"></i>Clase ' + letra(c) + '</span>');
+  ley.insertAdjacentHTML('beforeend',
+    '<span>Vista isométrica: fila 1 y columna 1 abajo a la izquierda, cada celda tiene ' + CAPAS + (CAPAS === 1 ? ' lugar' : ' lugares') + ' en profundidad</span>' +
+    '<span><i class="punto" style="background:var(--acento)"></i>E/S: plataforma en el pasillo, por donde entran y salen los ítems</span>' +
+    '<span>Línea discontinua: trayectoria Chebyshev (x e y a la vez, cada eje a su velocidad; el punto marca donde llega el eje más rápido)</span>' +
+    '<span><i class="punto" style="background:var(--almacenar)"></i>Turquesa: hueco donde se deja un ítem, o entrada al E/S</span>' +
+    '<span><i class="punto" style="background:var(--recuperar)"></i>Rosa: hueco del que se retira un ítem, o salida hacia el E/S</span>' +
+    '<span><i class="punto" style="background:var(--almacenar)"></i>Tarea de almacenar</span>' +
+    '<span><i class="punto" style="background:var(--recuperar)"></i>Tarea de recuperar</span>');
+}
 
-mostrarVelocidad();
-construir();
+function cargarDatos(datos) {
+  DATOS = datos; replicaActual = 0;
+  prepararEscena();
+  const sel = el('replica'); sel.innerHTML = '';
+  DATOS.replicas.forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = (i + 1) + ' (semilla ' + r.semilla + ')'; sel.appendChild(o); });
+  construirLeyenda();
+  construir();
+}
+
+function escenaVacia(texto) {
+  paneles = []; DATOS = null;
+  el('paneles').innerHTML = '<div class="vacio-escena">' + texto + '</div>';
+  el('marcador').innerHTML = ''; el('leyenda').innerHTML = ''; el('replica').innerHTML = '';
+  el('resultados').classList.remove('visible'); el('estadistica').classList.remove('visible');
+}
+
+// ================= estadística de varias réplicas =================
+let ESTADISTICA = null;
+const METRICAS = [
+  ['tiempo_total', 'Tiempo total (s)'], ['tiempo_almacenamiento', 'Tiempo de almacenamiento (s)'], ['tiempo_recuperacion', 'Tiempo de recuperación (s)'],
+  ['tiempo_reubicacion', 'Tiempo de reubicación (s)'], ['reubicaciones', 'Cantidad de reubicaciones'], ['operaciones', 'Operaciones realizadas']
+];
+
+function mostrarEstadistica(est) {
+  ESTADISTICA = est;
+  const sec = el('estadistica');
+  if (!est || !est.replicas) { sec.classList.remove('visible'); return; }
+  sec.classList.add('visible');
+  const sel = el('metrica');
+  if (!sel.options.length) METRICAS.forEach(([k, n]) => { const o = document.createElement('option'); o.value = k; o.textContent = n; sel.appendChild(o); });
+  const m = sel.value || 'tiempo_total';
+  const filas = est.politicas.slice().sort((a, b) => a[m].media - b[m].media);
+  const mejor = filas[0][m].media, maxVal = Math.max(...filas.map(f => f[m].media + f[m].ic95)) || 1;
+  const decimales = m === 'reubicaciones' || m === 'operaciones' ? 1 : 0;
+  const nf = v => decimales ? fmt1(v) : fmt(v);
+  el('tituloEstadistica').textContent = 'Estadística de ' + est.replicas + (est.replicas === 1 ? ' réplica' : ' réplicas');
+  el('encEstadistica').innerHTML = '<tr><th>Política</th><th>Promedio ± IC 95 %</th><th class="num">Desv. estándar</th><th class="num">Mínimo</th><th class="num">Máximo</th><th class="num">vs. la mejor</th><th class="num">Veces mejor</th></tr>';
+  el('cuerpoEstadistica').innerHTML = filas.map((f, i) => {
+    const s = f[m], ancho = 100 * s.media / maxVal, inicioErr = 100 * Math.max(0, s.media - s.ic95) / maxVal, anchoErr = 100 * (Math.min(maxVal, s.media + s.ic95) - Math.max(0, s.media - s.ic95)) / maxVal;
+    return '<tr class="' + (i === 0 ? 'mejor' : '') + '"><td>' + (NOMBRES[f.nombre] || f.nombre) + '</td>' +
+      '<td class="celda-barra"><i class="b" style="width:' + ancho + '%"></i><i class="e" style="left:' + inicioErr + '%;width:' + anchoErr + '%"></i><span>' + nf(s.media) + ' ± ' + nf(s.ic95) + '</span></td>' +
+      '<td class="num">' + nf(s.desviacion) + '</td><td class="num">' + nf(s.minimo) + '</td><td class="num">' + nf(s.maximo) + '</td>' +
+      '<td class="num">' + (i === 0 || mejor === 0 ? '–' : '+' + (100 * (s.media - mejor) / mejor).toFixed(1) + ' %') + '</td>' +
+      '<td class="num">' + f.victorias + ' (' + (100 * f.victorias / est.replicas).toFixed(0) + ' %)</td></tr>';
+  }).join('');
+  const sem = ULTIMA_CONFIG ? ULTIMA_CONFIG.escalar_semilla : null;
+  el('notaEstadistica').textContent = 'Cada réplica usa una secuencia de llegadas distinta' + (sem !== null ? ' (semillas ' + sem + ' a ' + (sem + est.replicas - 1) + ')' : '') +
+    '. "Veces mejor" cuenta en cuántas réplicas esa política terminó primero o empató; las barras muestran el promedio y el intervalo de confianza.';
+}
+
+el('metrica').onchange = () => mostrarEstadistica(ESTADISTICA);
+el('btnCsv').onclick = () => {
+  if (!ESTADISTICA) return;
+  const cab = ['Politica', 'Victorias'];
+  METRICAS.forEach(([k]) => ['media', 'desviacion', 'minimo', 'maximo', 'ic95'].forEach(s => cab.push(k + '_' + s)));
+  const lineas = [cab.join(';')];
+  ESTADISTICA.politicas.forEach(p => {
+    const fila = [NOMBRES[p.nombre] || p.nombre, p.victorias];
+    METRICAS.forEach(([k]) => ['media', 'desviacion', 'minimo', 'maximo', 'ic95'].forEach(s => fila.push(String(p[k][s]).replace('.', ','))));
+    lineas.push(fila.join(';'));
+  });
+  descargar('estadistica_simulacion.csv', lineas.join('\n'), 'text/csv;charset=utf-8');
+};
+
+function descargar(nombre, contenido, tipo) {
+  const url = URL.createObjectURL(new Blob(['﻿' + contenido], { type: tipo }));
+  const a = document.createElement('a'); a.href = url; a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ================= formulario de parámetros =================
+let CONFIG_DEFECTO = null, ULTIMA_CONFIG = null;
+const entradas = [];            // campos numéricos simples del formulario
+let clasesUI = [];              // filas de la tabla de clases: { cap, dem }
+const num = (clave, indice, etiqueta, opc = {}) => ({ clave, indice, etiqueta, ...opc });
+
+const GRUPOS = [
+  { titulo: 'Estantería', abierto: true, campos: [
+    num('vector_configuracion_estanteria', 0, 'Filas', { entero: true, min: 1, max: 200, ayuda: 'Niveles de altura' }),
+    num('vector_configuracion_estanteria', 1, 'Columnas', { entero: true, min: 1, max: 200 }),
+    num('vector_configuracion_estanteria', 2, 'Capas de profundidad', { entero: true, min: 1, max: 12, ayuda: 'Ítems que caben uno detrás de otro en cada canal' }),
+    num('vector_cotas_estanteria', 0, 'Alto de cada fila', { unidad: 'm', min: 0.1, paso: 0.1 }),
+    num('vector_cotas_estanteria', 1, 'Ancho de cada columna', { unidad: 'm', min: 0.1, paso: 0.1 }),
+    num('vector_cotas_estanteria', 2, 'Profundidad de cada celda', { unidad: 'm', min: 0.1, paso: 0.1 }),
+    { nota: 'El total de celdas no puede superar 6000.' }
+  ] },
+  { titulo: 'Estantería: posición y referencia', campos: [
+    num('vector_posicion_estanteria', 0, 'Posición vertical', { unidad: 'm', paso: 0.1, ayuda: 'Desplaza la estantería respecto al E/S' }),
+    num('vector_posicion_estanteria', 1, 'Posición horizontal', { unidad: 'm', paso: 0.1 }),
+    num('vector_posicion_estanteria', 2, 'Posición en profundidad', { unidad: 'm', paso: 0.1 }),
+    num('vector_centro_celda_estanteria', 0, 'Centro de celda (vertical)', { min: 0, max: 1, paso: 0.05, ayuda: 'Punto de referencia dentro de la celda, de 0 a 1' }),
+    num('vector_centro_celda_estanteria', 1, 'Centro de celda (horizontal)', { min: 0, max: 1, paso: 0.05 }),
+    num('vector_centro_celda_estanteria', 2, 'Centro de celda (profundidad)', { min: 0, max: 1, paso: 0.05 })
+  ] },
+  { titulo: 'Grúa y E/S', abierto: true, campos: [
+    num('vector_velocidad_grua', 0, 'Velocidad en filas', { unidad: 'm/s', min: 0.01, paso: 0.1 }),
+    num('vector_velocidad_grua', 1, 'Velocidad en columnas', { unidad: 'm/s', min: 0.01, paso: 0.1 }),
+    num('vector_velocidad_grua', 2, 'Velocidad en canales (z)', { unidad: 'm/s', min: 0.01, paso: 0.1 }),
+    num('escalar_tiempo_carga_descarga', null, 'Tiempo de carga o descarga', { unidad: 's', min: 0, paso: 0.5 }),
+    num('escalar_separacion_riel_grua', null, 'Separación del riel', { unidad: 'm', min: 0, paso: 0.1, ayuda: 'Distancia entre la cara de la estantería y el riel de la grúa' })
+  ] },
+  { titulo: 'Ocupación inicial', abierto: true, campos: [
+    num('escalar_nivel_ocupacion', null, 'Estantería ocupada al empezar', { unidad: '%', factor: 100, min: 0, max: 100, paso: 1, ayuda: 'Se llena con cada política antes de la lista de tareas' })
+  ] },
+  { titulo: 'Clases de ítems', abierto: true, especial: 'clases' },
+  { titulo: 'Lista de tareas', abierto: true, especial: 'tareas' },
+  { titulo: 'Políticas a comparar', abierto: true, especial: 'politicas' },
+  { titulo: 'Réplicas y semilla', campos: [
+    num('escalar_semilla', null, 'Semilla', { entero: true, min: 0, max: 2147483647, ayuda: 'La réplica i usa semilla + i; misma semilla, mismo resultado' }),
+    num('escalar_replicas_animadas', null, 'Réplicas animadas', { entero: true, min: 1, max: 10, ayuda: 'Las que se pueden ver en la carrera' }),
+    num('escalar_cantidad_replicas', null, 'Réplicas para la estadística', { entero: true, min: 0, max: 2000, ayuda: '0 para omitir la estadística' }),
+    { nota: 'Las réplicas de la estadística se ejecutan en paralelo y pueden tardar, según el tamaño de la estantería.' }
+  ] }
+];
+
+function crearCampo(c) {
+  const fila = document.createElement('label'); fila.className = 'campo'; if (c.ayuda) fila.title = c.ayuda;
+  fila.innerHTML = '<span class="etq">' + c.etiqueta + (c.unidad ? '<small>' + c.unidad + '</small>' : '') + '</span>';
+  const inp = document.createElement('input'); inp.type = 'number'; inp.step = c.paso || (c.entero ? 1 : 'any');
+  if (c.min !== undefined) inp.min = c.min; if (c.max !== undefined) inp.max = c.max;
+  inp.addEventListener('input', () => inp.classList.remove('invalido'));
+  fila.appendChild(inp); entradas.push({ c, inp });
+  return fila;
+}
+
+function filaClase(i) {
+  const f = clasesUI[i];
+  return '<span class="ficha" style="background:' + colorClase(i + 1) + '">' + letra(i + 1) + '</span>' +
+    '<input type="number" min="0" step="any" data-clase="' + i + '" data-campo="cap" value="' + f.cap + '" aria-label="Capacidad de la clase ' + letra(i + 1) + '">' +
+    '<input type="number" min="0" step="any" data-clase="' + i + '" data-campo="dem" value="' + f.dem + '" aria-label="Demanda de la clase ' + letra(i + 1) + '">' +
+    '<span class="pct" id="pct' + i + '"></span>';
+}
+function dibujarClases() {
+  const cont = el('tablaClases');
+  cont.innerHTML = '<span></span><span class="enc">Espacio en la estantería</span><span class="enc">Demanda</span><span class="enc"></span>' + clasesUI.map((_, i) => filaClase(i)).join('');
+  cont.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => { clasesUI[+inp.dataset.clase][inp.dataset.campo] = inp.value === '' ? 0 : +inp.value; actualizarPorcentajes(); }));
+  actualizarPorcentajes();
+  el('btnMasClase').disabled = clasesUI.length >= 8; el('btnMenosClase').disabled = clasesUI.length <= 1;
+}
+function actualizarPorcentajes() {
+  const sc = clasesUI.reduce((a, f) => a + f.cap, 0) || 1, sd = clasesUI.reduce((a, f) => a + f.dem, 0) || 1;
+  clasesUI.forEach((f, i) => { const p = el('pct' + i); if (p) p.textContent = Math.round(100 * f.cap / sc) + '% / ' + Math.round(100 * f.dem / sd) + '%'; });
+}
+
+function construirFormulario() {
+  const cont = el('formulario'); cont.innerHTML = ''; entradas.length = 0;
+  GRUPOS.forEach(g => {
+    const det = document.createElement('details'); det.className = 'grupo'; if (g.abierto) det.open = true;
+    det.innerHTML = '<summary>' + g.titulo + '</summary>';
+    const cuerpo = document.createElement('div'); cuerpo.className = 'cuerpo-grupo';
+    if (g.especial === 'clases') {
+      cuerpo.innerHTML = '<p class="nota">Cada clase tiene un espacio asignado en las políticas con zonas fijas y una demanda (llegadas y solicitudes). Los valores son pesos: se normalizan solos y a la derecha ves el resultado (espacio / demanda).</p>' +
+        '<div class="tabla-clases" id="tablaClases"></div><div class="botones-fila"><button id="btnMasClase">Añadir clase</button><button id="btnMenosClase">Quitar última</button></div>';
+    } else if (g.especial === 'tareas') {
+      cuerpo.innerHTML = '<label class="politica"><input type="checkbox" id="tareasAuto"><span>Cantidad automática<small>10 % de las celdas de la estantería</small></span></label>' +
+        '<label class="campo" title="Almacenamientos y recuperaciones en total"><span class="etq">Cantidad de tareas</span><input type="number" id="tareasN" min="1" max="5000" step="1"></label>' +
+        '<label class="campo" title="El resto son recuperaciones"><span class="etq">Almacenamientos <small>%</small></span><input type="number" id="pctAlmacenar" min="0" max="100" step="1"></label>';
+    } else if (g.especial === 'politicas') {
+      cuerpo.innerHTML = POLITICAS.map(p => '<label class="politica" title="' + p.ayuda + '"><input type="checkbox" data-politica="' + p.clave + '"><span>' + p.nombre + '<small>' + p.ayuda + '</small></span></label>').join('') +
+        '<p class="nota">La política que elijas decide dónde se almacena y también dónde se reubica. La recuperación es siempre FCFS.</p>';
+    } else {
+      g.campos.forEach(c => cuerpo.appendChild(c.nota ? Object.assign(document.createElement('p'), { className: 'nota', textContent: c.nota }) : crearCampo(c)));
+    }
+    det.appendChild(cuerpo); cont.appendChild(det);
+  });
+  if (el('btnMasClase')) {
+    el('btnMasClase').onclick = () => { if (clasesUI.length < 8) { clasesUI.push({ cap: 1, dem: 1 }); dibujarClases(); } };
+    el('btnMenosClase').onclick = () => { if (clasesUI.length > 1) { clasesUI.pop(); dibujarClases(); } };
+    el('tareasAuto').onchange = () => { el('tareasN').disabled = el('tareasAuto').checked; actualizarAuto(); };
+    ['input', 'change'].forEach(ev => entradas.forEach(({ c, inp }) => { if (c.clave === 'vector_configuracion_estanteria') inp.addEventListener(ev, actualizarAuto); }));
+  }
+}
+
+function actualizarAuto() {
+  if (!el('tareasAuto').checked) return;
+  const celdas = entradas.filter(x => x.c.clave === 'vector_configuracion_estanteria').reduce((a, x) => a * (+x.inp.value || 1), 1);
+  el('tareasN').value = Math.max(1, Math.round(celdas * 0.1));
+}
+
+function ponerFormulario(cfg) {
+  entradas.forEach(({ c, inp }) => {
+    const v = c.indice === null ? cfg[c.clave] : (cfg[c.clave] || [])[c.indice];
+    inp.value = v === undefined || v === null ? '' : Math.round(v * (c.factor || 1) * 1e6) / 1e6;
+    inp.classList.remove('invalido');
+  });
+  clasesUI = cfg.vector_capacidad_clase.map((cap, i) => ({ cap: Math.round(cap * 1000) / 10, dem: Math.round(cfg.vector_demanda_clase[i] * 1000) / 10 }));
+  dibujarClases();
+  el('pctAlmacenar').value = Math.round((cfg.vector_prob_acum_AR[0] || 0) * 1000) / 10;
+  const celdas = cfg.vector_configuracion_estanteria.reduce((a, b) => a * b, 1), auto = Math.round(celdas * 0.1) === cfg.escalar_largo_secuencia;
+  el('tareasAuto').checked = auto; el('tareasN').value = cfg.escalar_largo_secuencia; el('tareasN').disabled = auto;
+  document.querySelectorAll('[data-politica]').forEach(c => { c.checked = (cfg.vector_politicas_asignacion || []).includes(c.dataset.politica); });
+}
+
+function leerFormulario() {
+  const cfg = JSON.parse(JSON.stringify(CONFIG_DEFECTO));
+  let primerError = null;
+  entradas.forEach(({ c, inp }) => {
+    const txt = inp.value.trim(), v = txt === '' ? NaN : Number(txt) / (c.factor || 1);
+    if (!isFinite(v)) { inp.classList.add('invalido'); primerError = primerError || (c.etiqueta + ': falta el valor.'); return; }
+    if (c.indice === null) cfg[c.clave] = v; else cfg[c.clave][c.indice] = v;
+  });
+  cfg.vector_capacidad_clase = clasesUI.map(f => f.cap); cfg.vector_demanda_clase = clasesUI.map(f => f.dem);
+  const pct = Number(el('pctAlmacenar').value);
+  if (el('pctAlmacenar').value === '' || !isFinite(pct) || pct < 0 || pct > 100) { el('pctAlmacenar').classList.add('invalido'); primerError = primerError || 'Almacenamientos: debe estar entre 0 y 100 %.'; }
+  cfg.vector_prob_acum_AR = [pct / 100, 1];
+  if (el('tareasAuto').checked) delete cfg.escalar_largo_secuencia; else cfg.escalar_largo_secuencia = Number(el('tareasN').value);
+  cfg.vector_politicas_asignacion = Array.from(document.querySelectorAll('[data-politica]:checked')).map(c => c.dataset.politica);
+  if (primerError) throw new Error(primerError);
+  return cfg;
+}
+
+// ================= aviso, ejecución y progreso =================
+let trabajoActual = null, temporizador = null;
+function aviso(tipo, html) {
+  const a = el('aviso'); a.className = 'aviso visible ' + (tipo || ''); a.innerHTML = html;
+}
+function ocultarAviso() { el('aviso').className = 'aviso'; }
+
+async function simular() {
+  let cfg;
+  try { cfg = leerFormulario(); } catch (e) { aviso('error', e.message); return; }
+  el('btnSimular').disabled = true;
+  aviso('', '<div class="progreso"><span>Enviando…</span></div>');
+  try {
+    const r = await fetch('/api/simular', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: cfg }) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'No se pudo iniciar la simulación.');
+    trabajoActual = j.id; ULTIMA_CONFIG = cfg;
+    try { localStorage.setItem('asrs_config', JSON.stringify(cfg)); } catch (e) {}
+    consultar();
+  } catch (e) {
+    aviso('error', e.message); el('btnSimular').disabled = false;
+  }
+}
+
+async function consultar() {
+  try {
+    const r = await fetch('/api/trabajo/' + trabajoActual); const j = await r.json();
+    if (!r.ok) throw new Error(j.error || 'Se perdió la simulación.');
+    if (j.estado === 'listo') {
+      const rr = await fetch('/api/trabajo/' + trabajoActual + '?resultado=1'); const jj = await rr.json();
+      terminar(jj.resultado, j.segundos); return;
+    }
+    if (j.estado === 'error') throw new Error(j.error || 'La simulación falló.');
+    if (j.estado === 'cancelado') { aviso('', 'Simulación cancelada.'); el('btnSimular').disabled = false; return; }
+    const pct = Math.round(100 * j.progreso / Math.max(1, j.total));
+    aviso('', '<div class="progreso"><span>' + (j.mensaje || 'Simulando') + '… ' + j.progreso + '/' + j.total + '</span><div class="barra"><i style="width:' + pct + '%"></i></div><button id="btnCancelar">Cancelar</button></div>');
+    el('btnCancelar').onclick = () => fetch('/api/cancelar/' + trabajoActual, { method: 'POST' });
+    temporizador = setTimeout(consultar, 400);
+  } catch (e) {
+    aviso('error', e.message); el('btnSimular').disabled = false;
+  }
+}
+
+function terminar(resultado, segundos) {
+  el('btnSimular').disabled = false;
+  aviso('exito', 'Simulación lista en ' + fmt1(segundos) + ' s. Pulsa Iniciar para ver la carrera.');
+  cargarDatos(resultado.datos);
+  mostrarEstadistica(resultado.estadistica);
+}
+
+// ================= arranque =================
+async function iniciar() {
+  mostrarVelocidad();
+  const hayServidor = location.protocol.startsWith('http');
+  if (hayServidor) {
+    try {
+      const r = await fetch('/api/config'); CONFIG_DEFECTO = await r.json();
+    } catch (e) { CONFIG_DEFECTO = null; }
+  }
+  if (CONFIG_DEFECTO) {
+    // modo interactivo: formulario y simulación en el servidor local
+    el('app').classList.remove('sin-parametros'); el('btnParametros').style.display = '';
+    construirFormulario();
+    let inicial = CONFIG_DEFECTO;
+    try { const g = localStorage.getItem('asrs_config'); if (g) inicial = { ...CONFIG_DEFECTO, ...JSON.parse(g) }; } catch (e) {}
+    ponerFormulario(inicial);
+    el('btnSimular').onclick = simular;
+    el('btnRestablecer').onclick = () => { ponerFormulario(CONFIG_DEFECTO); ocultarAviso(); };
+    el('btnGuardar').onclick = () => { try { descargar('configuracion_asrs.json', JSON.stringify(leerFormulario(), null, 2), 'application/json'); } catch (e) { aviso('error', e.message); } };
+    el('btnCargar').onclick = () => el('archivoConfig').click();
+    el('archivoConfig').onchange = async ev => {
+      const archivo = ev.target.files[0]; if (!archivo) return;
+      try { ponerFormulario({ ...CONFIG_DEFECTO, ...JSON.parse(await archivo.text()) }); aviso('exito', 'Parámetros cargados desde ' + archivo.name + '.'); }
+      catch (e) { aviso('error', 'El archivo no es una configuración válida.'); }
+      ev.target.value = '';
+    };
+    el('btnParametros').onclick = () => { const cerrado = el('app').classList.toggle('cerrado'); el('btnParametros').textContent = cerrado ? 'Mostrar parámetros' : 'Ocultar parámetros'; };
+    escenaVacia('Ajusta los parámetros y pulsa <b>Simular</b>.');
+    simular();   // la primera ejecución usa los valores iniciales
+  } else if (DATOS_INICIALES) {
+    // archivo autónomo: solo reproduce los datos incrustados
+    cargarDatos(DATOS_INICIALES);
+  } else {
+    escenaVacia('Esta página necesita el servidor local. Ejecuta <code>python visualizar.py --servir</code>.');
+  }
+}
+iniciar();
 </script>
 </body>
 </html>

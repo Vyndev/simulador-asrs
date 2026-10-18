@@ -1,4 +1,4 @@
-"""Graba la ejecución de las políticas y genera una página HTML que las compara en carrera."""
+"""Graba la ejecución de las políticas y genera los datos que reproduce el visualizador."""
 import json
 import os
 import random as rnd
@@ -35,8 +35,9 @@ def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S):
     }
 
 
-def generar_datos(config, vector_semillas):
+def generar_datos(config, vector_semillas, al_avanzar=None):
     # Graba cada política en cada réplica, usando las mismas semillas que la simulación principal
+    # al_avanzar: función opcional que se llama al terminar cada réplica, sirve para informar el progreso
     instancia_simulacion = Simulacion(config)
     vector_replicas = []
 
@@ -54,23 +55,31 @@ def generar_datos(config, vector_semillas):
             "secuencia": [[int(escalar_actividad), int(escalar_clase)] for escalar_actividad, escalar_clase in S],
             "politicas": vector_politicas,
         })
+        if al_avanzar is not None:
+            al_avanzar()
 
     return {
         "configuracion": [int(escalar) for escalar in config["vector_configuracion_estanteria"]],
         "cotas": [float(escalar) for escalar in config["vector_cotas_estanteria"]],
         "velocidad": [float(escalar) for escalar in config["vector_velocidad_grua"]],
+        "posicion": [float(escalar) for escalar in config["vector_posicion_estanteria"]],
+        "centro": [float(escalar) for escalar in config["vector_centro_celda_estanteria"]],
         "clases": len(config["vector_demanda_clase"]),
         "z_riel": float(instancia_simulacion.crearInstancias()[1].vector_posicion_resposo[2]),
         "replicas": vector_replicas,
     }
 
 
-def escribir_html(diccionario_datos, txt_ruta_salida):
-    # Inserta los datos en la plantilla y escribe la página, que funciona sin servidor
+def leer_plantilla():
+    # Devuelve el HTML de la página con el marcador de datos sin reemplazar
     txt_ruta_plantilla = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plantilla.html")
     with open(txt_ruta_plantilla, encoding="utf-8") as archivo:
-        txt_plantilla = archivo.read()
+        return archivo.read()
 
+
+def escribir_html(diccionario_datos, txt_ruta_salida):
+    # Inserta los datos en la plantilla y escribe la página, que funciona sin servidor
+    txt_plantilla = leer_plantilla()
     txt_datos = json.dumps(diccionario_datos, separators=(",", ":"))
     with open(txt_ruta_salida, "w", encoding="utf-8", newline="\n") as archivo:
         archivo.write(txt_plantilla.replace("/*DATOS*/null", txt_datos))
