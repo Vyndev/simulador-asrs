@@ -101,6 +101,9 @@
   .controles { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
   .reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
   .reloj small { color: var(--suave); font-weight: 400; font-size: 13px; }
+  .vistas { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 10px; font-size: 13px; color: var(--suave); }
+  .vistas button { padding: 3px 10px; font-size: 13px; }
+  .vistas small { margin-left: 6px; }
   .leyenda { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--suave); font-size: 13px; margin: 0 0 14px; }
   .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
   .punto { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
@@ -190,6 +193,7 @@
         <div class="reloj"><small>Tiempo simulado</small> <span id="reloj">0</span> s</div>
       </div>
 
+      <div class="vistas" id="vistas"><span>Vista</span><button data-vista="iso">Isométrica</button><button data-vista="frente">Frente</button><button data-vista="lateral">Lateral</button><button data-vista="superior">Superior</button><small>La cámara es la misma en todos los paneles</small></div>
       <div class="leyenda" id="leyenda"></div>
 
       <section class="marcador"><h2>Marcador</h2><div id="marcador"></div></section>
@@ -215,6 +219,7 @@
   </div>
 </div>
 
+<!--THREE-->
 <script>
 const DATOS_INICIALES = /*DATOS*/null;
 
@@ -245,20 +250,25 @@ const fmt = n => Math.round(n).toLocaleString('es');
 const fmt1 = n => (Math.round(n * 10) / 10).toLocaleString('es');
 const el = id => document.getElementById(id);
 
-// ================= escena isométrica (se recalcula con cada simulación) =================
+// ================= escena 3D (se recalcula con cada simulación) =================
+// Ejes del mundo en metros: X a lo largo del pasillo (columnas), Y hacia arriba (filas), Z hacia el pasillo (el fondo de la estantería está en Z = 0)
 let DATOS = null, SECUENCIA = [], totalTareas = 0;
 let FILAS, COLUMNAS, CAPAS, VEL_FILA, VEL_COLUMNA, VEL_PROF, ACEL, DECEL, COTA_FILA, COTA_COLUMNA, COTA_PROF, Z_RIEL, POS, CEN, RIEL;
-let COL_M, FIL_M, PRO_M, LARGO, ALTURA, FONDO, PLATAFORMA, ES_X, ESC, ESC_V, LIM, OX, OY, ANCHO, ALTO, DIR_VISTA, ORDEN_HUECOS, RANGO, DEN_Z;
-const DY = 0.55, C30 = Math.cos(Math.PI / 6);
-const proy0 = (X, Y, H) => [(X - Y * DY) * C30 * ESC, (X + Y * DY) * 0.5 * ESC - H * ESC_V];
-const proy = (X, Y, H) => { const [a, b] = proy0(X, Y, H); return [a + OX, b + OY]; };
+let COL_M, FIL_M, PRO_M, LARGO, ALTURA, FONDO, PLATAFORMA, ES_X, LIM, ANCHO = 640, ALTO = 400, DEN_Z;
 
-function limitesProyeccion() {
-  let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-  [LIM.x0, LIM.x1].forEach(X => [LIM.y0, LIM.y1].forEach(Y => [LIM.h0, LIM.h1].forEach(H => {
-    const [a, b] = proy0(X, Y, H); minX = Math.min(minX, a); maxX = Math.max(maxX, a); minY = Math.min(minY, b); maxY = Math.max(maxY, b);
-  })));
-  return { minX, minY, maxX, maxY };
+// Cámara compartida por todos los paneles: se arrastra en uno y se mueven todos, así se comparan desde el mismo ángulo
+const CAMARA_INICIAL = { az: Math.PI / 4, el: 0.5, zoom: 1 };
+const CAM = { ...CAMARA_INICIAL };
+const VISTAS = { iso: { az: Math.PI / 4, el: 0.5 }, frente: { az: 0, el: 0.02 }, superior: { az: 0, el: 1.5 }, lateral: { az: Math.PI / 2, el: 0.02 } };
+
+let RENDER = null;
+function crearRender() {
+  if (RENDER) return RENDER;
+  RENDER = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  RENDER.setPixelRatio(DPR); RENDER.setSize(ANCHO, ALTO, false);
+  RENDER.setClearColor(0x000000, 0);
+  RENDER.shadowMap.enabled = true; RENDER.shadowMap.type = THREE.PCFSoftShadowMap;
+  return RENDER;
 }
 
 function prepararEscena() {
@@ -271,28 +281,21 @@ function prepararEscena() {
   RIEL = Z_RIEL - POS[2];                                               // posición del pasillo medida desde el fondo de la estantería
   COL_M = COTA_COLUMNA; FIL_M = COTA_FILA; PRO_M = COTA_PROF;
   LARGO = COLUMNAS * COL_M; ALTURA = FILAS * FIL_M; FONDO = CAPAS * PRO_M;
-  // E/S: plataforma a nivel del suelo, en el pasillo, pasado el extremo izquierdo de la estantería (abajo a la izquierda)
+  // E/S: plataforma a nivel del suelo, en el pasillo, pasado el extremo izquierdo de la estantería
   PLATAFORMA = { x0: -3.2, x1: -1.1, y0: RIEL - 0.8, y1: RIEL + 0.8, h: 0.5 };
   ES_X = (PLATAFORMA.x0 + PLATAFORMA.x1) / 2;
-  LIM = { x0: -5.4, x1: LARGO + 0.5, y0: Math.min(0, RIEL - 1.2), y1: Math.max(FONDO, RIEL) + 1.2, h0: 0, h1: ALTURA + 1.6 };
-  // Escala: celdas de frente casi cuadradas; después se ajusta para que la estantería quepa en un panel
-  ESC = 13; ESC_V = Math.max(1.2, (COL_M * C30 * ESC) / FIL_M);
-  const l0 = limitesProyeccion(), k = Math.min(2.2, 330 / (l0.maxX - l0.minX + 20), 400 / (l0.maxY - l0.minY + 32));
-  ESC *= k; ESC_V *= k;
-  const l = limitesProyeccion(), PAD = 10;
-  OX = PAD - l.minX; OY = PAD - l.minY;
-  ANCHO = Math.ceil(l.maxX - l.minX + 2 * PAD); ALTO = Math.ceil(l.maxY - l.minY + 2 * PAD + 12);
-  // Orden de dibujo (de lo lejano a lo cercano): se proyecta cada hueco sobre la dirección de la vista
-  DIR_VISTA = [DY, 1, DY * ESC / ESC_V];
-  const lista = [];
-  for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) for (let kk = 0; kk < CAPAS; kk++) {
-    lista.push({ f, c, k: kk, clave: (c + 0.5) * COL_M * DIR_VISTA[0] + (kk + 0.5) * PRO_M * DIR_VISTA[1] + (f + 0.5) * FIL_M * DIR_VISTA[2] });
-  }
-  ORDEN_HUECOS = lista.sort((a, b) => a.clave - b.clave);
-  RANGO = new Int32Array(FILAS * COLUMNAS * CAPAS);
-  ORDEN_HUECOS.forEach((h, i) => { RANGO[(h.f * COLUMNAS + h.c) * CAPAS + h.k] = i; });
+  LIM = { x0: -5.4, x1: LARGO + 0.5, y0: Math.min(0, RIEL - 1.2), y1: Math.max(FONDO, RIEL) + 1.8, h0: 0, h1: ALTURA + 1.6 };
   // la horquilla llega al centro del hueco cuando está dentro del canal; esta distancia reparte la transición desde el pasillo
   DEN_Z = Math.max(RIEL - ((CAPAS - 1) * PRO_M + CEN[2] * PRO_M), 1e-6);
+  // Proporción del panel: la de la escena vista en isométrico, para no dejar márgenes vacíos
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000), c0 = new THREE.Vector3((LIM.x0 + LIM.x1) / 2, (LIM.h0 + LIM.h1) / 2, (LIM.y0 + LIM.y1) / 2);
+  cam.position.set(c0.x + Math.sin(CAMARA_INICIAL.az) * Math.cos(CAMARA_INICIAL.el) * 300, c0.y + Math.sin(CAMARA_INICIAL.el) * 300, c0.z + Math.cos(CAMARA_INICIAL.az) * Math.cos(CAMARA_INICIAL.el) * 300);
+  cam.lookAt(c0); cam.updateMatrixWorld();
+  let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; const v = new THREE.Vector3();
+  [LIM.x0, LIM.x1].forEach(x => [LIM.h0, LIM.h1].forEach(y => [LIM.y0, LIM.y1].forEach(z => { v.set(x, y, z).applyMatrix4(cam.matrixWorldInverse); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); })));
+  ALTO = Math.round(Math.max(340, Math.min(720, ANCHO * (y1 - y0) / (x1 - x0))));
+  crearRender();
+  RENDER.setSize(ANCHO, ALTO, false);
 }
 
 // Perfil de velocidad de un eje: acelera hasta la velocidad máxima, avanza a velocidad constante y frena
@@ -328,6 +331,24 @@ function tono(color, factor) {
   return res;
 }
 
+// Rótulos que miran siempre a la cámara (números de fila y columna, texto del E/S)
+const texturasRotulo = new Map();
+function rotulo(texto, color, tam, borde) {
+  const clave = texto + '|' + color + '|' + tam;
+  let tex = texturasRotulo.get(clave);
+  if (!tex) {
+    const cv = document.createElement('canvas'), n = 128; cv.width = n * 2; cv.height = n;
+    const g = cv.getContext('2d'); g.font = '800 ' + (tam || 84) + 'px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (borde) { g.lineWidth = 14; g.lineJoin = 'round'; g.strokeStyle = 'rgba(0,0,0,0.75)'; g.strokeText(texto, n, n / 2 + 4); }
+    g.fillStyle = color; g.fillText(texto, n, n / 2 + 4);
+    tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4; texturasRotulo.set(clave, tex);
+  }
+  return tex;
+}
+
+const GEO_CAJA = new THREE.BoxGeometry(1, 1, 1), GEO_CILINDRO = new THREE.CylinderGeometry(1, 1, 1, 8), GEO_CONO = new THREE.ConeGeometry(1, 1, 16), GEO_ESFERA = new THREE.SphereGeometry(1, 16, 12);
+const MAX_DASHES = 700;
+
 let replicaActual = 0, paneles = [], t = 0, jugando = false, ultimo = 0, lugarSiguiente = 1;
 
 class Panel {
@@ -339,22 +360,20 @@ class Panel {
     this.canvas.width = ANCHO * DPR; this.canvas.height = ALTO * DPR;
     this.ctx = this.canvas.getContext('2d');
     this.ctx.scale(DPR, DPR);
-    // Tres capas fuera de pantalla: el fondo (suelo y huecos) y el marco (cara lateral y tapa) solo se pintan al iniciar o al cambiar el tema
-    // La capa de ítems se repinta por partes: cuando cambia un hueco solo se redibujan ese hueco y sus vecinos
-    const nuevaCapa = () => { const cv = document.createElement('canvas'); cv.width = ANCHO * DPR; cv.height = ALTO * DPR; const cx = cv.getContext('2d'); cx.scale(DPR, DPR); return [cv, cx]; };
-    [this.capaFondo, this.gF] = nuevaCapa(); [this.capaItems, this.gI] = nuevaCapa(); [this.capaMarco, this.gM] = nuevaCapa();
     this.ticks = tarjeta.querySelectorAll('.tareas i');
     this.insignia = tarjeta.querySelector('.insignia');
     this.pie = tarjeta.querySelector('.pie');
     this.elTipo = tarjeta.querySelector('.estado .tipo');
     this.elChip = tarjeta.querySelector('.estado .chip');
     this.elAccion = tarjeta.querySelector('.estado .accion');
+    this.construirEscena();
+    this.activarCamara();
     this.reiniciar();
   }
   reiniciar() {
     this.estante = Int16Array.from(this.d.inicial);
     this.io = []; this.mano = 0; this.idx = 0; this.mov = null; this.salioDelES = false;
-    this.anims = []; this.destino = null; this.destinoES = null; this.sucioFondo = true; this.sucioItems = true; this.cambios = [];
+    this.anims = []; this.destino = null; this.destinoES = null; this.sucioItems = true; this.cambios = []; this.trayClave = null;
     this.tarea = -1; this.hechas = 0;
     this.tipoTarea = ''; this.claseTarea = 0; this.textoAccion = 'La grúa espera en el E/S';
     this.fin = null; this.lugar = 0;
@@ -468,158 +487,263 @@ class Panel {
     return { H: A.H + (B.H - A.H) * fx, X: A.X + (B.X - A.X) * fy, Y, z, fase, m, dt, A, B, tx, ty, perfX, perfY, enES: dt >= m.dur ? !!m.fin : false };
   }
 
-  // ---- dibujo ----
-  poligono(g, puntos, relleno, borde, ancho) {
-    g.beginPath(); puntos.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.closePath();
-    if (relleno) { g.fillStyle = relleno; g.fill(); }
-    if (borde) { g.strokeStyle = borde; g.lineWidth = ancho || 1; g.stroke(); }
+  // ---- escena 3D ----
+  construirEscena() {
+    const esc = this.escena = new THREE.Scene();
+    const centro = this.objetivo = new THREE.Vector3((LIM.x0 + LIM.x1) / 2, (LIM.h0 + LIM.h1) / 2, (LIM.y0 + LIM.y1) / 2);
+    this.esquinas = [];
+    [LIM.x0, LIM.x1].forEach(x => [LIM.h0, LIM.h1].forEach(y => [LIM.y0, LIM.y1].forEach(z => this.esquinas.push(new THREE.Vector3(x, y, z)))));
+    const diag = this.diag = Math.hypot(LIM.x1 - LIM.x0, LIM.h1 - LIM.h0, LIM.y1 - LIM.y0);
+    this.camara = new THREE.OrthographicCamera(-1, 1, 1, -1, diag * 0.1, diag * 3);
+
+    // luces: cielo suave y un sol que proyecta sombras
+    esc.add(new THREE.HemisphereLight(0xffffff, 0x8b97a6, 0.85));
+    const sol = this.sol = new THREE.DirectionalLight(0xffffff, 0.7);
+    sol.position.copy(centro).add(new THREE.Vector3(0.35, 1, 0.8).normalize().multiplyScalar(diag));
+    sol.target.position.copy(centro); esc.add(sol, sol.target);
+    sol.castShadow = true; sol.shadow.mapSize.set(1024, 1024);
+    const r = diag * 0.55, sc = sol.shadow.camera; sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = 1; sc.far = diag * 3;
+    sol.shadow.bias = -0.0006; sol.shadow.normalBias = 0.03;
+
+    const std = (rug, met) => new THREE.MeshStandardMaterial({ roughness: rug, metalness: met || 0 });
+    const M = this.mat = { suelo: std(1), pasillo: std(1), fondo: std(1), acero: std(0.45, 0.35), items: std(0.55, 0.05), plataforma: std(0.6, 0.2), rodillo: std(0.7),
+      grua: std(0.5, 0.2), carro: std(0.5, 0.2), horquilla: std(0.5, 0.3), carga: std(0.55, 0.05),
+      sombraTray: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55 }), tray: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      destino: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.3, depthWrite: false }), bordeDestino: new THREE.LineBasicMaterial({ transparent: true }) };
+    const caja = (mat, sx, sy, sz, x, y, z, sombra) => {
+      const m = new THREE.Mesh(GEO_CAJA, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); m.castShadow = !!sombra; m.receiveShadow = true; esc.add(m); return m;
+    };
+
+    // suelo y pasillo
+    const anchoSuelo = LIM.x1 - LIM.x0, hondoSuelo = LIM.y1 - LIM.y0;
+    const suelo = caja(M.suelo, anchoSuelo, 0.04, hondoSuelo, centro.x, -0.02, centro.z);
+    const pasillo = caja(M.pasillo, anchoSuelo, 0.02, LIM.y1 - FONDO, centro.x, 0.01, (LIM.y1 + FONDO) / 2);
+    pasillo.castShadow = false; suelo.castShadow = false;
+
+    // estantería: fondo, postes y vigas
+    const fondo = new THREE.Mesh(new THREE.PlaneGeometry(LARGO, ALTURA), M.fondo); fondo.position.set(LARGO / 2, ALTURA / 2, -0.01); fondo.receiveShadow = true; esc.add(fondo);
+    this.propios = [fondo.geometry];
+    const nPostes = 2 * (COLUMNAS + 1), nVigas = 2 * (FILAS + 1);
+    const postes = new THREE.InstancedMesh(GEO_CAJA, M.acero, nPostes), vigas = new THREE.InstancedMesh(GEO_CAJA, M.acero, nVigas);
+    const tmp = new THREE.Matrix4(), pos = new THREE.Vector3(), esq = new THREE.Vector3(), q = new THREE.Quaternion();
+    let i = 0;
+    for (let c = 0; c <= COLUMNAS; c++) for (const z of [0.04, FONDO - 0.04]) postes.setMatrixAt(i++, tmp.compose(pos.set(c * COL_M, ALTURA / 2, z), q, esq.set(0.07, ALTURA, 0.07)));
+    i = 0;
+    for (let f = 0; f <= FILAS; f++) for (const z of [0.04, FONDO - 0.04]) vigas.setMatrixAt(i++, tmp.compose(pos.set(LARGO / 2, f * FIL_M, z), q, esq.set(LARGO, 0.06, 0.06)));
+    [postes, vigas].forEach(m => { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; esc.add(m); });
+
+    // ítems: una caja por hueco (las vacías se ocultan con escala cero)
+    const n = FILAS * COLUMNAS * CAPAS;
+    const items = this.items = new THREE.InstancedMesh(GEO_CAJA, M.items, n);
+    items.frustumCulled = false; items.castShadow = true; items.receiveShadow = true;
+    items.setColorAt(0, new THREE.Color(0xffffff));
+    esc.add(items);
+    this.matriz = new THREE.Matrix4(); this.colorTmp = new THREE.Color();
+
+    // E/S: plataforma con rodillos
+    const P = PLATAFORMA, cxp = (P.x0 + P.x1) / 2, czp = (P.y0 + P.y1) / 2;
+    caja(M.plataforma, P.x1 - P.x0, P.h, P.y1 - P.y0, cxp, P.h / 2, czp, true);
+    for (let k = 1; k < 6; k++) caja(M.rodillo, 0.05, 0.02, P.y1 - P.y0 - 0.1, P.x0 + (P.x1 - P.x0) * k / 6, P.h + 0.01, czp);
+    this.borde = new THREE.LineSegments(new THREE.EdgesGeometry(GEO_CAJA), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true }));
+    this.borde.scale.set(P.x1 - P.x0 + 0.3, P.h + 0.3, P.y1 - P.y0 + 0.3); this.borde.position.set(cxp, P.h / 2, czp); this.borde.visible = false; esc.add(this.borde);
+    this.propios.push(this.borde.geometry);
+
+    // rieles del pasillo (suelo y techo) y sus postes
+    const xr0 = LIM.x0 + 1.6, xr1 = LARGO + 0.2, altoRiel = ALTURA + 0.7;
+    caja(M.acero, xr1 - xr0, 0.08, 0.08, (xr0 + xr1) / 2, 0.06, RIEL);
+    caja(M.acero, xr1 - xr0, 0.08, 0.08, (xr0 + xr1) / 2, altoRiel, RIEL, true);
+    [xr0, xr1].forEach(x => caja(M.acero, 0.1, altoRiel, 0.1, x, altoRiel / 2, RIEL, true));
+
+    // grúa: mástil, carro, horquilla y carga
+    const g = this.gruaObj = {};
+    g.mastil = caja(M.grua, 0.14, altoRiel, 0.14, 0, altoRiel / 2, RIEL, true);
+    g.carro = caja(M.carro, 1.1, 0.4, 0.7, 0, 0, RIEL, true);
+    g.horquilla = caja(M.horquilla, 0.26, 0.2, 1, 0, 0, RIEL, true);
+    g.carga = caja(M.carga, 0.68, 0.7, 0.6, 0, 0, RIEL, true);
+
+    // ítems que entran o salen por el E/S
+    this.pool = [0, 1, 2].map(() => { const m = new THREE.Mesh(GEO_CAJA, new THREE.MeshStandardMaterial({ roughness: 0.55, transparent: true })); m.scale.set(0.8, 0.8, 0.7); m.visible = false; m.castShadow = true; esc.add(m); this.propios.push(m.material); return m; });
+
+    // celda destino y trayectoria Chebyshev
+    const d = this.destGrupo = new THREE.Group(); d.visible = false;
+    d.add(new THREE.Mesh(GEO_CAJA, M.destino));
+    this.bordeDest = new THREE.LineSegments(new THREE.EdgesGeometry(GEO_CAJA), M.bordeDestino); d.add(this.bordeDest); this.propios.push(this.bordeDest.geometry);
+    esc.add(d);
+    this.sombraTray = new THREE.InstancedMesh(GEO_CILINDRO, M.sombraTray, 2);
+    this.dashes = new THREE.InstancedMesh(GEO_CILINDRO, M.tray, MAX_DASHES);
+    this.flecha = new THREE.Mesh(GEO_CONO, M.tray); this.codo = new THREE.Mesh(GEO_ESFERA, M.tray);
+    [this.sombraTray, this.dashes].forEach(m => { m.frustumCulled = false; m.count = 0; });
+    this.trayecto = new THREE.Group(); this.trayecto.visible = false;
+    this.trayecto.add(this.sombraTray, this.dashes, this.flecha, this.codo); esc.add(this.trayecto);
+
+    this.rotulos = new THREE.Group(); esc.add(this.rotulos);
+    this.aplicarTema();
   }
-  // Caja con sus tres caras visibles: arriba, la que mira al pasillo (+Y) y la que mira al extremo derecho (+X)
-  caja(g, x0, x1, y0, y1, h0, h1, color, borde) {
-    this.poligono(g, [proy(x0, y0, h1), proy(x1, y0, h1), proy(x1, y1, h1), proy(x0, y1, h1)], tono(color, 1.2), borde, 0.6);
-    this.poligono(g, [proy(x0, y1, h0), proy(x1, y1, h0), proy(x1, y1, h1), proy(x0, y1, h1)], color, borde, 0.6);
-    this.poligono(g, [proy(x1, y0, h0), proy(x1, y1, h0), proy(x1, y1, h1), proy(x1, y0, h1)], tono(color, 0.7), borde, 0.6);
-  }
-  armazon(g, x0, x1, y0, y1, h0, h1, color, ancho) {
-    const P = [[x0, y0, h0], [x1, y0, h0], [x1, y1, h0], [x0, y1, h0], [x0, y0, h1], [x1, y0, h1], [x1, y1, h1], [x0, y1, h1]].map(p => proy(p[0], p[1], p[2]));
-    g.strokeStyle = color; g.lineWidth = ancho; g.lineJoin = 'round';
-    [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]].forEach(([a, b]) => { g.beginPath(); g.moveTo(P[a][0], P[a][1]); g.lineTo(P[b][0], P[b][1]); g.stroke(); });
-  }
-  // Fondo: suelo, pasillo, un hueco oscuro por celda y las marcas de los ejes. Marco: cara lateral y tapa de la estantería
-  pintarFondo() {
-    const g = this.gF; g.clearRect(0, 0, ANCHO, ALTO);
-    const yAcera = Math.max(FONDO, RIEL) + 0.9;
-    this.poligono(g, [proy(LIM.x0 + 1.6, 0, 0), proy(LARGO + 0.2, 0, 0), proy(LARGO + 0.2, yAcera, 0), proy(LIM.x0 + 1.6, yAcera, 0)], css('--vacio'), css('--borde'), 1);
-    this.poligono(g, [proy(LIM.x0 + 1.6, FONDO, 0), proy(LARGO + 0.2, FONDO, 0), proy(LARGO + 0.2, yAcera, 0), proy(LIM.x0 + 1.6, yAcera, 0)], css('--pendiente'), null);
-    const hueco = css('--hueco'), borde = css('--borde');
-    for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) {
-      const X0 = c * COL_M, X1 = X0 + COL_M, H0 = f * FIL_M, H1 = H0 + FIL_M;
-      this.poligono(g, [proy(X0, FONDO, H0), proy(X1, FONDO, H0), proy(X1, FONDO, H1), proy(X0, FONDO, H1)], hueco, borde, 0.6);
-    }
+
+  // Colores que dependen del tema (claro u oscuro)
+  aplicarTema() {
+    const M = this.mat, T = this.tema = { almacenar: css('--almacenar'), recuperar: css('--recuperar'), acento: css('--acento'), suave: css('--suave'), texto: css('--texto') };
+    M.suelo.color.set(css('--vacio')); M.pasillo.color.set(css('--pendiente')); M.fondo.color.set(css('--hueco'));
+    M.acero.color.set(tono(css('--suave'), 0.9)); M.plataforma.color.set(T.acento); M.rodillo.color.set('#1f2937');
+    M.grua.color.set(T.texto); M.carro.color.set('#f8fafc'); M.horquilla.color.set('#cbd5e1');
+    const rot = this.rotulos; while (rot.children.length) { const h = rot.children.pop(); h.material.dispose(); }
+    const sprite = (tex, x, y, z, w, h) => {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true })); s.position.set(x, y, z); s.scale.set(w, h, 1); s.renderOrder = 10; rot.add(s); return s;
+    };
     const paso = n => n <= 12 ? 1 : (n <= 30 ? 5 : 10);
-    g.fillStyle = css('--suave'); g.font = '8px system-ui, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'center';
-    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % paso(COLUMNAS) === 0 || c === COLUMNAS - 1) { const q = proy((c + 0.5) * COL_M, yAcera, 0); g.fillText(c + 1, q[0], q[1] + 8); }
-    g.textAlign = 'right';
-    for (let f = 0; f < FILAS; f++) if (f === 0 || (f + 1) % paso(FILAS) === 0 || f === FILAS - 1) { const q = proy(-0.2, FONDO, (f + 0.5) * FIL_M); g.fillText(f + 1, q[0] - 4, q[1]); }
-    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
-    const m = this.gM; m.clearRect(0, 0, ANCHO, ALTO);
-    this.poligono(m, [proy(LARGO, 0, 0), proy(LARGO, FONDO, 0), proy(LARGO, FONDO, ALTURA), proy(LARGO, 0, ALTURA)], tono(css('--borde'), 0.9), css('--suave'), 1);
-    this.poligono(m, [proy(0, 0, ALTURA), proy(LARGO, 0, ALTURA), proy(LARGO, FONDO, ALTURA), proy(0, FONDO, ALTURA)], tono(css('--borde'), 1.15), css('--suave'), 1);
+    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % paso(COLUMNAS) === 0 || c === COLUMNAS - 1) sprite(rotulo(String(c + 1), T.suave, 84), (c + 0.5) * COL_M, 0.05, LIM.y1 - 0.5, 1.0, 0.5);
+    for (let f = 0; f < FILAS; f++) if (f === 0 || (f + 1) % paso(FILAS) === 0 || f === FILAS - 1) sprite(rotulo(String(f + 1), T.suave, 84), -0.55, (f + 0.5) * FIL_M, FONDO, 1.0, 0.5);
+    const y = 2.1, ejeX = ES_X;
+    this.etES = sprite(rotulo('E/S', '#ffffff', 96, true), ejeX, y, RIEL, 2.6, 1.3);
+    this.etEntra = sprite(rotulo('ENTRA', T.almacenar, 96, true), ejeX, y, RIEL, 2.6, 1.3);
+    this.etSale = sprite(rotulo('SALE', T.recuperar, 96, true), ejeX, y, RIEL, 2.6, 1.3);
+    this.sucioItems = true;
   }
-  // Caja del ítem que ocupa un hueco, si lo hay
-  itemEn(g, f, c, k) {
-    const v = this.estante[(f * COLUMNAS + c) * CAPAS + k];
-    if (!v) return;
-    const ix = 0.12 * COL_M, iy = 0.14 * PRO_M, ih = 0.16 * FIL_M;
-    this.caja(g, c * COL_M + ix, (c + 1) * COL_M - ix, k * PRO_M + iy, (k + 1) * PRO_M - iy, f * FIL_M + ih, (f + 1) * FIL_M - ih, this.colorSku(v), 'rgba(0,0,0,0.35)');
+  liberar() {
+    this.escena.traverse(o => { if (o.material) { (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.dispose()); } if (o.isInstancedMesh) o.dispose(); });
+    (this.propios || []).forEach(p => p.dispose && p.dispose());
+    this.escena.clear();
   }
-  pintarItems() {
-    const g = this.gI; g.clearRect(0, 0, ANCHO, ALTO);
-    ORDEN_HUECOS.forEach(h => this.itemEn(g, h.f, h.c, h.k));
+
+  // ---- cámara compartida: arrastrar rota, la rueda acerca y el doble clic restablece ----
+  activarCamara() {
+    const cv = this.canvas; let previo = null;
+    cv.style.touchAction = 'none'; cv.style.cursor = 'grab';
+    cv.addEventListener('pointerdown', ev => { previo = [ev.clientX, ev.clientY]; cv.setPointerCapture(ev.pointerId); cv.style.cursor = 'grabbing'; });
+    cv.addEventListener('pointermove', ev => {
+      if (!previo) return;
+      CAM.az -= (ev.clientX - previo[0]) * 0.008; CAM.el = Math.max(0.02, Math.min(1.5, CAM.el + (ev.clientY - previo[1]) * 0.006));
+      previo = [ev.clientX, ev.clientY]; redibujar();
+    });
+    const soltar = () => { previo = null; cv.style.cursor = 'grab'; };
+    cv.addEventListener('pointerup', soltar); cv.addEventListener('pointercancel', soltar);
+    cv.addEventListener('wheel', ev => { ev.preventDefault(); CAM.zoom = Math.max(0.5, Math.min(6, CAM.zoom * Math.exp(-ev.deltaY * 0.0012))); redibujar(); }, { passive: false });
+    cv.addEventListener('dblclick', () => { Object.assign(CAM, CAMARA_INICIAL); redibujar(); });
   }
-  // Redibuja un hueco y sus vecinos (de lo lejano a lo cercano) dentro del rectángulo que ocupa su caja
-  repintarHueco(f, c, k) {
-    const g = this.gI, ix = 0.12 * COL_M, iy = 0.14 * PRO_M, ih = 0.16 * FIL_M;
-    const x0 = c * COL_M + ix, x1 = (c + 1) * COL_M - ix, y0 = k * PRO_M + iy, y1 = (k + 1) * PRO_M - iy, h0 = f * FIL_M + ih, h1 = (f + 1) * FIL_M - ih;
-    let minX = 1e9, minY = 1e9, maxX = -1e9, maxY = -1e9;
-    [x0, x1].forEach(X => [y0, y1].forEach(Y => [h0, h1].forEach(H => { const q = proy(X, Y, H); minX = Math.min(minX, q[0]); maxX = Math.max(maxX, q[0]); minY = Math.min(minY, q[1]); maxY = Math.max(maxY, q[1]); })));
-    minX -= 2; minY -= 2; maxX += 2; maxY += 2;
-    const candidatos = [];
-    for (let cc = Math.max(0, c - 3); cc <= Math.min(COLUMNAS - 1, c + 3); cc++) for (let ff = Math.max(0, f - 3); ff <= Math.min(FILAS - 1, f + 3); ff++) for (let kk = 0; kk < CAPAS; kk++) {
-      if (this.estante[(ff * COLUMNAS + cc) * CAPAS + kk]) candidatos.push([RANGO[(ff * COLUMNAS + cc) * CAPAS + kk], ff, cc, kk]);
+  // Orienta la cámara ortográfica y ajusta el encuadre para que toda la escena quepa
+  ajustarCamara() {
+    const cam = this.camara, d = new THREE.Vector3(Math.sin(CAM.az) * Math.cos(CAM.el), Math.sin(CAM.el), Math.cos(CAM.az) * Math.cos(CAM.el));
+    cam.position.copy(this.objetivo).addScaledVector(d, this.diag * 1.5); cam.lookAt(this.objetivo); cam.updateMatrixWorld();
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; const v = new THREE.Vector3();
+    this.esquinas.forEach(p => { v.copy(p).applyMatrix4(cam.matrixWorldInverse); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); });
+    const aspecto = ANCHO / ALTO; let w = (x1 - x0) * 1.06, h = (y1 - y0) * 1.06;
+    if (w / h < aspecto) w = h * aspecto; else h = w / aspecto;
+    w /= CAM.zoom; h /= CAM.zoom;
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    cam.left = cx - w / 2; cam.right = cx + w / 2; cam.top = cy + h / 2; cam.bottom = cy - h / 2; cam.updateProjectionMatrix();
+  }
+
+  // Caja del ítem que ocupa un hueco: se actualiza su matriz y su color
+  actualizarItem(f, c, k) {
+    const i = (f * COLUMNAS + c) * CAPAS + k, v = this.estante[i], M = this.matriz;
+    if (!v) M.makeScale(0, 0, 0);
+    else {
+      const sx = COL_M * 0.76, sy = FIL_M * 0.7, sz = PRO_M * 0.74;
+      M.makeScale(sx, sy, sz).setPosition((c + 0.5) * COL_M, f * FIL_M + 0.05 + sy / 2, (k + 0.5) * PRO_M);
+      this.items.setColorAt(i, this.colorTmp.set(this.colorSku(v)));
     }
-    candidatos.sort((a, b) => a[0] - b[0]);
-    g.save(); g.beginPath(); g.rect(minX, minY, maxX - minX, maxY - minY); g.clip(); g.clearRect(minX, minY, maxX - minX, maxY - minY);
-    candidatos.forEach(q => this.itemEn(g, q[1], q[2], q[3]));
-    g.restore();
+    this.items.setMatrixAt(i, M);
+  }
+  refrescarItems() {
+    for (let f = 0; f < FILAS; f++) for (let c = 0; c < COLUMNAS; c++) for (let k = 0; k < CAPAS; k++) this.actualizarItem(f, c, k);
+    this.items.instanceMatrix.needsUpdate = true; if (this.items.instanceColor) this.items.instanceColor.needsUpdate = true;
+  }
+
+  // Dibuja la trayectoria Chebyshev en el plano del pasillo: los dos ejes salen a la vez, cada uno a su velocidad
+  // El camino es una diagonal hasta que llega el eje más rápido (codo) y luego sigue recto por el otro eje
+  construirTrayectoria(e) {
+    const tm = Math.min(e.tx, e.ty), fh = e.perfX.fraccion(tm), fX = e.perfY.fraccion(tm);
+    const p0 = [e.A.X, e.A.H], pc = [e.A.X + (e.B.X - e.A.X) * fX, e.A.H + (e.B.H - e.A.H) * fh], p1 = [e.B.X, e.B.H];
+    let dx = p1[0] - pc[0], dy = p1[1] - pc[1], largo = Math.hypot(dx, dy);
+    if (largo < 0.02) { dx = pc[0] - p0[0]; dy = pc[1] - p0[1]; largo = Math.hypot(dx, dy) || 1; }
+    const dir = [dx / largo, dy / largo], fin = [p1[0] - dir[0] * 0.3, p1[1] - dir[1] * 0.3], z = RIEL + 0.5;
+    const eje = new THREE.Vector3(0, 0, 1), q = new THREE.Quaternion(), pos = new THREE.Vector3(), esc = new THREE.Vector3(), M = new THREE.Matrix4();
+    const pieza = (malla, i, a, b, grosor, desde, hasta) => {
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]); if (L < 1e-6) return false;
+      const ux = (b[0] - a[0]) / L, uy = (b[1] - a[1]) / L, s0 = desde === undefined ? 0 : desde, s1 = hasta === undefined ? L : hasta, len = s1 - s0;
+      q.setFromAxisAngle(eje, Math.atan2(-ux, uy));
+      malla.setMatrixAt(i, M.compose(pos.set(a[0] + ux * (s0 + len / 2), a[1] + uy * (s0 + len / 2), z), q, esc.set(grosor, len, grosor)));
+      return true;
+    };
+    // línea oscura continua debajo y trazos blancos encima
+    const segmentos = [[p0, pc], [pc, fin]];
+    let ns = 0; segmentos.forEach(([a, b]) => { if (pieza(this.sombraTray, ns, a, b, 0.13)) ns++; }); this.sombraTray.count = ns; this.sombraTray.instanceMatrix.needsUpdate = true;
+    let nd = 0;
+    segmentos.forEach(([a, b]) => {
+      const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      for (let s = 0; s < L && nd < MAX_DASHES; s += 0.55) if (pieza(this.dashes, nd, a, b, 0.065, s, Math.min(L, s + 0.32))) nd++;
+    });
+    this.dashes.count = nd; this.dashes.instanceMatrix.needsUpdate = true;
+    // punta de flecha al final y punto en el codo
+    this.flecha.position.set(fin[0] + dir[0] * 0.2, fin[1] + dir[1] * 0.2, z); this.flecha.scale.set(0.2, 0.42, 0.2);
+    this.flecha.quaternion.setFromAxisAngle(eje, Math.atan2(-dir[0], dir[1]));
+    this.codo.position.set(pc[0], pc[1], z); this.codo.scale.setScalar(0.12);
+    this.trayecto.visible = true;
   }
 
   dibujar(tiempo) {
-    const g = this.ctx, e = this.estadoGrua(tiempo), ahora = performance.now();
-    const colorAlm = css('--almacenar'), colorRec = css('--recuperar');
-    if (this.sucioFondo) { this.pintarFondo(); this.sucioFondo = false; }
-    if (this.sucioItems || this.cambios.length > 40) { this.pintarItems(); this.sucioItems = false; this.cambios = []; }
-    else if (this.cambios.length) { this.cambios.forEach(q => this.repintarHueco(q[0], q[1], q[2])); this.cambios = []; }
-    g.clearRect(0, 0, ANCHO, ALTO);
-    g.drawImage(this.capaFondo, 0, 0, ANCHO, ALTO);
-    g.drawImage(this.capaItems, 0, 0, ANCHO, ALTO);
-    g.drawImage(this.capaMarco, 0, 0, ANCHO, ALTO);
+    const g = this.ctx, e = this.estadoGrua(tiempo), ahora = performance.now(), T = this.tema, M = this.mat, G = this.gruaObj;
+    if (this.sucioItems || this.cambios.length > 40) { this.refrescarItems(); this.sucioItems = false; this.cambios = []; }
+    else if (this.cambios.length) {
+      this.cambios.forEach(q => this.actualizarItem(q[0], q[1], q[2])); this.cambios = [];
+      this.items.instanceMatrix.needsUpdate = true; if (this.items.instanceColor) this.items.instanceColor.needsUpdate = true;
+    }
 
-    // plataforma del E/S: su color y su etiqueta dicen si entra o sale un ítem
+    // plataforma del E/S: su color y su rótulo dicen si entra o sale un ítem
     const entra = this.anims.find(a => a.tipo === 'entra'), sale = this.anims.find(a => a.tipo === 'sale');
-    const activo = entra ? colorAlm : (sale || this.destinoES) ? colorRec : null;
+    const activo = entra ? T.almacenar : (sale || this.destinoES) ? T.recuperar : null;
     const pulso = 0.6 + 0.4 * Math.sin(ahora / 170);
-    this.caja(g, PLATAFORMA.x0, PLATAFORMA.x1, PLATAFORMA.y0, PLATAFORMA.y1, 0, PLATAFORMA.h, activo ? tono(activo, 0.9) : css('--acento'), 'rgba(0,0,0,0.4)');
-    g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 1;   // rodillos
-    for (let i = 1; i < 6; i++) { const X = PLATAFORMA.x0 + (PLATAFORMA.x1 - PLATAFORMA.x0) * i / 6, a = proy(X, PLATAFORMA.y0, PLATAFORMA.h), b = proy(X, PLATAFORMA.y1, PLATAFORMA.h); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
-    if (activo) { g.globalAlpha = pulso; this.armazon(g, PLATAFORMA.x0 - 0.1, PLATAFORMA.x1 + 0.1, PLATAFORMA.y0 - 0.1, PLATAFORMA.y1 + 0.1, 0, PLATAFORMA.h + 0.1, activo, 3); g.globalAlpha = 1; }
-    const et = proy(ES_X, RIEL, 1.6);
-    g.font = '800 11px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    const texto = entra ? 'ENTRA' : (sale || this.destinoES) ? 'SALE' : 'E/S';
-    g.lineWidth = 3.5; g.strokeStyle = 'rgba(0,0,0,0.7)'; g.strokeText(texto, et[0], et[1]);
-    g.fillStyle = activo || '#ffffff'; g.fillText(texto, et[0], et[1]); g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    M.plataforma.color.set(activo ? tono(activo, 0.9) : T.acento);
+    this.borde.visible = !!activo; if (activo) { this.borde.material.color.set(activo); this.borde.material.opacity = pulso; }
+    this.etES.visible = !activo; this.etEntra.visible = !!entra; this.etSale.visible = !entra && !!activo;
     if (this.destinoES && this.destinoES.fin && ahora - this.destinoES.fin > 500) this.destinoES = null;
 
     // el ítem llega o se va por el extremo izquierdo del pasillo
     this.anims = this.anims.filter(a => ahora - a.t0 < 1000);
     const ease = s => s < 0.5 ? 2 * s * s : 1 - Math.pow(-2 * s + 2, 2) / 2;
-    this.anims.forEach(a => {
+    this.pool.forEach((m, i) => {
+      const a = this.anims[i];
+      if (!a) { m.visible = false; return; }
       const k = (ahora - a.t0) / 1000, dentro = ES_X, fuera = LIM.x0 + 0.5;
       const X = a.tipo === 'entra' ? fuera + (dentro - fuera) * ease(Math.min(1, k / 0.45)) : dentro + (fuera - dentro) * ease(Math.max(0, Math.min(1, (k - 0.25) / 0.6)));
-      g.globalAlpha = a.tipo === 'entra' ? (k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3) : (k < 0.2 ? 1 : 1 - (k - 0.2) / 0.8);
-      this.caja(g, X - 0.4, X + 0.4, RIEL - 0.35, RIEL + 0.35, PLATAFORMA.h, PLATAFORMA.h + 0.8, this.colorSku(a.clase), 'rgba(0,0,0,0.45)');
-      g.globalAlpha = 1;
+      m.material.opacity = a.tipo === 'entra' ? (k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3) : (k < 0.2 ? 1 : 1 - (k - 0.2) / 0.8);
+      m.material.color.set(this.colorSku(a.clase)); m.position.set(X, PLATAFORMA.h + 0.4, RIEL); m.visible = true;
     });
 
-    // rieles del pasillo: uno en el suelo y otro arriba
-    g.strokeStyle = css('--suave'); g.lineWidth = 1.5;
-    [0, ALTURA + 0.7].forEach(H => { const a = proy(LIM.x0 + 1.6, RIEL, H), b = proy(LARGO + 0.2, RIEL, H); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); });
-
-    // celda destino: el hueco se enmarca con un armazón pulsante, turquesa si se deja un ítem y rosa si se retira
+    // celda destino: el hueco se enmarca con un volumen pulsante, turquesa si se deja un ítem y rosa si se retira
     const d = this.destino;
     if (d) {
-      const col = d.tipo === 'D' ? colorAlm : colorRec;
-      const x0 = d.c * COL_M, y0 = d.k * PRO_M, h0 = d.f * FIL_M;
-      if (d.fin) {
-        const s = (ahora - d.fin) / 500;
-        if (s >= 1) this.destino = null;
-        else { g.globalAlpha = 1 - s; this.armazon(g, x0 - s * 0.6, x0 + COL_M + s * 0.6, y0 - s * 0.3, y0 + PRO_M + s * 0.3, h0 - s * 0.5, h0 + FIL_M + s * 0.5, col, 2.5); g.globalAlpha = 1; }
-      } else {
-        this.armazon(g, x0, x0 + COL_M, y0, y0 + PRO_M, h0, h0 + FIL_M, 'rgba(0,0,0,0.7)', 5);
-        g.globalAlpha = 0.75 + 0.25 * Math.sin(ahora / 170); this.armazon(g, x0, x0 + COL_M, y0, y0 + PRO_M, h0, h0 + FIL_M, col, 2.6); g.globalAlpha = 1;
-      }
-    }
+      const col = d.tipo === 'D' ? T.almacenar : T.recuperar;
+      let s = 0, op = 0.75 + 0.25 * Math.sin(ahora / 170);
+      if (d.fin) { s = (ahora - d.fin) / 500; op = 1 - s; if (s >= 1) { this.destino = null; } }
+      if (this.destino) {
+        this.destGrupo.visible = true;
+        this.destGrupo.position.set((d.c + 0.5) * COL_M, (d.f + 0.5) * FIL_M, (d.k + 0.5) * PRO_M);
+        this.destGrupo.scale.set(COL_M * (1.02 + s * 0.5), FIL_M * (1.02 + s * 0.5), PRO_M * (1.02 + s * 0.3));
+        M.destino.color.set(col); M.destino.opacity = 0.28 * op; M.bordeDestino.color.set(col); M.bordeDestino.opacity = op;
+      } else this.destGrupo.visible = false;
+    } else this.destGrupo.visible = false;
 
-    // trayectoria Chebyshev en el plano del pasillo: los dos ejes salen a la vez, cada uno a su velocidad
-    // el camino es una diagonal hasta que llega el eje más rápido (codo) y luego sigue recto por el otro eje
-    // termina en una punta de flecha antes del destino para no taparlo
+    // trayectoria Chebyshev: se construye una vez por desplazamiento
     const m = e.m;
     if (m && e.dt < m.dur && m.txy > 0) {
-      const tm = Math.min(e.tx, e.ty);
-      const fh = e.perfX.fraccion(tm), fX = e.perfY.fraccion(tm);
-      const p0 = proy(e.A.X, RIEL, e.A.H), pc = proy(e.A.X + (e.B.X - e.A.X) * fX, RIEL, e.A.H + (e.B.H - e.A.H) * fh), p1 = proy(e.B.X, RIEL, e.B.H);
-      let dx = p1[0] - pc[0], dy = p1[1] - pc[1], largo = Math.hypot(dx, dy);
-      if (largo < 0.5) { dx = pc[0] - p0[0]; dy = pc[1] - p0[1]; largo = Math.hypot(dx, dy) || 1; }
-      const dir = [dx / largo, dy / largo], fin = [p1[0] - dir[0] * 8, p1[1] - dir[1] * 8], perp = [-dir[1], dir[0]];
-      [['rgba(0,0,0,0.65)', 5, []], ['#ffffff', 2.2, [6, 4]]].forEach(([color, ancho, guion]) => {
-        g.strokeStyle = color; g.lineWidth = ancho; g.setLineDash(guion);
-        g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(pc[0], pc[1]); g.lineTo(fin[0], fin[1]); g.stroke(); g.setLineDash([]);
-      });
-      g.beginPath(); g.moveTo(fin[0] + dir[0] * 4, fin[1] + dir[1] * 4);
-      g.lineTo(fin[0] - dir[0] * 4 + perp[0] * 4.5, fin[1] - dir[1] * 4 + perp[1] * 4.5);
-      g.lineTo(fin[0] - dir[0] * 4 - perp[0] * 4.5, fin[1] - dir[1] * 4 - perp[1] * 4.5); g.closePath();
-      g.fillStyle = '#ffffff'; g.strokeStyle = 'rgba(0,0,0,0.65)'; g.lineWidth = 1.5; g.stroke(); g.fill();
-      g.beginPath(); g.arc(pc[0], pc[1], 2.5, 0, Math.PI * 2); g.fill(); g.stroke();
-    }
+      if (this.trayClave !== m) { this.trayClave = m; this.construirTrayectoria(e); } else this.trayecto.visible = true;
+    } else this.trayecto.visible = false;
 
     // grúa: mástil sobre el riel, carro a la altura de la fila y horquilla que entra al canal
-    const mastil = [proy(e.X, RIEL, 0), proy(e.X, RIEL, ALTURA + 0.7)];
-    g.strokeStyle = 'rgba(0,0,0,0.55)'; g.lineWidth = 5; g.beginPath(); g.moveTo(mastil[0][0], mastil[0][1]); g.lineTo(mastil[1][0], mastil[1][1]); g.stroke();
-    g.strokeStyle = css('--texto'); g.lineWidth = 2.5; g.beginPath(); g.moveTo(mastil[0][0], mastil[0][1]); g.lineTo(mastil[1][0], mastil[1][1]); g.stroke();
-    if (e.Y < RIEL - 0.02) this.caja(g, e.X - 0.13, e.X + 0.13, e.Y, RIEL, e.H - 0.15, e.H + 0.05, e.fase === 1 ? css('--acento') : '#cbd5e1', 'rgba(0,0,0,0.5)');   // horquilla
-    if (this.mano) this.caja(g, e.X - 0.34, e.X + 0.34, e.Y - 0.3, e.Y + 0.3, e.H + 0.05, e.H + 0.75, this.colorSku(this.mano), 'rgba(0,0,0,0.6)');
-    this.caja(g, e.X - 0.55, e.X + 0.55, RIEL - 0.35, RIEL + 0.35, e.H - 0.5, e.H - 0.1, e.fase === 1 ? css('--acento') : '#f8fafc', 'rgba(0,0,0,0.6)');   // carro
-    if (this.mano && e.Y >= RIEL - 0.02) this.caja(g, e.X - 0.34, e.X + 0.34, RIEL - 0.3, RIEL + 0.3, e.H - 0.1, e.H + 0.6, this.colorSku(this.mano), 'rgba(0,0,0,0.6)');
+    const enMov = e.fase === 1;
+    G.mastil.position.x = e.X; G.carro.position.set(e.X, e.H - 0.3, RIEL);
+    M.carro.color.set(enMov ? T.acento : '#f8fafc'); M.horquilla.color.set(enMov ? T.acento : '#cbd5e1');
+    const dentro = e.Y < RIEL - 0.02;
+    G.horquilla.visible = dentro;
+    if (dentro) { G.horquilla.scale.z = RIEL - e.Y; G.horquilla.position.set(e.X, e.H - 0.05, (e.Y + RIEL) / 2); }
+    G.carga.visible = !!this.mano;
+    if (this.mano) { M.carga.color.set(this.colorSku(this.mano)); G.carga.position.set(e.X, e.H + 0.4, dentro ? e.Y : RIEL); }
+
+    this.ajustarCamara();
+    RENDER.render(this.escena, this.camara);
+    g.clearRect(0, 0, ANCHO, ALTO);
+    g.drawImage(RENDER.domElement, 0, 0, ANCHO, ALTO);
   }
   actualizarPie(tiempo) {
     const t = this.fin !== null ? this.fin : tiempo;
@@ -654,6 +778,7 @@ function construir() {
   const r = DATOS.replicas[replicaActual];
   SECUENCIA = r.secuencia; totalTareas = SECUENCIA.length;
   const columnasTareas = totalTareas <= 72 ? 36 : (totalTareas <= 300 ? 60 : 100);
+  paneles.forEach(p => p.liberar());
   const cont = el('paneles'); cont.innerHTML = '';
   paneles = r.politicas.map(p => {
     const tarjeta = document.createElement('article'); tarjeta.className = 'panel';
@@ -709,6 +834,9 @@ function resultados() {
   el('resultados').classList.add('visible');
 }
 
+// Vuelve a dibujar todos los paneles sin avanzar el reloj (al mover la cámara)
+function redibujar() { paneles.forEach(p => p.dibujar(t)); }
+
 let ultimoMarcador = 0;
 function paso(dt) {
   if (!paneles.length) return;
@@ -753,15 +881,16 @@ el('final').onclick = () => {
 };
 el('velocidad').oninput = mostrarVelocidad;
 document.addEventListener('keydown', e => { if (e.code === 'Space' && !['SELECT', 'INPUT', 'TEXTAREA', 'BUTTON'].includes(e.target.tagName)) { e.preventDefault(); el('jugar').click(); } });
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { paneles.forEach(p => { p.sucioFondo = true; p.sucioItems = true; }); paso(0); });
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { paneles.forEach(p => p.aplicarTema()); redibujar(); });
 
+document.querySelectorAll('#vistas button').forEach(b => { b.onclick = () => { Object.assign(CAM, VISTAS[b.dataset.vista], { zoom: 1 }); redibujar(); }; });
 el('replica').onchange = () => { replicaActual = +el('replica').value; construir(); };
 
 function construirLeyenda() {
   const ley = el('leyenda'); ley.innerHTML = '';
   ley.insertAdjacentHTML('beforeend', '<span>El color de cada ítem depende de la política (mira la leyenda de cada panel); el número del SKU aparece en el rótulo de la tarea</span>');
   ley.insertAdjacentHTML('beforeend',
-    '<span>Vista isométrica: fila 1 y columna 1 abajo a la izquierda, cada celda tiene ' + CAPAS + (CAPAS === 1 ? ' lugar' : ' lugares') + ' en profundidad</span>' +
+    '<span>Vista 3D: arrastra para girar, rueda para acercar, doble clic para restablecer. Fila 1 y columna 1 abajo a la izquierda, cada celda tiene ' + CAPAS + (CAPAS === 1 ? ' lugar' : ' lugares') + ' en profundidad</span>' +
     '<span><i class="punto" style="background:var(--acento)"></i>E/S: plataforma en el pasillo, por donde entran y salen los ítems</span>' +
     '<span>Línea discontinua: trayectoria Chebyshev (x e y a la vez, cada eje a su velocidad; el punto marca donde llega el eje más rápido)</span>' +
     '<span><i class="punto" style="background:var(--almacenar)"></i>Turquesa: hueco donde se deja un ítem, o entrada al E/S</span>' +
@@ -780,6 +909,7 @@ function cargarDatos(datos) {
 }
 
 function escenaVacia(texto) {
+  paneles.forEach(p => p.liberar());
   paneles = []; DATOS = null;
   el('paneles').innerHTML = '<div class="vacio-escena">' + texto + '</div>';
   el('marcador').innerHTML = ''; el('leyenda').innerHTML = ''; el('replica').innerHTML = '';

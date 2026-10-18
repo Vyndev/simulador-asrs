@@ -91,7 +91,11 @@ def leer_plantilla():
     # Devuelve el HTML de la página con el marcador de datos sin reemplazar
     txt_ruta_plantilla = os.path.join(os.path.dirname(os.path.abspath(__file__)), "plantilla.html")
     with open(txt_ruta_plantilla, encoding="utf-8") as archivo:
-        return archivo.read()
+        txt_pagina = archivo.read()
+    # La librería gráfica (Three.js) se incluye en la página para que funcione sin conexión a internet
+    txt_ruta_libreria = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor", "three.min.js")
+    with open(txt_ruta_libreria, encoding="utf-8") as archivo:
+        return txt_pagina.replace("<!--THREE-->", "<script>" + archivo.read() + "</script>")
 
 
 def escribir_html(diccionario_datos, txt_ruta_salida):
