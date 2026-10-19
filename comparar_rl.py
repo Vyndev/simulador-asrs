@@ -40,8 +40,11 @@ def main():
         for txt_sufijo in ("", "_vivo"):
             txt_ruta = os.path.join("modelos", txt_algoritmo + txt_sufijo + ".zip")
             if os.path.exists(txt_ruta):
-                modelo = clase.load(txt_ruta, device="cpu")
-                dic_resultados[txt_algoritmo.upper() + txt_sufijo] = evaluar_agente(modelo, txt_algoritmo, EntornoAsignacion(config, SEMILLA_BASE, argumentos.estados), vector_pruebas)
+                try:
+                    modelo = clase.load(txt_ruta, device="cpu")
+                    dic_resultados[txt_algoritmo.upper() + txt_sufijo] = evaluar_agente(modelo, txt_algoritmo, EntornoAsignacion(config, SEMILLA_BASE, argumentos.estados), vector_pruebas)
+                except Exception as error:
+                    print(f"Se omite {txt_ruta}: no es compatible con el entorno actual ({type(error).__name__}). Vuelve a entrenarlo.")
     if len(dic_resultados) == len(CLASICAS):
         print("No hay modelos entrenados en la carpeta modelos/: ejecuta primero entrenar_rl.py o la vista Entrenamiento.\n")
     print(comparacion.tabla(dic_resultados))

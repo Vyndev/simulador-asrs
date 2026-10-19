@@ -135,11 +135,16 @@ Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de
 
 ### Cómo se plantea
 
-- **Decisión del agente:** en qué canal almacenar cada ítem; dentro del canal se aplica la regla de minimización de varianza. Las recuperaciones son FCFS y las reubicaciones las decide la política más cercana a la grúa.
-- **Recompensa:** el tiempo que invierte la grúa desde una decisión hasta la siguiente, con signo negativo. El retorno del episodio es el tiempo total de la lista, la misma métrica con la que se compara a las políticas clásicas.
+- **Estado** `X_t = ((l, c, d), (i, e))` más la tarea actual y el perfil de la demanda:
+  - *Configuración física:* para cada posición (nivel `l`, columna `c`, profundidad `d`, con 1 frontal) el SKU almacenado `i` y su orden de ingreso `e`, necesario para FIFO. Se añade la cercanía de cada posición al E/S, que es la geometría de las coordenadas.
+  - *Tarea actual:* el SKU `i_t` y el tipo de operación `θ_t` (almacenamiento o recuperación). Cuando la decisión es reubicar un ítem que obstruye, la tarea en curso es una recuperación y se informa además el SKU del ítem que hay que ubicar.
+  - *Perfil de la demanda:* el balance `p_t` entre almacenamientos y recuperaciones y los perfiles de SKUs que entran `P_t^S` y que salen `P_t^R`, calculados con las últimas 30 tareas y suavizados con la demanda de planificación mientras hay poco historial.
+- **Acción:** una de las posiciones disponibles de almacenamiento, es decir celdas libres y accesibles (sin ítems delante). No se impone la regla de la celda más profunda: el agente elige la celda exacta.
+- **Cuándo decide:** al almacenar cada ítem y al reubicar cada ítem que obstruye una recuperación. Las recuperaciones son FCFS. Si no queda ninguna posición disponible no hay decisión: la tarea se omite o el ítem espera en el E/S, igual que en el simulador.
+- **Recompensa:** el tiempo de ciclo con signo negativo, es decir lo que tarda la grúa desde una decisión hasta la siguiente. El retorno del episodio es el tiempo total de la lista, la misma métrica con la que se compara a las políticas clásicas.
 - **Protocolo de comparación:** todos (agente y políticas clásicas) parten de la misma estantería, llenada con la política aleatoria, y ejecutan la misma lista de tareas. El agente se evalúa en estados de prueba que no vio al entrenar. Esto es distinto de la carrera del visualizador, donde cada política llena su propia estantería.
-- **Qué ve el agente:** por cada canal, su llenado, su cercanía al E/S, cuántos ítems del mismo SKU tiene y si tiene espacio; más el rango de demanda del SKU y el avance de la lista.
-- **Algoritmos:** DQN toma el mejor valor Q entre los canales con espacio; PPO usa su máscara de acciones (`MaskablePPO` de sb3-contrib).
+- **Algoritmos:** DQN toma el mejor valor Q entre las posiciones disponibles; PPO usa su máscara de acciones (`MaskablePPO` de sb3-contrib).
+- **Implementación:** el simulador corre en un hilo que se detiene en cada decisión y espera la acción (`asrs/rl/entorno.py`), así se reutiliza el controlador de la grúa sin modificarlo.
 
 ### Cómo se usa
 
@@ -155,12 +160,12 @@ La tabla de `comparar_rl.py` da, para cada política, el tiempo medio, la **dife
 
 ### Dónde estamos
 
-Con los modelos entrenados hasta ahora (entre 5 000 y 12 000 pasos, 18×20×2, 72 tareas, 20 estados de prueba) ningún agente supera a las clásicas: PPO queda un 13 % por encima de la mejor (más cercana a la grúa) y DQN un 17 %. Son entrenamientos muy cortos, de modo que todavía no se puede concluir nada sobre su techo.
+Con la formulación actual solo se probó una corrida corta (6 000 pasos, 18×20×2, 72 tareas, 6 estados de prueba): PPO queda un 24 % por encima de la mejor clásica (más cercana a la grúa) y DQN un 27 %, al nivel de la política aleatoria. Con tan pocos pasos no se puede concluir nada sobre su techo. El agente ahora elige posiciones exactas y también decide las reubicaciones, un problema más difícil que el anterior (que elegía solo el canal y dejaba las reubicaciones a una heurística).
 
 ### Siguientes pasos
 
 1. **Entrenar en serio** (200 000 pasos o más) y medir con `comparar_rl.py` en 30 o más estados.
-2. **Mejorar al agente antes de gastar más cómputo:** que arranque imitando a la mejor política clásica (así parte de su nivel y solo tiene que mejorarla), y una red que puntúe cada canal con los mismos pesos, que aprende mucho más rápido que mirar los 1442 números a la vez.
+2. **Mejorar al agente antes de gastar más cómputo:** que arranque imitando a la mejor política clásica (así parte de su nivel y solo tiene que mejorarla), y una red que puntúe cada posición con los mismos pesos, que aprende mucho más rápido que mirar los más de 4000 números a la vez.
 3. **Unificar el protocolo con la carrera** (que el agente también llene su estantería) para poder ponerlo junto a las demás políticas en el visualizador.
 
 ### Vista Entrenamiento del visualizador
@@ -169,7 +174,7 @@ En la herramienta interactiva hay dos vistas: Carrera y Entrenamiento. En la seg
 
 - la curva de aprendizaje, con el tiempo total por episodio y las políticas clásicas como líneas de referencia;
 - las pérdidas (y epsilon en DQN);
-- la red por dentro: la estantería que ve el agente, cómo se activan las neuronas de cada capa oculta y el mapa de canales con lo que decide;
+- la red por dentro: los mapas por posición que ve el agente, cómo se activan las neuronas de cada capa oculta y el mapa de posiciones con lo que decide;
 - cómo cambian los pesos: histogramas, a qué grupo de entradas mira cada neurona de la primera capa y un mapa de los pesos entre capas.
 
 La red se muestra siempre ante la misma situación de la estantería, y un deslizador permite comparar el principio del entrenamiento con el final. Usa el almacén, la demanda y las tareas del formulario. Solo se entrena un agente a la vez y se puede detener en cualquier momento.

@@ -3,7 +3,7 @@
 // lo que ve (la estantería), cómo se activan sus neuronas, qué decide (un mapa de canales) y cómo cambian sus pesos.
 (function () {
   const NOMBRES_CLASICAS = { aleatoria: 'Aleatoria', basada_en_clases: 'Basada en clases', full_turnover: 'Full-turnover', mas_cercana_es: 'Más cercana al E/S', mas_cercana_grua: 'Más cercana a la grúa' };
-  const GRUPOS = ['Llenado', 'Cercanía al E/S', 'Mismo SKU', 'Con espacio', 'Escalares'];
+  const GRUPOS = ['Ocupada', 'SKU (rango)', 'Mismo SKU', 'Antigüedad (FIFO)', 'Disponible', 'Cercanía al E/S', 'Tarea y perfil'];
   let construida = false, actual = null, ultimoN = 0, temporizadorEnt = null;
   let metricas = [], fotos = [], referencias = {}, evaluacion = {}, estadoEnt = 'inactivo', inicio = null, indiceFoto = 0, enVivo = true, finInfo = null, errorEnt = null;
   let zonasRed = [];
@@ -62,19 +62,22 @@
   function dibujarRed() {
     const foto = fotos[indiceFoto]; zonasRed = [];
     if (!foto || !inicio) { lienzo('cvRed', 120); texto(lienzo('cvRed', 120).g, 'Aquí aparecerá la red cuando empiece el entrenamiento.', 20, 60); return; }
-    const filas = inicio.filas, cols = inicio.columnas, alto = 470, { g, w } = lienzo('cvRed', alto);
-    const colEntrada = 20, anchoMini = Math.min(150, w * 0.17), altoMini = anchoMini * filas / cols * 0.78;
-    // 1. Entrada: cuatro mapas de la estantería que ve el agente
+    // Cada posición del mapa es una celda (nivel, columna, profundidad): las capas de profundidad de una columna quedan una junto a otra
+    const filas = inicio.filas, cols = inicio.columnas_mapa || inicio.columnas, capas = inicio.capas || 1, alto = 470, { g, w } = lienzo('cvRed', alto);
+    const colEntrada = 20, anchoMini = Math.min(118, w * 0.12), altoMini = Math.min(anchoMini * filas / cols * 0.9, 95);
+    // 1. Entrada: los mapas por posición de la estantería que ve el agente, en dos columnas
     texto(g, 'Lo que ve', colEntrada, 14, { color: css('--texto'), peso: 700, tam: 12 });
-    const yMini = i => 26 + i * (altoMini + 30);
+    const xMini = i => colEntrada + (i % 2) * (anchoMini + 14), yMini = i => 26 + Math.floor(i / 2) * (altoMini + 30);
     foto.entrada.forEach((v, i) => {
-      texto(g, GRUPOS[i], colEntrada, yMini(i) + 9, { tam: 10 });
-      mapa(g, v, filas, cols, colEntrada, yMini(i) + 14, anchoMini, altoMini, t => secuencial(t / 255), { abajo: true });
+      texto(g, GRUPOS[i], xMini(i), yMini(i) + 9, { tam: 10 });
+      mapa(g, v, filas, cols, xMini(i), yMini(i) + 14, anchoMini, altoMini, t => secuencial(t / 255), { abajo: true });
     });
-    texto(g, 'rango del SKU ' + fmt1(foto.escalares[0] * 100) + ' % · avance ' + fmt1(foto.escalares[1] * 100) + ' %', colEntrada, yMini(3) + altoMini + 30, { tam: 10 });
+    const esc = foto.escalares, reub = esc[3] > 0.5;
+    texto(g, 'Tarea: ' + (esc[1] > 0.5 ? 'almacenar' : 'recuperar') + (reub ? ' · reubicando un ítem' : ''), colEntrada, yMini(5) + altoMini + 30, { tam: 10, color: css('--texto') });
+    texto(g, 'rango del SKU de la tarea ' + fmt1(esc[0] * 100) + ' % · balance almacenar ' + fmt1(esc[5] * 100) + ' %', colEntrada, yMini(5) + altoMini + 44, { tam: 10 });
 
     // 2. Capas ocultas: una cuadrícula de neuronas coloreadas por su activación
-    const xCap = [w * 0.34, w * 0.52], lado = Math.min(w * 0.14, 200), pesos = foto.pesos;
+    const xCap = [w * 0.38, w * 0.575], lado = Math.min(w * 0.12, 190), pesos = foto.pesos;
     const nNeur = foto.activaciones.map(a => a.length);
     foto.activaciones.forEach((a, k) => {
       const n = a.length, lados = Math.ceil(Math.sqrt(n)), maxAbs = Math.max(1e-9, ...a.map(Math.abs)), hayNeg = a.some(v => v < -1e-6);
@@ -92,16 +95,17 @@
       texto(g, hayNeg ? 'azul negativa · rosa positiva' : 'violeta apagada · amarilla muy activa', xCap[k], y + 14 + lados * cel + 16, { tam: 10 });
     });
 
-    // 3. Salida: el mapa de canales de la estantería con lo que decide la red
-    const xSal = w * 0.72, anchoSal = Math.min(w * 0.25, 260), altoSal = anchoSal * filas / cols * 0.8, sal = foto.salida;
+    // 3. Salida: el mapa de posiciones de la estantería con lo que decide la red
+    const xSal = w * 0.76, anchoSal = Math.min(w * 0.22, 250), altoSal = Math.min(anchoSal * filas / cols * 0.9, 200), sal = foto.salida;
     texto(g, 'Lo que decide', xSal, 14, { color: css('--texto'), peso: 700, tam: 12 });
-    texto(g, sal.tipo === 'prob' ? 'probabilidad de elegir cada canal' : 'valor Q de cada canal', xSal, 28, { tam: 10 });
+    texto(g, sal.tipo === 'prob' ? 'probabilidad de elegir cada posición' : 'valor Q de cada posición', xSal, 28, { tam: 10 });
     const numeros = sal.valores.filter(v => v !== null), mn = Math.min(...numeros), mx = Math.max(...numeros), rango = Math.max(mx - mn, 1e-9);
     mapa(g, sal.valores.map(v => v === null ? null : (v - mn) / rango), filas, cols, xSal, 40, anchoSal, altoSal, secuencial, { abajo: true });
     const fe = Math.floor(sal.elegida / cols), ce = sal.elegida % cols;
     g.strokeStyle = css('--texto'); g.lineWidth = 2; g.strokeRect(xSal + ce * anchoSal / cols - 1, 40 + altoSal - (fe + 1) * altoSal / filas - 1, anchoSal / cols + 2, altoSal / filas + 2);
-    texto(g, 'Canal elegido: fila ' + (fe + 1) + ', columna ' + (ce + 1), xSal, 40 + altoSal + 16, { tam: 11, color: css('--texto') });
-    texto(g, 'gris: canales sin espacio', xSal, 40 + altoSal + 30, { tam: 10 });
+    // profundidad 1 es la frontal (la más cercana al pasillo), como en el modelo
+    texto(g, 'Elegida: fila ' + (fe + 1) + ', columna ' + (Math.floor(ce / capas) + 1) + ', profundidad ' + (capas - (ce % capas)), xSal, 40 + altoSal + 16, { tam: 11, color: css('--texto') });
+    texto(g, 'gris: posiciones no disponibles', xSal, 40 + altoSal + 30, { tam: 10 });
 
     // 4. Flechas entre etapas, con el tamaño medio de los pesos de cada capa
     const flecha = (x1, x2, y, k) => {
@@ -109,11 +113,11 @@
       g.strokeStyle = css('--suave'); g.lineWidth = 1 + Math.min(5, p.media_abs * 25); g.globalAlpha = 0.55;
       g.beginPath(); g.moveTo(x1, y); g.lineTo(x2 - 6, y); g.stroke(); g.globalAlpha = 1;
       g.fillStyle = css('--suave'); g.beginPath(); g.moveTo(x2, y); g.lineTo(x2 - 9, y - 5); g.lineTo(x2 - 9, y + 5); g.closePath(); g.fill();
-      texto(g, 'pesos ' + p.entrada + '→' + p.salida, (x1 + x2) / 2, y - 8, { alin: 'center', tam: 10 });
-      texto(g, 'media |w| ' + p.media_abs.toFixed(3), (x1 + x2) / 2, y + 16, { alin: 'center', tam: 10 });
+      texto(g, 'W ' + p.entrada + '→' + p.salida, (x1 + x2) / 2, y - 8, { alin: 'center', tam: 10 });
+      texto(g, '|w| ' + p.media_abs.toFixed(3), (x1 + x2) / 2, y + 16, { alin: 'center', tam: 10 });
     };
     const yMed = 40 + lado / 2 + 14;
-    flecha(colEntrada + anchoMini + 8, xCap[0] - 6, yMed, 0);
+    flecha(colEntrada + 2 * anchoMini + 22, xCap[0] - 6, yMed, 0);
     flecha(xCap[0] + lado + 6, xCap[1] - 6, yMed, 1);
     flecha(xCap[1] + lado + 6, xSal - 6, yMed, 2);
     zonasRed.forEach(z => { z.alturaTotal = alto; });
@@ -154,8 +158,8 @@
       texto(g, 'Entre las capas ocultas', 10, 14, { color: css('--texto'), peso: 600, tam: 11 });
       mapa(g, p.pool.map(v => v / m1), 32, 32, 10, 24, lado, lado, divergente);
       const m2 = Math.max(...s.por_canal.map(Math.abs), 1e-9), x2 = 10 + lado + 40, anchoS = Math.min(w - x2 - 10, 190);
-      texto(g, 'Peso medio hacia cada canal', x2, 14, { color: css('--texto'), peso: 600, tam: 11 });
-      mapa(g, s.por_canal.map(v => v / m2), inicio.filas, inicio.columnas, x2, 24, anchoS, anchoS * inicio.filas / inicio.columnas * 0.8, divergente, { abajo: true });
+      texto(g, 'Peso medio hacia cada posición', x2, 14, { color: css('--texto'), peso: 600, tam: 11 });
+      mapa(g, s.por_canal.map(v => v / m2), inicio.filas, inicio.columnas_mapa || inicio.columnas, x2, 24, anchoS, Math.min(anchoS * inicio.filas / (inicio.columnas_mapa || inicio.columnas) * 0.9, 150), divergente, { abajo: true });
     }
   }
 
@@ -246,11 +250,11 @@
       '<label title="Cada entorno corre en un núcleo del procesador">Entornos en paralelo <input type="number" id="inEntornos" min="1" max="64" step="1"></label>' +
       '<button id="btnEntrenar" class="primario">Entrenar</button><button id="btnDetener" disabled>Detener</button></div>' +
       '<div id="entEstado" class="ent-estado"></div>' +
-      '<p class="nota">El agente aprende en qué canal almacenar cada ítem. Usa el almacén, la demanda y las tareas de los parámetros de la izquierda. Se compara con las políticas clásicas en estados de prueba que no ve al entrenar.</p></section>' +
+      '<p class="nota">El agente aprende en qué posición almacenar cada ítem y dónde reubicar los que estorban. Usa el almacén, la demanda y las tareas de los parámetros de la izquierda. Se compara con las políticas clásicas en estados de prueba que no ve al entrenar.</p></section>' +
       '<div class="ent-cuadricula"><section class="ent-tarjeta"><h3>Curva de aprendizaje</h3><p class="nota">Tiempo total de la lista de tareas por episodio (media de los últimos 30; menos es mejor). Las líneas punteadas son las políticas clásicas.</p><canvas id="cvCurva"></canvas></section>' +
       '<section class="ent-tarjeta"><h3>Pérdidas <select id="selPerdida"></select></h3><p class="nota">Cuánto se equivoca la red en cada actualización. En DQN, epsilon es la parte de decisiones al azar (exploración).</p><canvas id="cvPerdida"></canvas></section></div>' +
       '<section class="ent-tarjeta"><div class="ent-cabecera"><h3>La red por dentro</h3><div class="ent-replay"><label><input type="checkbox" id="chkVivo" checked> En vivo</label><input type="range" id="slFoto" min="0" max="0" value="0"><span id="lblFoto">—</span></div></div>' +
-      '<p class="nota">La red mira siempre la misma situación de la estantería y, con el avance del entrenamiento, cambia lo que decide. Desliza para comparar el principio con el final. Pasa el ratón sobre una neurona para ver su activación.</p>' +
+      '<p class="nota">La red mira siempre la misma situación de la estantería (cada fila de un mapa es un nivel y las capas de profundidad de una columna quedan juntas) y, con el avance del entrenamiento, cambia lo que decide. Desliza para comparar el principio con el final. Pasa el ratón sobre una neurona para ver su activación.</p>' +
       '<canvas id="cvRed"></canvas><div id="entTip" class="nota">&nbsp;</div></section>' +
       '<div class="ent-cuadricula"><section class="ent-tarjeta"><h3>Distribución de los pesos</h3><p class="nota">Cada barra cuenta cuántos pesos tienen ese valor. Al aprender, las distribuciones se ensanchan o se desplazan.</p><canvas id="cvHist"></canvas></section>' +
       '<section class="ent-tarjeta"><h3>Pesos entre capas y hacia los canales</h3><canvas id="cvMapaPesos"></canvas></section></div>' +

@@ -44,13 +44,12 @@ def evaluar_agente(modelo, txt_algoritmo, entorno, vector_estados):
     escalar_inicio = time.perf_counter()
     for escalar_indice in vector_estados:
         vector_observacion, _ = entorno.reset(options={"estado": escalar_indice})
-        booleano_fin = entorno.escalar_indice >= len(entorno.S)
-        while not booleano_fin:
+        while not entorno.terminado:
             if txt_algoritmo == "dqn":
                 escalar_accion = _accion_dqn_enmascarada(modelo, vector_observacion, entorno.action_masks())
             else:
                 escalar_accion, _ = modelo.predict(vector_observacion, action_masks=entorno.action_masks(), deterministic=True)
-            vector_observacion, _, booleano_fin, _, _ = entorno.step(int(escalar_accion))
+            vector_observacion, _, _, _, _ = entorno.step(int(escalar_accion))
         vector_tiempos.append(entorno.tiempo_total())
         vector_omitidas.append(len(entorno.S) - int(entorno.C.instancia_metricas.recuperarInformcion()[-2]))
         escalar_decisiones += entorno.escalar_decisiones

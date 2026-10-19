@@ -12,6 +12,7 @@ import traceback
 import numpy as np
 
 from asrs.config import config_desde_json
+from asrs.rl.entorno import ESCALAR_MAPAS
 from asrs.rl.entrenamiento import CLASICAS, DESPLAZAMIENTO_PRUEBA, SEMILLA_BASE
 
 INTERVALO_METRICAS = 1.5       # segundos entre mediciones
@@ -46,7 +47,7 @@ def pares_capas(modelo, txt_algoritmo):
     return vector_pares
 
 
-def foto_de_la_red(modelo, txt_algoritmo, vector_observacion, vector_valido, escalar_canales, escalar_pasos):
+def foto_de_la_red(modelo, txt_algoritmo, vector_observacion, vector_valido, escalar_celdas, escalar_pasos):
     # Estado de la red ante una observación fija: lo que ve, cómo se activan las neuronas, qué decide y cómo son sus pesos
     import torch
     import torch.nn.functional as F
@@ -79,11 +80,11 @@ def foto_de_la_red(modelo, txt_algoritmo, vector_observacion, vector_valido, esc
                         "desv": round(float(matriz.std()), 5), "hist": vector_histograma.tolist(),
                         "min": round(float(vector_bordes[0]), 5), "max": round(float(vector_bordes[-1]), 5)}
             if escalar_indice == 0:
-                # Atención de cada neurona oculta a cada grupo de entradas: cuatro mapas por canal y los escalares
-                escalar_grupos = (matriz.shape[1] - 2) // escalar_canales
+                # Atención de cada neurona oculta a cada grupo de entradas: los mapas por posición y, al final, la tarea y el perfil de la demanda
+                escalar_grupos = ESCALAR_MAPAS
                 matriz_abs = matriz.abs().numpy()
-                vector_columnas = [matriz_abs[:, g * escalar_canales:(g + 1) * escalar_canales].mean(axis=1) for g in range(escalar_grupos)]
-                vector_columnas.append(matriz_abs[:, escalar_grupos * escalar_canales:].mean(axis=1))
+                vector_columnas = [matriz_abs[:, g * escalar_celdas:(g + 1) * escalar_celdas].mean(axis=1) for g in range(escalar_grupos)]
+                vector_columnas.append(matriz_abs[:, escalar_grupos * escalar_celdas:].mean(axis=1))
                 dic_capa["atencion"] = _redondear(np.stack(vector_columnas, axis=1).ravel(), 4)        # (neuronas, grupos + 1)
                 dic_capa["grupos"] = escalar_grupos + 1
             elif escalar_indice < len(vector_pares) - 1:
@@ -92,10 +93,10 @@ def foto_de_la_red(modelo, txt_algoritmo, vector_observacion, vector_valido, esc
                 dic_capa["por_canal"] = _redondear(matriz.mean(dim=1).numpy(), 4)                     # peso medio hacia cada canal de salida
             vector_capas_pesos.append(dic_capa)
 
-    escalar_c = escalar_canales
+    escalar_c = escalar_celdas
     return {"tipo": "snapshot", "pasos": int(escalar_pasos),
-            "entrada": [np.round(vector_observacion[g * escalar_c:(g + 1) * escalar_c] * 255).astype(int).tolist() for g in range(4)],
-            "escalares": _redondear(vector_observacion[4 * escalar_c:], 3),
+            "entrada": [np.round(vector_observacion[g * escalar_c:(g + 1) * escalar_c] * 255).astype(int).tolist() for g in range(ESCALAR_MAPAS)],
+            "escalares": _redondear(vector_observacion[ESCALAR_MAPAS * escalar_c:], 3),
             "activaciones": [_redondear(v, 3) for v in vector_activaciones],
             "salida": {"tipo": "prob" if txt_algoritmo == "ppo" else "q", "valores": vector_valores, "elegida": escalar_elegida},
             "pesos": vector_capas_pesos}
@@ -127,9 +128,9 @@ def main():
     entorno_sonda = EntornoAsignacion(config, SEMILLA_BASE, argumentos.estados)
     vector_observacion, _ = entorno_sonda.reset(options={"estado": 0})
     vector_valido = entorno_sonda.action_masks()
-    escalar_canales = entorno_sonda.escalar_canales
+    escalar_celdas = entorno_sonda.escalar_celdas
     emitir({"tipo": "inicio", "algoritmo": argumentos.algoritmo, "filas": entorno_sonda.escalar_filas, "columnas": entorno_sonda.escalar_columnas,
-            "capas": entorno_sonda.escalar_capas, "entornos": argumentos.entornos, "pasos": argumentos.pasos, "entrada": int(vector_observacion.shape[0])})
+            "capas": entorno_sonda.escalar_capas, "columnas_mapa": entorno_sonda.escalar_columnas * entorno_sonda.escalar_capas, "entornos": argumentos.entornos, "pasos": argumentos.pasos, "entrada": int(vector_observacion.shape[0])})
 
     # Referencias: cuánto tardan las políticas clásicas en los mismos estados de prueba
     dic_estados = {}
@@ -157,7 +158,7 @@ def main():
             modelo.set_logger(RegistroVivo(None, []))
 
         def _foto(self):
-            emitir(foto_de_la_red(self.model, argumentos.algoritmo, vector_observacion, vector_valido, escalar_canales, self.num_timesteps))
+            emitir(foto_de_la_red(self.model, argumentos.algoritmo, vector_observacion, vector_valido, escalar_celdas, self.num_timesteps))
             self.ultima_foto = time.perf_counter()
 
         def _on_training_start(self):
@@ -184,7 +185,7 @@ def main():
 
     modelo, escalar_segundos = entrenamiento.entrenar(argumentos.algoritmo, config, argumentos.pasos, argumentos.estados, argumentos.semilla,
                                                       argumentos.entornos, argumentos.dispositivo, [Vivo()])
-    emitir(foto_de_la_red(modelo, argumentos.algoritmo, vector_observacion, vector_valido, escalar_canales, argumentos.pasos))
+    emitir(foto_de_la_red(modelo, argumentos.algoritmo, vector_observacion, vector_valido, escalar_celdas, argumentos.pasos))
 
     resultado = evaluar_agente(modelo, argumentos.algoritmo, EntornoAsignacion(config, SEMILLA_BASE, argumentos.estados), vector_pruebas)
     emitir({"tipo": "evaluacion", "clave": argumentos.algoritmo.upper(), "media": round(float(resultado["tiempos"].mean()), 1)})
