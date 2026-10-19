@@ -17,7 +17,13 @@ Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica y p
 python visualizar.py --servir
 ```
 
-Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`, sin dependencias nuevas). A la izquierda están **todos los parámetros de la simulación**, organizados en cuatro pestañas (Almacén, Demanda, Políticas y Ejecución) con un resumen siempre visible; a la derecha, la carrera de políticas en 3D (Three.js, incluido en `asrs/visualizacion/vendor/`, funciona sin internet) y la estadística. La cámara es la misma en todos los paneles: arrastra para girar, rueda para acercar, doble clic para restablecer, o usa los botones Isométrica, Frente, Lateral y Superior. Si recargas la página mientras corre una simulación, se reconecta y sigue su progreso.
+Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`, sin dependencias nuevas). Se trabaja en tres pasos, que están siempre a la vista en la barra superior junto al botón **Simular**:
+
+1. **Escenario.** Todo lo que se puede ajustar, a la vista y a todo el ancho, en cuatro tarjetas: Almacén (con un esquema a escala de la estantería), Demanda, Políticas y Ejecución. No hay pestañas que escondan parámetros. Si cambias algo después de simular, la barra avisa "Cambios sin simular".
+2. **Carrera.** Al terminar de simular se pasa solo a este paso: las políticas ejecutan la misma lista de tareas sobre un mismo reloj, en 3D (Three.js, incluido en `asrs/visualizacion/vendor/`, funciona sin internet). La cámara es la misma en todos los paneles: arrastra para girar, rueda para acercar, doble clic para restablecer, o usa los botones Isométrica, Frente, Lateral y Superior.
+3. **Resultados.** Primero la conclusión en una frase (qué política gana, por cuánto y si la diferencia es creíble o los intervalos de confianza se solapan) y después la estadística de las réplicas y la tabla de la réplica vista.
+
+Si recargas la página mientras corre una simulación, se reconecta y sigue su progreso. En el menú ⋯ están restablecer, guardar y cargar el escenario.
 
 **Parámetros editables**
 - Estantería: filas, columnas, capas de profundidad, medidas de la celda, posición y centro de referencia de la celda.

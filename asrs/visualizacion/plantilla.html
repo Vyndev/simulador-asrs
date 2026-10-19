@@ -22,15 +22,32 @@
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }       /* el atributo hidden debe ganar a cualquier display de las clases */
   body { margin: 0; background: var(--fondo); color: var(--texto); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .contenedor { max-width: 1600px; margin: 0 auto; padding: 20px 16px 48px; }
-  .encabezado { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
-  h1 { font-size: 22px; margin: 0 0 2px; }
-  .sub { color: var(--suave); margin: 0; }
-  .app { display: grid; grid-template-columns: 350px minmax(0, 1fr); gap: 16px; align-items: start; }
-  .app.sin-parametros { grid-template-columns: minmax(0, 1fr); }
-  .app.sin-parametros .parametros { display: none; }
-  .app.cerrado { grid-template-columns: minmax(0, 1fr); }
-  .app.cerrado .parametros { display: none; }
+  .contenedor { max-width: 1680px; margin: 0 auto; padding: 0 16px 48px; }
+  /* barra superior fija: marca, pasos, estado y acción principal */
+  .barra { position: sticky; top: 0; z-index: 30; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px 24px;
+    margin: 0 -16px 16px; padding: 10px 16px; background: var(--fondo); border-bottom: 1px solid var(--borde); }
+  h1 { font-size: 19px; margin: 0; line-height: 1.2; }
+  .sub { color: var(--suave); margin: 0; font-size: 12.5px; }
+  .pasos { display: flex; justify-content: center; gap: 6px; min-width: 0; }
+  .pasos button { display: flex; align-items: center; gap: 10px; text-align: left; border: 1px solid transparent; background: transparent; padding: 6px 14px 6px 8px; border-radius: 12px; color: var(--suave); min-width: 0; }
+  .pasos button b { display: inline-flex; flex: none; width: 26px; height: 26px; border-radius: 50%; align-items: center; justify-content: center; background: var(--vacio); font-size: 13px; }
+  .pasos button span { display: grid; line-height: 1.2; font-weight: 600; min-width: 0; }
+  .pasos button small { font-weight: 400; font-size: 11.5px; color: var(--suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
+  .pasos button.activo { background: var(--tarjeta); border-color: var(--borde); color: var(--texto); }
+  .pasos button.activo b { background: var(--acento); color: #fff; }
+  .pasos button:disabled { opacity: .45; }
+  .barra-accion { display: flex; align-items: center; gap: 10px; justify-self: end; }
+  .barra-accion .primario { padding: 8px 22px; }
+  .cambios { color: var(--oro); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  .menu-mas { position: relative; }
+  .menu-mas summary { list-style: none; cursor: pointer; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--borde); border-radius: 8px; background: var(--tarjeta); font-size: 18px; line-height: 1; }
+  .menu-mas summary::-webkit-details-marker { display: none; }
+  .menu-lista { position: absolute; right: 0; top: 40px; display: grid; gap: 2px; min-width: 200px; padding: 6px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.28); z-index: 40; }
+  .menu-lista button { text-align: left; border: 0; background: transparent; padding: 8px 10px; }
+  .menu-lista button:hover { background: var(--vacio); }
+  .vista-app { min-width: 0; }
+  @media (max-width: 1100px) { .barra { grid-template-columns: 1fr auto; } .pasos { grid-column: 1 / -1; grid-row: 2; justify-content: stretch; } .pasos button { flex: 1; } }
+  @media (max-width: 640px) { .pasos button small { display: none; } }
   button, select, input { font: inherit; color: var(--texto); }
   button, select { background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
   button:hover, select:hover { border-color: var(--acento); }
@@ -42,22 +59,21 @@
   label { color: var(--suave); display: flex; align-items: center; gap: 8px; }
   input[type=range] { width: 150px; accent-color: var(--acento); }
 
-  /* parámetros */
-  .parametros { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; display: flex; flex-direction: column; gap: 10px; padding-right: 2px; }
-  .acciones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px; position: sticky; top: 0; z-index: 2; }
-  .acciones .primario { grid-column: 1 / -1; padding: 8px 12px; }
-  .acciones button:not(.primario) { padding: 5px 6px; font-size: 13px; }
-  #formulario { display: flex; flex-direction: column; gap: 10px; }
-  .resumen-param { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 6px; }
-  .ficha-res { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 8px; padding: 4px 8px; font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* escenario: cuatro tarjetas que se reparten el ancho, sin pestañas que escondan nada */
+  .esc-cabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; margin-bottom: 14px; }
+  .esc-cabecera .nota { margin: 0; }
+  .escenario { columns: 3 360px; column-gap: 16px; }
+  .esc-tarjeta { break-inside: avoid; margin: 0 0 16px; padding: 14px 14px 4px; background: var(--vacio); border: 1px solid var(--borde); border-radius: 14px; display: grid; gap: 10px; }
+  .esc-tarjeta > header { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 10px; margin-bottom: 2px; }
+  .esc-tarjeta > header b { display: inline-flex; width: 26px; height: 26px; border-radius: 8px; align-items: center; justify-content: center; background: var(--acento); color: #fff; font-size: 13px; grid-row: 1 / 3; }
+  .esc-tarjeta > header h2 { margin: 0; font-size: 16px; }
+  .esc-tarjeta > header p { margin: 0; color: var(--suave); font-size: 12.5px; }
+  .esquema-rack { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 6px; }
+  .esquema-rack svg { display: block; width: 100%; height: auto; }
+  .resumen-param { display: flex; flex-wrap: wrap; gap: 8px; }
+  .ficha-res { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 6px 14px; min-width: 96px; font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ficha-res small { display: block; color: var(--suave); font-weight: 400; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
   .ficha-res.mal { border-color: var(--omitida); color: var(--omitida); }
-  .pestanas { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; background: var(--vacio); border-radius: 10px; padding: 3px; }
-  .pestanas button { border: 0; background: transparent; border-radius: 8px; padding: 7px 4px; color: var(--suave); font-size: 13.5px; }
-  .pestanas button:hover { color: var(--texto); }
-  .pestanas button.activa { background: var(--tarjeta); color: var(--texto); font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.18); }
-  .panel-pestana { display: flex; flex-direction: column; gap: 10px; }
-  .panel-pestana[hidden] { display: none; }
   .seccion { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px 12px; }
   .seccion > h3, .seccion > summary { margin: 0 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--suave); }
   .seccion > summary { cursor: pointer; margin: 0; list-style: none; display: flex; justify-content: space-between; }
@@ -100,7 +116,7 @@
   .politica small { display: block; color: var(--suave); font-size: 12.5px; }
 
   /* avisos y progreso */
-  .aviso { display: none; border-radius: 10px; padding: 7px 12px; margin-bottom: 10px; font-size: 14px; border: 1px solid var(--borde); background: var(--tarjeta); }
+  .aviso { position: sticky; top: 62px; z-index: 29; display: none; border-radius: 10px; padding: 7px 12px; margin-bottom: 10px; font-size: 14px; border: 1px solid var(--borde); background: var(--tarjeta); }
   .aviso.visible { display: block; }
   .aviso.error { background: var(--error-fondo); border-color: var(--omitida); color: var(--omitida); }
   .aviso.exito { border-color: var(--exito); }
@@ -109,7 +125,7 @@
   .progreso .barra i { display: block; height: 100%; width: 0; background: var(--acento); transition: width .25s; }
 
   /* carrera */
-  .controles { position: sticky; top: 8px; z-index: 5; box-shadow: 0 6px 16px -8px rgba(0,0,0,.45); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+  .controles { position: sticky; top: 66px; z-index: 5; box-shadow: 0 6px 16px -8px rgba(0,0,0,.45); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
   .reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
   .reloj small { color: var(--suave); font-weight: 400; font-size: 13px; }
   .vistas { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding-top: 8px; border-top: 1px solid var(--borde); font-size: 13px; color: var(--suave); }
@@ -154,8 +170,17 @@
   .tareas i.hecha { opacity: 1; } .tareas i.actual { opacity: 1; outline: 2px solid var(--texto); outline-offset: 1px; }
   .tareas i.omitida { background: transparent; outline: 1px solid var(--omitida); outline-offset: -1px; opacity: 1; }
   .pie { display: flex; justify-content: space-between; color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .veredicto { background: var(--tarjeta); border: 1px solid var(--borde); border-left: 5px solid var(--almacenar); border-radius: 12px; padding: 16px 20px; margin-bottom: 14px; display: grid; gap: 6px; }
+  .veredicto h2 { margin: 0; font-size: 22px; line-height: 1.25; }
+  .veredicto p { margin: 0; color: var(--suave); }
+  .veredicto .cifras { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 6px; }
+  .veredicto .cifras div { display: grid; }
+  .veredicto .cifras b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .veredicto .cifras small { color: var(--suave); font-size: 12px; }
+  .veredicto.dudoso { border-left-color: var(--oro); }
   .resultados, .estadistica { display: none; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
   .resultados.visible, .estadistica.visible { display: block; }
+  .resultados { margin-top: 0; }
   .estadistica .cabecera-est { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   .estadistica .cabecera-est h2 { margin: 0; }
   .estadistica .nota { margin: 8px 0 0; }
@@ -175,29 +200,45 @@
 </head>
 <body>
 <div class="contenedor">
-  <header class="encabezado">
-    <div>
+  <header class="barra" id="barra">
+    <div class="marca">
       <h1>Simulador ASRS</h1>
-      <p class="sub">Todas las políticas de asignación ejecutan la misma lista de tareas sobre un mismo reloj. Gana la que termina primero.</p>
+      <p class="sub">Compara políticas de asignación de almacenamiento</p>
     </div>
-    <button id="btnParametros" style="display:none">Ocultar parámetros</button>
+    <nav class="pasos" id="pasos" aria-label="Pasos" style="display:none">
+      <button data-vista="escenario" class="activo"><b>1</b><span>Escenario<small id="subEscenario">Define el almacén y la demanda</small></span></button>
+      <button data-vista="carrera" disabled><b>2</b><span>Carrera<small id="subCarrera">Aún sin simular</small></span></button>
+      <button data-vista="resultados" disabled><b>3</b><span>Resultados<small id="subResultados">Aún sin simular</small></span></button>
+    </nav>
+    <div class="barra-accion" id="barraAccion" style="display:none">
+      <span class="cambios" id="estadoEscenario" hidden>● Cambios sin simular</span>
+      <button id="btnSimular" class="primario">Simular</button>
+      <details class="menu-mas" id="menuMas">
+        <summary aria-label="Más acciones">⋯</summary>
+        <div class="menu-lista">
+          <button id="btnRestablecer" title="Vuelve a los valores iniciales">Restablecer valores</button>
+          <button id="btnGuardar" title="Descarga los parámetros en un archivo JSON">Guardar escenario…</button>
+          <button id="btnCargar" title="Carga parámetros desde un archivo JSON">Cargar escenario…</button>
+        </div>
+      </details>
+      <input type="file" id="archivoConfig" accept="application/json,.json" hidden>
+    </div>
   </header>
 
-  <div class="app sin-parametros" id="app">
-    <aside class="parametros" id="parametros">
-      <div class="acciones">
-        <button id="btnSimular" class="primario">Simular</button>
-        <button id="btnRestablecer" title="Vuelve a los valores iniciales">Restablecer</button>
-        <button id="btnGuardar" title="Descarga los parámetros en un archivo JSON">Guardar</button>
-        <button id="btnCargar" title="Carga parámetros desde un archivo JSON">Cargar</button>
-        <input type="file" id="archivoConfig" accept="application/json,.json" hidden>
+  <div class="aviso" id="aviso"></div>
+
+  <main>
+    <!-- 1. ESCENARIO: todo lo que se puede ajustar, a la vista y a todo el ancho -->
+    <section class="vista-app" id="vistaEscenario">
+      <div class="esc-cabecera">
+        <div class="resumen-param" id="resumenParam"></div>
+        <p class="nota">Ajusta lo que necesites y pulsa <b>Simular</b>. Los valores iniciales ya forman un escenario completo.</p>
       </div>
-      <div id="formulario"></div>
-    </aside>
+      <div id="formulario" class="escenario"></div>
+    </section>
 
-    <main>
-      <div class="aviso" id="aviso"></div>
-
+    <!-- 2. CARRERA: las políticas ejecutan la misma lista de tareas sobre un mismo reloj -->
+    <section class="vista-app" id="vistaCarrera" hidden>
       <div class="controles" id="controles">
         <button id="jugar" class="primario">Iniciar</button>
         <button id="reiniciar">Reiniciar</button>
@@ -205,19 +246,19 @@
         <label>Réplica <select id="replica"></select></label>
         <label>Velocidad <input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></label>
         <div class="reloj"><small>Tiempo simulado</small> <span id="reloj">0</span> s</div>
+        <button id="btnVerResultados" class="primario" hidden>Ver resultados →</button>
         <div class="vistas" id="vistas"><span>Vista</span><button data-vista="iso">Isométrica</button><button data-vista="frente">Frente</button><button data-vista="lateral">Lateral</button><button data-vista="superior">Superior</button><small>La cámara es la misma en todos los paneles</small></div>
       </div>
 
-      
       <details class="ayuda"><summary>Leyenda y ayuda</summary><div class="leyenda" id="leyenda"></div></details>
 
       <section class="marcador"><h2>Marcador</h2><div id="marcador"></div></section>
       <section class="paneles" id="paneles"></section>
+    </section>
 
-      <section class="resultados" id="resultados">
-        <h2>Resultado de esta réplica</h2>
-        <table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table>
-      </section>
+    <!-- 3. RESULTADOS: primero la conclusión, después el detalle -->
+    <section class="vista-app" id="vistaResultados" hidden>
+      <section class="veredicto" id="veredicto" hidden></section>
 
       <section class="estadistica" id="estadistica">
         <div class="cabecera-est">
@@ -230,8 +271,14 @@
         <div class="tabla-ancha"><table><thead id="encEstadistica"></thead><tbody id="cuerpoEstadistica"></tbody></table></div>
         <p class="nota" id="notaEstadistica"></p>
       </section>
-    </main>
-  </div>
+
+      <section class="resultados" id="resultados">
+        <h2>Resultado de la réplica que se está viendo</h2>
+        <table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table>
+      </section>
+      <p class="nota vacio-res" id="vacioRes" hidden>La tabla de la réplica aparece cuando termina la carrera. Puedes ir al final desde el paso 2.</p>
+    </section>
+  </main>
 </div>
 
 <!--THREE-->
@@ -811,11 +858,12 @@ function construir() {
     f.innerHTML = '<span class="lugar">–</span><span>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</span><span class="barra"><i></i></span><span class="valor"></span>';
     marc.appendChild(f);
   });
-  el('resultados').classList.remove('visible');
+  el('resultados').classList.remove('visible'); el('vacioRes').hidden = false;
   reiniciar();
 }
 
 function reiniciar() {
+  el('btnVerResultados').hidden = true;
   t = 0; lugarSiguiente = 1; jugando = false;
   el('jugar').textContent = 'Iniciar';
   paneles.forEach(p => p.reiniciar());
@@ -847,7 +895,7 @@ function resultados() {
     '<tr><td>' + (i + 1) + '.º</td><td>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</td><td class="num">' + fmt(p.fin) +
     '</td><td class="num">' + (i === 0 || mejor === 0 ? '–' : '+' + fmt(p.fin - mejor) + ' s (+' + (100 * (p.fin - mejor) / mejor).toFixed(0) + ' %)') +
     '</td><td class="num">' + p.d.reubicaciones + '</td></tr>').join('');
-  el('resultados').classList.add('visible');
+  el('resultados').classList.add('visible'); el('vacioRes').hidden = true; mostrarVeredicto(); el('btnVerResultados').hidden = false;
 }
 
 // Vuelve a dibujar todos los paneles sin avanzar el reloj (al mover la cámara)
@@ -929,7 +977,7 @@ function escenaVacia(texto) {
   paneles = []; DATOS = null;
   el('paneles').innerHTML = '<div class="vacio-escena">' + texto + '</div>';
   el('marcador').innerHTML = ''; el('leyenda').innerHTML = ''; el('replica').innerHTML = '';
-  el('resultados').classList.remove('visible'); el('estadistica').classList.remove('visible');
+  el('resultados').classList.remove('visible'); el('estadistica').classList.remove('visible'); el('veredicto').hidden = true;
 }
 
 // ================= estadística de varias réplicas =================
@@ -939,8 +987,34 @@ const METRICAS = [
   ['tiempo_reubicacion', 'Tiempo de reubicación (s)'], ['reubicaciones', 'Cantidad de reubicaciones'], ['operaciones', 'Operaciones realizadas']
 ];
 
+// Conclusión en una frase: qué política gana, por cuánto y si la diferencia es creíble
+function mostrarVeredicto() {
+  const caja = el('veredicto'), est = ESTADISTICA && ESTADISTICA.replicas ? ESTADISTICA : null;
+  let filas = null, base = '';
+  if (est) {
+    filas = est.politicas.map(f => ({ nombre: f.nombre, media: f.tiempo_total.media, ic: f.tiempo_total.ic95, victorias: f.victorias })).sort((a, b) => a.media - b.media);
+    base = 'promedio de ' + est.replicas + (est.replicas === 1 ? ' réplica' : ' réplicas');
+  } else if (paneles.length && paneles.every(p => p.fin !== null)) {
+    filas = paneles.map(p => ({ nombre: p.d.nombre, media: p.fin, ic: 0, victorias: null })).sort((a, b) => a.media - b.media);
+    base = 'réplica ' + (replicaActual + 1);
+  }
+  if (!filas) { caja.hidden = true; return; }
+  const nom = f => NOMBRES[f.nombre] || f.nombre, [a, b] = filas;
+  if (!b) { caja.hidden = false; caja.className = 'veredicto'; caja.innerHTML = '<h2>' + nom(a) + '</h2><p>Solo hay una política en el escenario: ' + fmt(a.media) + ' s (' + base + ').</p>'; return; }
+  const menos = b.media > 0 ? 100 * (b.media - a.media) / b.media : 0;
+  const dudoso = est ? a.media + a.ic >= b.media - b.ic : false;
+  caja.hidden = false; caja.className = 'veredicto' + (dudoso ? ' dudoso' : '');
+  caja.innerHTML = '<h2>' + (dudoso ? nom(a) + ' y ' + nom(b) + ' quedan muy parejas' : nom(a) + ' es la más rápida') + '</h2>' +
+    '<p>' + (dudoso ? 'Sus intervalos de confianza se solapan, así que la diferencia no es concluyente. Prueba con más réplicas en el escenario.' :
+      (est ? 'Termina la lista de tareas antes que las demás de forma consistente.' : 'Con una sola réplica no se sabe si la ventaja es real: aumenta las réplicas para tener estadística.')) + '</p>' +
+    '<div class="cifras"><div><b>' + fmt(a.media) + ' s</b><small>tiempo total (' + base + (est ? ', ± ' + fmt(a.ic) : '') + ')</small></div>' +
+    '<div><b>' + menos.toFixed(1) + ' %</b><small>menos tiempo que la segunda (' + nom(b) + ')</small></div>' +
+    (a.victorias !== null ? '<div><b>' + a.victorias + ' de ' + est.replicas + '</b><small>réplicas en las que termina primera</small></div>' : '') + '</div>';
+}
+
 function mostrarEstadistica(est) {
   ESTADISTICA = est;
+  mostrarVeredicto();
   const sec = el('estadistica');
   if (!est || !est.replicas) { sec.classList.remove('visible'); return; }
   sec.classList.add('visible');
@@ -994,7 +1068,7 @@ const campo = (clave, indice, etiqueta, opc = {}) => ({ clave, indice, etiqueta,
 
 // Los parámetros se agrupan por lo que el usuario está decidiendo: el almacén, la demanda, las políticas y la ejecución
 const PESTANAS = [
-  { id: 'almacen', nombre: 'Almacén', secciones: [
+  { id: 'almacen', nombre: 'Almacén', desc: 'Estantería, grúa y ocupación inicial', secciones: [
     { titulo: 'Estantería', items: [
       { trio: 'Dimensiones', campos: [
         campo('vector_configuracion_estanteria', 0, 'Filas', { entero: true, min: 1, max: 200, ayuda: 'Niveles de altura' }),
@@ -1037,16 +1111,16 @@ const PESTANAS = [
         campo('vector_centro_celda_estanteria', 2, 'Profundidad', { min: 0, max: 1, paso: 0.05 })] }
     ] }
   ] },
-  { id: 'demanda', nombre: 'Demanda', secciones: [
-    { titulo: 'Demanda', especial: 'origen' },
+  { id: 'demanda', nombre: 'Demanda', desc: 'Qué se pide: productos y lista de tareas', secciones: [
+    { titulo: 'Origen de la demanda', especial: 'origen' },
     { titulo: 'Archivo subido', especial: 'datos', id: 'seccionDatos' },
     { titulo: 'Productos (SKU)', especial: 'skus', id: 'seccionProductos' },
     { titulo: 'Lista de tareas', especial: 'tareas', id: 'seccionTareas' }
   ] },
-  { id: 'politicas', nombre: 'Políticas', secciones: [
+  { id: 'politicas', nombre: 'Políticas', desc: 'Qué estrategias de asignación compiten', secciones: [
     { titulo: 'Políticas a comparar', especial: 'politicas' }
   ] },
-  { id: 'ejecucion', nombre: 'Ejecución', secciones: [
+  { id: 'ejecucion', nombre: 'Ejecución', desc: 'Réplicas y semilla', secciones: [
     { titulo: 'Réplicas y semilla', items: [
       { fila: campo('escalar_semilla', null, 'Semilla', { entero: true, min: 0, max: 2147483647, ayuda: 'La réplica i usa semilla + i; misma semilla, mismo resultado' }) },
       { fila: campo('escalar_replicas_animadas', null, 'Réplicas animadas', { entero: true, min: 1, max: 10, ayuda: 'Las que se pueden ver en la carrera' }) },
@@ -1200,23 +1274,20 @@ function actualizarResumen() {
     ['Tareas', isFinite(tareas) ? String(tareas) : '—', false],
     ['Políticas', String(politicas), politicas === 0]
   ];
+  el('subEscenario').textContent = (isFinite(celdas) ? f + '×' + c + '×' + k : '—') + ' · ' + (skus === null ? '—' : skus + ' SKUs') + ' · ' + (isFinite(tareas) ? tareas + ' tareas' : '—');
   el('resumenParam').innerHTML = fichas.map(([n, val, mal]) => '<span class="ficha-res' + (mal ? ' mal' : '') + '" title="' + n + (n === 'Estantería' && isFinite(celdas) ? ': ' + celdas + ' celdas' : '') + '"><small>' + n + '</small>' + val + '</span>').join('');
   const nota = el('notaCeldas');
   if (nota) nota.textContent = isFinite(celdas) ? (celdas + ' celdas · ' + (f * c) + ' canales' + (celdas > 6000 ? ' (el máximo es 6000)' : '')) : 'El total de celdas no puede superar 6000.';
 }
 
-function activarPestana(id) {
-  document.querySelectorAll('.pestanas button').forEach(b => b.classList.toggle('activa', b.dataset.pestana === id));
-  document.querySelectorAll('.panel-pestana').forEach(p => { p.hidden = p.dataset.pestana !== id; });
-  try { localStorage.setItem('asrs_pestana', id); } catch (e) {}
-}
-// Si algún campo es inválido, se abre la pestaña que lo contiene y se enfoca
+// Si algún campo es inválido, se va al escenario y se enfoca
 function mostrarPrimerError() {
   const malo = document.querySelector('#formulario .invalido'); if (!malo) return;
-  const panel = malo.closest('.panel-pestana'); if (panel) activarPestana(panel.dataset.pestana);
+  irA('escenario');
   const det = malo.closest('details'); if (det) det.open = true;
-  malo.focus();
+  malo.scrollIntoView({ block: 'center', behavior: 'smooth' }); malo.focus({ preventScroll: true });
 }
+
 // La sección de clases solo importa si se compara la política basada en clases
 // Con datos reales la demanda, los SKUs y las tareas salen del archivo, así que las secciones generadas no se usan
 let RESUMEN_DATOS = null, temporizadorTareas = null;
@@ -1255,12 +1326,10 @@ function actualizarClasesActivas() {
 
 function construirFormulario() {
   const cont = el('formulario'); cont.innerHTML = ''; entradas.length = 0;
-  const resumen = document.createElement('div'); resumen.className = 'resumen-param'; resumen.id = 'resumenParam'; cont.appendChild(resumen);
-  const nav = document.createElement('nav'); nav.className = 'pestanas'; nav.setAttribute('role', 'tablist'); cont.appendChild(nav);
-  PESTANAS.forEach(p => {
-    const b = document.createElement('button'); b.type = 'button'; b.textContent = p.nombre; b.dataset.pestana = p.id; b.setAttribute('role', 'tab');
-    b.onclick = () => activarPestana(p.id); nav.appendChild(b);
-    const panel = document.createElement('div'); panel.className = 'panel-pestana'; panel.dataset.pestana = p.id; panel.hidden = true; cont.appendChild(panel);
+  PESTANAS.forEach((p, n) => {
+    const panel = document.createElement('section'); panel.className = 'esc-tarjeta'; panel.dataset.pestana = p.id; cont.appendChild(panel);
+    panel.innerHTML = '<header><b>' + (n + 1) + '</b><h2>' + p.nombre + '</h2><p>' + p.desc + '</p></header>';
+    if (p.id === 'almacen') { const esq = document.createElement('div'); esq.className = 'esquema-rack'; esq.id = 'esquemaRack'; panel.appendChild(esq); }
     p.secciones.forEach(s => {
       const sec = document.createElement(s.plegable ? 'details' : 'section'); sec.className = 'seccion'; if (s.id) sec.id = s.id;
       const titulo = document.createElement(s.plegable ? 'summary' : 'h3'); titulo.textContent = s.titulo; sec.appendChild(titulo);
@@ -1328,8 +1397,9 @@ function construirFormulario() {
   el('tareasN').addEventListener('input', actualizarResumen);
   document.querySelectorAll('[data-politica]').forEach(c => c.addEventListener('change', () => { actualizarClasesActivas(); actualizarResumen(); }));
   entradas.forEach(({ c, inp }) => { if (c.clave === 'vector_configuracion_estanteria') inp.addEventListener('input', actualizarAuto); });
-  let inicial = 'almacen'; try { inicial = localStorage.getItem('asrs_pestana') || 'almacen'; } catch (e) {}
-  activarPestana(PESTANAS.some(p => p.id === inicial) ? inicial : 'almacen');
+  // cualquier cambio en el escenario deja la simulación mostrada desactualizada
+  cont.addEventListener('input', marcarCambios); cont.addEventListener('change', marcarCambios);
+  entradas.forEach(({ c, inp }) => { if (c.clave === 'vector_configuracion_estanteria' || c.clave === 'vector_cotas_estanteria') inp.addEventListener('input', dibujarEsquemaRack); });
 }
 
 function actualizarAuto() {
@@ -1355,7 +1425,7 @@ function ponerFormulario(cfg) {
   document.querySelectorAll('[data-politica]').forEach(c => { c.checked = (cfg.vector_politicas_asignacion || []).includes(c.dataset.politica); });
   el('origenTareas').value = cfg.texto_origen_tareas || 'generada'; el('textoTareas').value = cfg.texto_tareas_csv || ''; el('pctHistorial').value = cfg.escalar_porcentaje_historial || 100;
   el('criterioClases').value = cfg.texto_criterio_clases || 'iguales'; el('nClases').value = cfg.escalar_numero_clases || 3;
-  dibujarClases(); actualizarClasesActivas(); actualizarOrigen(); actualizarResumen();
+  dibujarClases(); actualizarClasesActivas(); actualizarOrigen(); actualizarResumen(); dibujarEsquemaRack();
 }
 
 function leerFormulario() {
@@ -1397,6 +1467,48 @@ function leerFormulario() {
   if (primerError) { mostrarPrimerError(); throw new Error(primerError); }
   return cfg;
 }
+
+// ================= esquema del almacén =================
+// Dibujo a escala de la estantería vista de frente: da una idea inmediata del tamaño que se está definiendo
+function dibujarEsquemaRack() {
+  const cont = el('esquemaRack'); if (!cont) return;
+  const v = (clave, i) => { const x = entradas.find(e => e.c.clave === clave && e.c.indice === i); return x ? Number(x.inp.value) : NaN; };
+  const F = v('vector_configuracion_estanteria', 0), C = v('vector_configuracion_estanteria', 1), K = v('vector_configuracion_estanteria', 2);
+  const hF = v('vector_cotas_estanteria', 0), wC = v('vector_cotas_estanteria', 1), dK = v('vector_cotas_estanteria', 2);
+  if (![F, C, K, hF, wC, dK].every(x => x > 0)) { cont.innerHTML = '<p class="nota" style="margin:6px">Completa las dimensiones para ver el esquema.</p>'; return; }
+  const largo = C * wC, alto = F * hF, fondo = K * dK, W = 320, H = 170, mx = 44, my = 26;
+  const esc = Math.min((W - mx - 14) / largo, (H - my - 24) / alto), w = largo * esc, h = alto * esc, x0 = mx, y0 = my;
+  let rej = '';
+  if (C <= 40) for (let c = 1; c < C; c++) rej += '<line x1="' + (x0 + w * c / C) + '" y1="' + y0 + '" x2="' + (x0 + w * c / C) + '" y2="' + (y0 + h) + '"/>';
+  if (F <= 30) for (let f = 1; f < F; f++) rej += '<line x1="' + x0 + '" y1="' + (y0 + h * f / F) + '" x2="' + (x0 + w) + '" y2="' + (y0 + h * f / F) + '"/>';
+  const n = x => (Math.round(x * 10) / 10).toLocaleString('es');
+  cont.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Esquema de la estantería vista de frente">' +
+    '<rect x="' + x0 + '" y="' + y0 + '" width="' + w + '" height="' + h + '" fill="var(--vacio)" stroke="var(--suave)" stroke-width="1.4"/>' +
+    '<g stroke="var(--borde)" stroke-width=".6">' + rej + '</g>' +
+    '<rect x="' + (x0 - 38) + '" y="' + (y0 + h - 14) + '" width="30" height="14" rx="3" fill="var(--acento)"/><text x="' + (x0 - 23) + '" y="' + (y0 + h - 4) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">E/S</text>' +
+    '<text x="' + (x0 + w / 2) + '" y="' + (y0 - 9) + '" text-anchor="middle" font-size="10" fill="var(--suave)">' + C + ' columnas · ' + n(largo) + ' m</text>' +
+    '<text transform="translate(' + (x0 + w + 12) + ' ' + (y0 + h / 2) + ') rotate(90)" text-anchor="middle" font-size="10" fill="var(--suave)">' + F + ' filas · ' + n(alto) + ' m</text>' +
+    '<text x="' + (x0 + w / 2) + '" y="' + (y0 + h + 17) + '" text-anchor="middle" font-size="10" fill="var(--suave)">fondo ' + n(fondo) + ' m (' + K + (K === 1 ? ' capa' : ' capas') + ')</text></svg>';
+}
+
+// ================= pasos: escenario, carrera y resultados =================
+let VISTA = 'escenario', HAY_SIMULACION = false, CAMBIOS = false;
+function irA(vista) {
+  if (vista !== 'escenario' && !HAY_SIMULACION) return;
+  VISTA = vista;
+  if (!el('btnSimular').disabled) ocultarAviso();         // los avisos de la vista anterior ya no vienen al caso, salvo el progreso de una simulación en marcha
+  el('vistaEscenario').hidden = vista !== 'escenario'; el('vistaCarrera').hidden = vista !== 'carrera'; el('vistaResultados').hidden = vista !== 'resultados';
+  document.querySelectorAll('#pasos button').forEach(b => b.classList.toggle('activo', b.dataset.vista === vista));
+  window.scrollTo(0, 0);
+}
+function marcarCambios() { if (HAY_SIMULACION) { CAMBIOS = true; el('estadoEscenario').hidden = false; } }
+function habilitarPasos() {
+  document.querySelectorAll('#pasos button').forEach(b => { b.disabled = b.dataset.vista !== 'escenario' && !HAY_SIMULACION; });
+}
+document.querySelectorAll('#pasos button').forEach(b => { b.onclick = () => irA(b.dataset.vista); });
+el('btnVerResultados').onclick = () => irA('resultados');
+document.querySelectorAll('.menu-lista button').forEach(b => b.addEventListener('click', () => { el('menuMas').open = false; }));
+document.addEventListener('click', ev => { const m = el('menuMas'); if (m.open && !m.contains(ev.target)) m.open = false; });
 
 // ================= aviso, ejecución y progreso =================
 let trabajoActual = null, temporizador = null;
@@ -1443,9 +1555,18 @@ async function consultar() {
 
 function terminar(resultado, segundos) {
   el('btnSimular').disabled = false;
-  aviso('exito', 'Simulación lista en ' + fmt1(segundos) + ' s. Pulsa Iniciar para ver la carrera.');
+  HAY_SIMULACION = true; CAMBIOS = false; el('estadoEscenario').hidden = true; habilitarPasos();
+  aviso('exito', 'Simulación lista en ' + fmt1(segundos) + ' s. Pulsa <b>Iniciar</b> para ver la carrera o ve directo a los resultados.');
   cargarDatos(resultado.datos);
   mostrarEstadistica(resultado.estadistica);
+  actualizarSubpasos();
+  irA('carrera');
+}
+// Texto de apoyo de los pasos 2 y 3 en la barra superior
+function actualizarSubpasos() {
+  const reps = DATOS ? DATOS.replicas.length : 0, pols = DATOS && DATOS.replicas[0] ? DATOS.replicas[0].politicas.length : 0;
+  el('subCarrera').textContent = pols + ' políticas · ' + reps + (reps === 1 ? ' réplica' : ' réplicas');
+  el('subResultados').textContent = ESTADISTICA && ESTADISTICA.replicas ? 'Estadística de ' + ESTADISTICA.replicas + ' réplicas' : 'Solo la réplica vista';
 }
 
 // ================= arranque =================
@@ -1459,37 +1580,39 @@ async function iniciar() {
     if (CONFIG_DEFECTO && (CONFIG_DEFECTO.escalar_numero_skus === undefined || CONFIG_DEFECTO.vector_proporcion_skus_por_clase === undefined)) {
       // el servidor corre una versión anterior del programa y no entiende los parámetros actuales
       CONFIG_DEFECTO = null;
+      el('vistaEscenario').hidden = true; el('vistaCarrera').hidden = false;
       escenaVacia('El servidor que responde en esta dirección es de una versión anterior. Ciérralo con Ctrl+C en su terminal y vuelve a ejecutar <code>python visualizar.py --servir</code>.');
       return;
     }
   }
   if (CONFIG_DEFECTO) {
     // modo interactivo: formulario y simulación en el servidor local
-    el('app').classList.remove('sin-parametros'); el('btnParametros').style.display = '';
+    el('pasos').style.display = ''; el('barraAccion').style.display = '';
     construirFormulario();
     let inicial = CONFIG_DEFECTO;
     try { const g = localStorage.getItem('asrs_config'); if (g) inicial = { ...CONFIG_DEFECTO, ...JSON.parse(g) }; } catch (e) {}
     ponerFormulario(inicial);
     el('btnSimular').onclick = simular;
-    el('btnRestablecer').onclick = () => { ponerFormulario(CONFIG_DEFECTO); ocultarAviso(); };
+    el('btnRestablecer').onclick = () => { ponerFormulario(CONFIG_DEFECTO); ocultarAviso(); dibujarEsquemaRack(); marcarCambios(); };
     el('btnGuardar').onclick = () => { try { descargar('configuracion_asrs.json', JSON.stringify(leerFormulario(), null, 2), 'application/json'); } catch (e) { aviso('error', e.message); } };
     el('btnCargar').onclick = () => el('archivoConfig').click();
     el('archivoConfig').onchange = async ev => {
       const archivo = ev.target.files[0]; if (!archivo) return;
-      try { ponerFormulario({ ...CONFIG_DEFECTO, ...JSON.parse(await archivo.text()) }); aviso('exito', 'Parámetros cargados desde ' + archivo.name + '.'); }
+      try { ponerFormulario({ ...CONFIG_DEFECTO, ...JSON.parse(await archivo.text()) }); dibujarEsquemaRack(); marcarCambios(); aviso('exito', 'Escenario cargado desde ' + archivo.name + '.'); }
       catch (e) { aviso('error', 'El archivo no es una configuración válida.'); }
       ev.target.value = '';
     };
-    el('btnParametros').onclick = () => { const cerrado = el('app').classList.toggle('cerrado'); el('btnParametros').textContent = cerrado ? 'Mostrar parámetros' : 'Ocultar parámetros'; };
-    escenaVacia('Ajusta los parámetros y pulsa <b>Simular</b>.');
-    // Si ya hay una simulación corriendo (por ejemplo, se recargó la página) se reconecta a ella; si no, la primera usa los valores iniciales
+    escenaVacia('Ajusta el escenario y pulsa <b>Simular</b>.');
+    dibujarEsquemaRack();
+    // Si ya hay una simulación corriendo (por ejemplo, se recargó la página) se reconecta a ella; si no, se parte del escenario para ajustarlo
     let activo = null;
     try { activo = (await (await fetch('/api/activo')).json()).id; } catch (e) {}
-    if (activo) { trabajoActual = activo; ULTIMA_CONFIG = CONFIG_DEFECTO; el('btnSimular').disabled = true; consultar(); } else { simular(); }
+    if (activo) { trabajoActual = activo; ULTIMA_CONFIG = CONFIG_DEFECTO; el('btnSimular').disabled = true; consultar(); }
   } else if (DATOS_INICIALES) {
-    // archivo autónomo: solo reproduce los datos incrustados
-    cargarDatos(DATOS_INICIALES);
+    // archivo autónomo: solo reproduce los datos incrustados, sin escenario que editar
+    HAY_SIMULACION = true; el('vistaEscenario').hidden = true; cargarDatos(DATOS_INICIALES); irA('carrera');
   } else {
+    el('vistaEscenario').hidden = true; el('vistaCarrera').hidden = false;
     escenaVacia('Esta página necesita el servidor local. Ejecuta <code>python visualizar.py --servir</code>.');
   }
 }
