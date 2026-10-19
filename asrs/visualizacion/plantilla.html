@@ -179,6 +179,7 @@
   .tareas i.hecha { opacity: 1; } .tareas i.actual { opacity: 1; outline: 2px solid var(--texto); outline-offset: 1px; }
   .tareas i.omitida { background: transparent; outline: 1px solid var(--omitida); outline-offset: -1px; opacity: 1; }
   .pie { display: flex; justify-content: space-between; color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
+  .nota-parcial { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--oro); border-radius: 10px; color: var(--texto); }
   .veredicto { background: var(--tarjeta); border: 1px solid var(--borde); border-left: 5px solid var(--almacenar); border-radius: 12px; padding: 16px 20px; margin-bottom: 14px; display: grid; gap: 6px; }
   .veredicto h2 { margin: 0; font-size: 22px; line-height: 1.25; }
   .veredicto p { margin: 0; color: var(--suave); }
@@ -252,13 +253,14 @@
         <button id="jugar" class="primario">Iniciar</button>
         <button id="reiniciar">Reiniciar</button>
         <button id="final">Ir al final</button>
-        <label>Réplica <select id="replica"></select></label>
+        <label id="etqReplica">Réplica <select id="replica"></select></label>
         <label>Velocidad <input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></label>
         <div class="reloj"><small>Tiempo simulado</small> <span id="reloj">0</span> s</div>
         <button id="btnVerResultados" class="primario" hidden>Ver resultados →</button>
         <div class="vistas" id="vistas"><span>Vista</span><button data-vista="iso">Isométrica</button><button data-vista="frente">Frente</button><button data-vista="lateral">Lateral</button><button data-vista="superior">Superior</button><small>La cámara es la misma en todos los paneles</small></div>
       </div>
 
+      <p class="nota nota-parcial" id="notaParcial" hidden></p>
       <details class="ayuda"><summary>Leyenda y ayuda</summary><div class="leyenda" id="leyenda"></div></details>
 
       <section class="marcador"><h2>Marcador</h2><div id="marcador"></div></section>
@@ -282,7 +284,7 @@
       </section>
 
       <section class="resultados" id="resultados">
-        <h2>Resultado de la réplica que se está viendo</h2>
+        <h2 id="tituloReplica">Resultado de la réplica que se está viendo</h2>
         <table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table>
       </section>
       <p class="nota vacio-res" id="vacioRes" hidden>La tabla de la réplica aparece cuando termina la carrera. Puedes ir al final desde el paso 2.</p>
@@ -977,6 +979,7 @@ function cargarDatos(datos) {
   prepararEscena();
   const sel = el('replica'); sel.innerHTML = '';
   DATOS.replicas.forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = (i + 1) + ' (semilla ' + r.semilla + ')'; sel.appendChild(o); });
+  el('etqReplica').hidden = DATOS.replicas.length < 2;      // solo el archivo autónomo puede traer varias réplicas
   construirLeyenda();
   construir();
 }
@@ -1005,7 +1008,8 @@ function mostrarVeredicto() {
     base = 'promedio de ' + est.replicas + (est.replicas === 1 ? ' réplica' : ' réplicas');
   } else if (paneles.length && paneles.every(p => p.fin !== null)) {
     filas = paneles.map(p => ({ nombre: p.d.nombre, media: p.fin, ic: 0, victorias: null })).sort((a, b) => a.media - b.media);
-    base = 'réplica ' + (replicaActual + 1);
+    const r0 = DATOS.replicas[replicaActual];
+    base = r0.tareas_totales > r0.secuencia.length ? 'carrera, primeras ' + fmt(r0.secuencia.length) + ' tareas' : 'réplica ' + (replicaActual + 1);
   }
   if (!filas) { caja.hidden = true; return; }
   const nom = f => NOMBRES[f.nombre] || f.nombre, [a, b] = filas;
@@ -1132,7 +1136,6 @@ const PESTANAS = [
   { id: 'ejecucion', nombre: 'Ejecución', desc: 'Réplicas y semilla', secciones: [
     { titulo: 'Réplicas y semilla', items: [
       { fila: campo('escalar_semilla', null, 'Semilla', { entero: true, min: 0, max: 2147483647, ayuda: 'La réplica i usa semilla + i; misma semilla, mismo resultado' }) },
-      { fila: campo('escalar_replicas_animadas', null, 'Réplicas animadas', { entero: true, min: 1, max: 10, ayuda: 'Las que se pueden ver en la carrera' }) },
       { fila: campo('escalar_cantidad_replicas', null, 'Réplicas para la estadística', { entero: true, min: 0, max: 2000, ayuda: '0 para omitir la estadística' }) },
       { nota: 'Las réplicas de la estadística se ejecutan en paralelo y pueden tardar según el tamaño de la estantería.' }
     ] }
@@ -1367,7 +1370,7 @@ function construirFormulario() {
           '<div class="resumen-datos" id="resumenDatos"></div>';
       } else if (s.especial === 'tareas') {
         cuerpo.innerHTML = '<label class="politica"><input type="checkbox" id="tareasAuto"><span>Cantidad automática<small>10 % de las celdas de la estantería</small></span></label>' +
-          '<div class="trio-campos dos"><label title="Almacenamientos y recuperaciones en total"><small>Cantidad de tareas</small><input type="number" id="tareasN" min="1" max="5000" step="1"></label>' +
+          '<div class="trio-campos dos"><label title="Almacenamientos y recuperaciones en total"><small>Cantidad de tareas</small><input type="number" id="tareasN" min="1" max="100000" step="1"></label>' +
           '<label title="El resto son recuperaciones"><small>% almacenar</small><input type="number" id="pctAlmacenar" min="0" max="100" step="1"></label></div>';
       } else if (s.especial === 'politicas') {
         // Los parámetros propios de una política se muestran debajo de ella, solo mientras está seleccionada
@@ -1586,7 +1589,12 @@ function terminar(resultado, segundos) {
 // Texto de apoyo de los pasos 2 y 3 en la barra superior
 function actualizarSubpasos() {
   const reps = DATOS ? DATOS.replicas.length : 0, pols = DATOS && DATOS.replicas[0] ? DATOS.replicas[0].politicas.length : 0;
-  el('subCarrera').textContent = pols + ' políticas · ' + reps + (reps === 1 ? ' réplica' : ' réplicas');
+  el('subCarrera').textContent = pols + ' políticas' + (reps > 1 ? ' · ' + reps + ' réplicas' : '');
+  // Con listas largas la carrera anima solo el principio; se avisa en la carrera y en la tabla de la réplica
+  const r0 = DATOS && DATOS.replicas[0], parcial = r0 && r0.tareas_totales > r0.secuencia.length;
+  el('notaParcial').hidden = !parcial;
+  if (parcial) el('notaParcial').innerHTML = 'La lista tiene <b>' + fmt(r0.tareas_totales) + '</b> tareas. La carrera anima las primeras ' + fmt(r0.secuencia.length) + '; la estadística de Resultados usa la lista completa.';
+  el('tituloReplica').textContent = parcial ? 'Resultado de la carrera (primeras ' + fmt(r0.secuencia.length) + ' tareas)' : 'Resultado de la réplica que se está viendo';
   el('subResultados').textContent = ESTADISTICA && ESTADISTICA.replicas ? 'Estadística de ' + ESTADISTICA.replicas + ' réplicas' : 'Solo la réplica vista';
 }
 

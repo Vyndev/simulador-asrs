@@ -34,7 +34,7 @@ Si recargas la página mientras corre una simulación, se reconecta y sigue su p
 - Clases de la política basada en clases (dentro de la propia política): la política agrupa los SKUs sola con la demanda definida en la pestaña Demanda (no la modifica) y solo se elige cómo formar las clases. *Misma demanda en cada clase* (de 1 a 8 clases, cada una con la misma parte de la demanda; es lo predeterminado, con 3 clases), *Pareto 80 / 15 / 5* (A con el 80 % de la demanda, B con el 15 % y C con el 5 %) o *a mano* con el porcentaje de SKUs de cada clase. Con los dos primeros no hace falta indicar cuántos SKUs tiene cada clase: salen de la curva de demanda acumulada (`agrupar_skus_por_demanda` en `asrs/politicas/zonificacion.py`), y la vista previa muestra el resultado.
 - Lista de tareas: cantidad (automática o fija) y porcentaje de almacenamientos.
 - Políticas a comparar: cualquier subconjunto de las cinco.
-- Semilla, réplicas animadas (hasta 10) y réplicas para la estadística (hasta 2000).
+- Semilla y réplicas para la estadística (hasta 2000). La carrera anima siempre una réplica, la primera.
 
 Los parámetros se validan antes de ejecutar y los errores se muestran junto al formulario. Se pueden guardar y cargar como archivo JSON, y el navegador recuerda los últimos usados.
 

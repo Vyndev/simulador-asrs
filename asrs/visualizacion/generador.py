@@ -45,6 +45,11 @@ def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S):
     }
 
 
+# La carrera anima como mucho estas tareas: con listas largas (datos reales de decenas de miles de tareas) los movimientos
+# de la grúa pesarían cientos de MB en el navegador. La estadística sí usa la lista completa
+TAREAS_ANIMACION = 2000
+
+
 def generar_datos(config, vector_semillas, al_avanzar=None):
     # Graba cada política en cada réplica, usando las mismas semillas que la simulación principal
     # al_avanzar: función opcional que se llama al terminar cada réplica, sirve para informar el progreso
@@ -58,11 +63,12 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         vector_politicas = []
         for escalar_indice_politica, txt_clave_politica in enumerate(config["vector_politicas_asignacion"]):
             rnd.seed(escalar_semilla * 1000 + escalar_indice_politica)
-            vector_politicas.append(grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S))
+            vector_politicas.append(grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S[:TAREAS_ANIMACION]))
 
         vector_replicas.append({
             "semilla": int(escalar_semilla),
-            "secuencia": [[int(escalar_actividad), int(escalar_clase)] for escalar_actividad, escalar_clase in S],
+            "secuencia": [[int(escalar_actividad), int(escalar_clase)] for escalar_actividad, escalar_clase in S[:TAREAS_ANIMACION]],
+            "tareas_totales": len(S),
             "politicas": vector_politicas,
         })
         if al_avanzar is not None:

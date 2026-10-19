@@ -6,10 +6,9 @@ from asrs.generacion.probabilidades import demanda_hausman
 
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
 LIMITE_CELDAS = 6000
-LIMITE_TAREAS = 5000
+LIMITE_TAREAS = 100_000
 LIMITE_SKUS = 200
 LIMITE_CLASES = 8
-LIMITE_REPLICAS_ANIMADAS = 10
 LIMITE_REPLICAS_ESTADISTICA = 2000
 
 
@@ -53,7 +52,7 @@ def cargar_configuracion():
         "escalar_porcentaje_historial": 100, # Con datos reales, porcentaje inicial de la lista con el que las políticas conocen la demanda (llenado y clases)
         "escalar_largo_secuencia": 1,  # Valor inicial, se ajustará en la inicialización
         "escalar_cantidad_replicas": 100, # la simulación se repetira según la cantidad de replicas
-        "escalar_replicas_animadas": 3, # réplicas que se graban para la animación del visualizador
+        "escalar_replicas_animadas": 1, # la carrera muestra una réplica; la estadística usa escalar_cantidad_replicas
         "escalar_semilla": 2024, # Semilla base, la réplica i usa semilla + i, esto hace reproducibles los resultados
 
         # Políticas de asignación de almacenamiento a comparar, también gobiernan la reubicación
@@ -208,7 +207,7 @@ def config_desde_json(diccionario):
     config["escalar_largo_secuencia"] = len(config["secuencia_real"]) if origen == "datos" else _numero(largo, "Cantidad de tareas", entero=True, minimo=1, maximo=LIMITE_TAREAS)
 
     config["escalar_semilla"] = _numero(datos["escalar_semilla"], "Semilla", entero=True, minimo=0, maximo=2 ** 31 - 1)
-    config["escalar_replicas_animadas"] = _numero(datos["escalar_replicas_animadas"], "Réplicas animadas", entero=True, minimo=1, maximo=LIMITE_REPLICAS_ANIMADAS)
+    config["escalar_replicas_animadas"] = 1      # ya no es un parámetro: la carrera anima siempre la primera réplica
     config["escalar_cantidad_replicas"] = _numero(datos["escalar_cantidad_replicas"], "Réplicas para la estadística", entero=True, minimo=0, maximo=LIMITE_REPLICAS_ESTADISTICA)
 
     politicas = datos["vector_politicas_asignacion"]
