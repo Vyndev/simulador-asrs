@@ -24,7 +24,7 @@
   body { margin: 0; background: var(--fondo); color: var(--texto); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
   .contenedor { max-width: 1680px; margin: 0 auto; padding: 0 16px 48px; }
   /* barra superior fija: marca, pasos, estado y acción principal */
-  .barra { position: sticky; top: 0; z-index: 30; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px 24px;
+  .barra-sup { position: sticky; top: 0; z-index: 30; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px 24px;
     margin: 0 -16px 16px; padding: 10px 16px; background: var(--fondo); border-bottom: 1px solid var(--borde); }
   h1 { font-size: 19px; margin: 0; line-height: 1.2; }
   .sub { color: var(--suave); margin: 0; font-size: 12.5px; }
@@ -46,13 +46,14 @@
   .menu-lista button { text-align: left; border: 0; background: transparent; padding: 8px 10px; }
   .menu-lista button:hover { background: var(--vacio); }
   .vista-app { min-width: 0; }
-  @media (max-width: 1100px) { .barra { grid-template-columns: 1fr auto; } .pasos { grid-column: 1 / -1; grid-row: 2; justify-content: stretch; } .pasos button { flex: 1; } }
-  @media (max-width: 640px) { .pasos button small { display: none; } }
+  @media (max-width: 1100px) { .barra-sup { grid-template-columns: 1fr auto; } .pasos { grid-column: 1 / -1; grid-row: 2; justify-content: stretch; } .pasos button { flex: 1; } }
+  @media (max-width: 640px) { .pasos button small, .sub { display: none; } .pasos { gap: 4px; } .pasos button { padding: 6px 6px 6px 4px; gap: 5px; font-size: 13.5px; } .pasos button b { width: 22px; height: 22px; font-size: 12px; } .pasos button span { overflow: hidden; text-overflow: ellipsis; } .barra-accion .primario { padding: 8px 14px; } }
   button, select, input { font: inherit; color: var(--texto); }
   button, select { background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
   button:hover, select:hover { border-color: var(--acento); }
   button.primario { background: var(--acento); border-color: var(--acento); color: #fff; font-weight: 600; min-width: 96px; }
   button:disabled { opacity: .55; cursor: not-allowed; }
+  select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
   input[type=number], input[type=text] { background: var(--fondo); border: 1px solid var(--borde); border-radius: 6px; padding: 4px 8px; width: 100%; min-width: 0; }
   input:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
   input.invalido { border-color: var(--omitida); }
@@ -62,14 +63,19 @@
   /* escenario: cuatro tarjetas que se reparten el ancho, sin pestañas que escondan nada */
   .esc-cabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; margin-bottom: 14px; }
   .esc-cabecera .nota { margin: 0; }
-  .escenario { columns: 3 360px; column-gap: 16px; }
-  .esc-tarjeta { break-inside: avoid; margin: 0 0 16px; padding: 14px 14px 4px; background: var(--vacio); border: 1px solid var(--borde); border-radius: 14px; display: grid; gap: 10px; }
+  /* Almacén a la izquierda; a la derecha Demanda y, a su lado o debajo, Políticas y Ejecución: el orden de lectura sigue la numeración */
+  .escenario { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; align-items: start; }
+  .esc-der { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
+  .esc-col { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  @media (max-width: 1200px) { .escenario { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .esc-der { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 720px) { .escenario { grid-template-columns: minmax(0, 1fr); } }
+  .esc-tarjeta { min-width: 0; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 14px 14px 4px; background: var(--vacio); border: 1px solid var(--borde); border-radius: 14px; display: grid; gap: 10px; }
   .esc-tarjeta > header { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 10px; margin-bottom: 2px; }
   .esc-tarjeta > header b { display: inline-flex; width: 26px; height: 26px; border-radius: 8px; align-items: center; justify-content: center; background: var(--acento); color: #fff; font-size: 13px; grid-row: 1 / 3; }
   .esc-tarjeta > header h2 { margin: 0; font-size: 16px; }
   .esc-tarjeta > header p { margin: 0; color: var(--suave); font-size: 12.5px; }
   .esquema-rack { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 6px; }
-  .esquema-rack svg { display: block; width: 100%; height: auto; }
+  .esquema-rack svg { display: block; width: 100%; height: auto; max-height: 200px; }
   .resumen-param { display: flex; flex-wrap: wrap; gap: 8px; }
   .ficha-res { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 6px 14px; min-width: 96px; font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ficha-res small { display: block; color: var(--suave); font-weight: 400; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
@@ -110,14 +116,17 @@
   .grafico-demanda { display: flex; align-items: flex-end; gap: 1px; height: 64px; padding: 4px; background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; }
   .grafico-demanda i { flex: 1; min-width: 1px; border-radius: 2px 2px 0 0; }
   .ficha { display: inline-flex; width: 22px; height: 22px; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #10151c; }
-  .botones-fila { display: flex; gap: 8px; }
+  .botones-fila { display: flex; flex-wrap: wrap; gap: 8px; }
   .politica { display: flex; gap: 8px; align-items: flex-start; color: var(--texto); font-size: 14px; }
   .politica input { margin-top: 3px; accent-color: var(--acento); }
   .politica small { display: block; color: var(--suave); font-size: 12.5px; }
 
   /* avisos y progreso */
-  .aviso { position: sticky; top: 62px; z-index: 29; display: none; border-radius: 10px; padding: 7px 12px; margin-bottom: 10px; font-size: 14px; border: 1px solid var(--borde); background: var(--tarjeta); }
-  .aviso.visible { display: block; }
+  /* avisos flotantes abajo: no tapan la barra ni los controles; los de éxito se van solos */
+  .aviso { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: max-content; max-width: min(760px, calc(100% - 32px)); z-index: 50; display: none; border-radius: 12px; padding: 10px 14px; font-size: 14px; border: 1px solid var(--borde); background: var(--tarjeta); box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+  .aviso .progreso { min-width: min(520px, calc(100vw - 64px)); }
+  .aviso .cerrar-aviso { margin-left: 10px; border: 0; background: transparent; padding: 0 4px; color: var(--suave); }
+  .aviso.visible { display: flex; align-items: center; gap: 6px; }
   .aviso.error { background: var(--error-fondo); border-color: var(--omitida); color: var(--omitida); }
   .aviso.exito { border-color: var(--exito); }
   .progreso { display: flex; align-items: center; gap: 12px; }
@@ -125,7 +134,7 @@
   .progreso .barra i { display: block; height: 100%; width: 0; background: var(--acento); transition: width .25s; }
 
   /* carrera */
-  .controles { position: sticky; top: 66px; z-index: 5; box-shadow: 0 6px 16px -8px rgba(0,0,0,.45); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
+  .controles { position: sticky; top: var(--alto-barra, 66px); z-index: 5; box-shadow: 0 6px 16px -8px rgba(0,0,0,.45); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
   .reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
   .reloj small { color: var(--suave); font-weight: 400; font-size: 13px; }
   .vistas { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding-top: 8px; border-top: 1px solid var(--borde); font-size: 13px; color: var(--suave); }
@@ -145,7 +154,7 @@
   .fila .barra i { display: block; height: 100%; width: 0; background: var(--acento); border-radius: 6px; }
   .fila .valor { text-align: right; font-variant-numeric: tabular-nums; color: var(--suave); }
   .fila.termino .barra i { background: var(--almacenar); }
-  .paneles { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 14px; }
+  .paneles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: 14px; }
   .vacio-escena { background: var(--tarjeta); border: 1px dashed var(--borde); border-radius: 12px; padding: 40px 16px; text-align: center; color: var(--suave); }
   .panel { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
   .panel.termino { border-color: var(--almacenar); }
@@ -180,7 +189,7 @@
   .veredicto.dudoso { border-left-color: var(--oro); }
   .resultados, .estadistica { display: none; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
   .resultados.visible, .estadistica.visible { display: block; }
-  .resultados { margin-top: 0; }
+  .resultados { margin-top: 0; overflow-x: auto; }
   .estadistica .cabecera-est { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
   .estadistica .cabecera-est h2 { margin: 0; }
   .estadistica .nota { margin: 8px 0 0; }
@@ -200,7 +209,7 @@
 </head>
 <body>
 <div class="contenedor">
-  <header class="barra" id="barra">
+  <header class="barra-sup" id="barra">
     <div class="marca">
       <h1>Simulador ASRS</h1>
       <p class="sub">Compara políticas de asignación de almacenamiento</p>
@@ -1243,7 +1252,7 @@ function actualizarVistaPrevia() {
   if (!demanda) { graf.innerHTML = ''; resumen.textContent = 'Revisa la cantidad de SKUs, el sesgo o la demanda personalizada.'; clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = ''; }); if (el('criterioClases').value !== 'skus') el('tablaClases').innerHTML = ''; actualizarResumen(); return; }
   const clase = clasesDelFormulario(demanda);
   const maximo = Math.max(...demanda);
-  graf.innerHTML = demanda.map((d, i) => '<i title="SKU ' + (i + 1) + ': ' + (100 * d).toFixed(1) + ' % de la demanda" style="height:' + Math.max(3, 100 * d / maximo) + '%;background:' + (clase ? colorGrupo(clase[i]) : 'var(--acento)') + '"></i>').join('');
+  graf.innerHTML = demanda.map((d, i) => '<i title="SKU ' + (i + 1) + ': ' + (100 * d).toFixed(1) + ' % de la demanda" style="height:' + Math.max(3, 100 * d / maximo) + '%;background:var(--acento)"></i>').join('');
   const top = demanda.slice().sort((a, b) => b - a), n5 = Math.max(1, Math.round(demanda.length * 0.2));
   resumen.textContent = demanda.length + ' SKUs. El 20 % más demandado (' + n5 + ') concentra el ' + Math.round(100 * top.slice(0, n5).reduce((a, b) => a + b, 0)) + ' % de la demanda.';
   const resumenClase = k => {
@@ -1326,13 +1335,17 @@ function actualizarClasesActivas() {
 
 function construirFormulario() {
   const cont = el('formulario'); cont.innerHTML = ''; entradas.length = 0;
+  // Columnas fijas: así el orden de lectura sigue la numeración en cualquier ancho
+  cont.innerHTML = '<div class="esc-col" id="colAlmacen"></div><div class="esc-der"><div class="esc-col" id="colDemanda"></div><div class="esc-col" id="colResto"></div></div>';
+  const columna = { almacen: 'colAlmacen', demanda: 'colDemanda' };
   PESTANAS.forEach((p, n) => {
-    const panel = document.createElement('section'); panel.className = 'esc-tarjeta'; panel.dataset.pestana = p.id; cont.appendChild(panel);
+    const panel = document.createElement('section'); panel.className = 'esc-tarjeta'; panel.dataset.pestana = p.id; el(columna[p.id] || 'colResto').appendChild(panel);
     panel.innerHTML = '<header><b>' + (n + 1) + '</b><h2>' + p.nombre + '</h2><p>' + p.desc + '</p></header>';
     if (p.id === 'almacen') { const esq = document.createElement('div'); esq.className = 'esquema-rack'; esq.id = 'esquemaRack'; panel.appendChild(esq); }
     p.secciones.forEach(s => {
       const sec = document.createElement(s.plegable ? 'details' : 'section'); sec.className = 'seccion'; if (s.id) sec.id = s.id;
-      const titulo = document.createElement(s.plegable ? 'summary' : 'h3'); titulo.textContent = s.titulo; sec.appendChild(titulo);
+      const titulo = document.createElement(s.plegable ? 'summary' : 'h3'); titulo.textContent = s.titulo;
+      if (s.plegable || p.secciones.length > 1) sec.appendChild(titulo);
       const cuerpo = document.createElement('div'); cuerpo.className = 'cuerpo-seccion';
       if (s.especial === 'skus') {
         cuerpo.innerHTML = '<p class="nota">La lista de tareas pide SKUs. La demanda de cada SKU sigue la curva de Hausman o una lista propia.</p>' +
@@ -1360,7 +1373,7 @@ function construirFormulario() {
         // Los parámetros propios de una política se muestran debajo de ella, solo mientras está seleccionada
         const parametrosPropios = {
           basada_en_clases: '<div class="sub-politica" id="seccionClases" hidden><b>Clases</b>' +
-            '<p class="nota">Aquí no se cambia la demanda (eso está en la pestaña Demanda): esta política solo decide cómo agrupar los SKUs, tomando la demanda tal como está. La clase A son los más demandados y cada clase recibe una zona, la A la más cercana al E/S.</p>' +
+            '<p class="nota">Aquí no se cambia la demanda (eso está en la tarjeta Demanda): esta política solo decide cómo agrupar los SKUs, tomando la demanda tal como está. La clase A son los más demandados y cada clase recibe una zona, la A la más cercana al E/S.</p>' +
             '<label class="bloque"><small>Cómo forma las clases</small><select id="criterioClases">' +
             '<option value="iguales">Misma demanda en cada clase</option><option value="pareto">ABC clásico: 80 / 15 / 5 % de la demanda (3 clases)</option><option value="skus">Yo defino el % de SKUs de cada clase</option></select></label>' +
             '<label class="bloque" id="bloqueNumClases"><small>Número de clases</small><input type="number" id="nClases" min="1" max="8" step="1"></label>' +
@@ -1506,14 +1519,22 @@ function habilitarPasos() {
   document.querySelectorAll('#pasos button').forEach(b => { b.disabled = b.dataset.vista !== 'escenario' && !HAY_SIMULACION; });
 }
 document.querySelectorAll('#pasos button').forEach(b => { b.onclick = () => irA(b.dataset.vista); });
+// Lo que queda fijo bajo la barra (controles de la carrera y avisos) se coloca según la altura real de la barra, que cambia con el ancho
+function medirBarra() { document.documentElement.style.setProperty('--alto-barra', el('barra').offsetHeight + 'px'); }
+if (window.ResizeObserver) new ResizeObserver(medirBarra).observe(el('barra')); else window.addEventListener('resize', medirBarra);
+medirBarra();
 el('btnVerResultados').onclick = () => irA('resultados');
 document.querySelectorAll('.menu-lista button').forEach(b => b.addEventListener('click', () => { el('menuMas').open = false; }));
 document.addEventListener('click', ev => { const m = el('menuMas'); if (m.open && !m.contains(ev.target)) m.open = false; });
 
 // ================= aviso, ejecución y progreso =================
 let trabajoActual = null, temporizador = null;
+let temporizadorAviso = null;
 function aviso(tipo, html) {
-  const a = el('aviso'); a.className = 'aviso visible ' + (tipo || ''); a.innerHTML = html;
+  const a = el('aviso'); a.className = 'aviso visible ' + (tipo || ''); clearTimeout(temporizadorAviso);
+  const enCurso = html.indexOf('class="progreso"') >= 0;
+  a.innerHTML = html + (enCurso ? '' : '<button class="cerrar-aviso" aria-label="Cerrar aviso" onclick="ocultarAviso()">✕</button>');
+  if (tipo === 'exito') temporizadorAviso = setTimeout(ocultarAviso, 7000);
 }
 function ocultarAviso() { el('aviso').className = 'aviso'; }
 
@@ -1556,11 +1577,11 @@ async function consultar() {
 function terminar(resultado, segundos) {
   el('btnSimular').disabled = false;
   HAY_SIMULACION = true; CAMBIOS = false; el('estadoEscenario').hidden = true; habilitarPasos();
-  aviso('exito', 'Simulación lista en ' + fmt1(segundos) + ' s. Pulsa <b>Iniciar</b> para ver la carrera o ve directo a los resultados.');
   cargarDatos(resultado.datos);
   mostrarEstadistica(resultado.estadistica);
   actualizarSubpasos();
   irA('carrera');
+  aviso('exito', 'Simulación lista en ' + fmt1(segundos) + ' s. Pulsa <b>Iniciar</b> para ver la carrera o ve directo a los resultados.');
 }
 // Texto de apoyo de los pasos 2 y 3 en la barra superior
 function actualizarSubpasos() {
