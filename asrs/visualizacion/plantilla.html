@@ -76,7 +76,10 @@
   .trio-campos small, .bloque small { color: var(--suave); font-size: 12px; }
   .bloque small em { font-style: normal; opacity: .85; }
   .nota { color: var(--suave); font-size: 12.5px; margin: 0; }
-  .aviso-clases:empty { display: none; } .aviso-clases { color: var(--omitida); }
+  .politica-grupo { display: grid; gap: 6px; }
+  .sub-politica { margin: 0 0 4px 26px; padding: 8px 10px 10px; display: grid; gap: 8px; border-left: 3px solid var(--acento); background: var(--fondo); border-radius: 0 8px 8px 0; font-size: 13.5px; }
+  .sub-politica[hidden] { display: none; }
+  .sub-politica .nota { margin: 0; }
   .tabla-clases { display: grid; grid-template-columns: 26px 78px minmax(0, 1fr); gap: 6px 8px; align-items: center; font-size: 13.5px; }
   .tabla-clases .enc { color: var(--suave); font-size: 12px; }
   .tabla-clases .pct { color: var(--suave); font-variant-numeric: tabular-nums; font-size: 12.5px; }
@@ -1039,8 +1042,7 @@ const PESTANAS = [
     { titulo: 'Lista de tareas', especial: 'tareas', id: 'seccionTareas' }
   ] },
   { id: 'politicas', nombre: 'Políticas', secciones: [
-    { titulo: 'Políticas a comparar', especial: 'politicas' },
-    { titulo: 'Clases de la política basada en clases', especial: 'clases', id: 'seccionClases' }
+    { titulo: 'Políticas a comparar', especial: 'politicas' }
   ] },
   { id: 'ejecucion', nombre: 'Ejecución', secciones: [
     { titulo: 'Réplicas y semilla', items: [
@@ -1198,8 +1200,7 @@ function validarTareas() {
 }
 function actualizarClasesActivas() {
   const usa = !!document.querySelector('[data-politica="basada_en_clases"]:checked');
-  el('seccionClases').classList.toggle('inactivo', !usa);
-  el('avisoClases').textContent = usa ? '' : 'Esta política no está seleccionada, así que estas clases no se usan.';
+  el('seccionClases').hidden = !usa;
 }
 
 function construirFormulario() {
@@ -1232,16 +1233,18 @@ function construirFormulario() {
           '<label class="bloque"><small>O pega las filas aquí</small><textarea id="textoTareas" rows="5" spellcheck="false" placeholder="SKU;Task&#10;PROD-001;A&#10;PROD-001;R"></textarea></label>' +
           '<label class="bloque" title="Las políticas planifican con el primer porcentaje de la lista: con él se hace el llenado inicial y se calculan las clases. Después se ejecuta la lista completa. Con 100 conocen toda la demanda."><small>Historial que conocen las políticas (%)</small><input type="number" id="pctHistorial" min="1" max="100" step="1"></label>' +
           '<div class="resumen-datos" id="resumenDatos"></div>';
-      } else if (s.especial === 'clases') {
-        cuerpo.innerHTML = '<p class="nota">Agrupa los SKUs por demanda (la clase A con los más demandados) y reserva una zona a cada clase. Los valores son pesos y se normalizan.</p>' +
-          '<p class="nota aviso-clases" id="avisoClases"></p>' +
-          '<div class="tabla-clases" id="tablaClases"></div><div class="botones-fila"><button type="button" id="btnMasClase">Añadir clase</button><button type="button" id="btnMenosClase">Quitar última</button></div>';
       } else if (s.especial === 'tareas') {
         cuerpo.innerHTML = '<label class="politica"><input type="checkbox" id="tareasAuto"><span>Cantidad automática<small>10 % de las celdas de la estantería</small></span></label>' +
           '<div class="trio-campos dos"><label title="Almacenamientos y recuperaciones en total"><small>Cantidad de tareas</small><input type="number" id="tareasN" min="1" max="5000" step="1"></label>' +
           '<label title="El resto son recuperaciones"><small>% almacenar</small><input type="number" id="pctAlmacenar" min="0" max="100" step="1"></label></div>';
       } else if (s.especial === 'politicas') {
-        cuerpo.innerHTML = POLITICAS.map(q => '<label class="politica" title="' + q.ayuda + '"><input type="checkbox" data-politica="' + q.clave + '"><span>' + q.nombre + '<small>' + q.ayuda + '</small></span></label>').join('') +
+        // Los parámetros propios de una política se muestran debajo de ella, solo mientras está seleccionada
+        const parametrosPropios = {
+          basada_en_clases: '<div class="sub-politica" id="seccionClases" hidden><b>Clases</b>' +
+            '<p class="nota">Agrupa los SKUs por demanda (la clase A con los más demandados) y reserva una zona a cada clase. Cada valor es el porcentaje de SKUs de la clase; son pesos y se normalizan.</p>' +
+            '<div class="tabla-clases" id="tablaClases"></div><div class="botones-fila"><button type="button" id="btnMasClase">Añadir clase</button><button type="button" id="btnMenosClase">Quitar última</button></div></div>'
+        };
+        cuerpo.innerHTML = POLITICAS.map(q => '<div class="politica-grupo"><label class="politica" title="' + q.ayuda + '"><input type="checkbox" data-politica="' + q.clave + '"><span>' + q.nombre + '<small>' + q.ayuda + '</small></span></label>' + (parametrosPropios[q.clave] || '') + '</div>').join('') +
           '<p class="nota">La política elegida decide dónde se almacena y también dónde se reubica. La recuperación es siempre FCFS.</p>';
       } else {
         s.items.forEach(it => {
@@ -1287,7 +1290,9 @@ function ponerFormulario(cfg) {
   });
   el('nSkus').value = cfg.escalar_numero_skus; el('sigma').value = cfg.escalar_sigma_hausman;
   el('demandaPersonalizada').value = cfg.vector_demanda_sku_personalizada ? cfg.vector_demanda_sku_personalizada.join(', ') : '';
-  clasesUI = cfg.vector_proporcion_skus_por_clase.map(p => Math.round(p * 1000) / 10);
+  // Las proporciones pueden venir ya normalizadas (suman 1) o como los pesos que se guardaron del formulario: se muestran siempre como porcentajes
+  const sumaClases = cfg.vector_proporcion_skus_por_clase.reduce((x, y) => x + y, 0) || 1;
+  clasesUI = cfg.vector_proporcion_skus_por_clase.map(p => Math.round(p / sumaClases * 1000) / 10);
   el('pctAlmacenar').value = Math.round((cfg.vector_prob_acum_AR[0] || 0) * 1000) / 10;
   const celdas = cfg.vector_configuracion_estanteria.reduce((a, b) => a * b, 1), auto = Math.round(celdas * 0.1) === cfg.escalar_largo_secuencia;
   el('tareasAuto').checked = auto; el('tareasN').value = cfg.escalar_largo_secuencia; el('tareasN').disabled = auto;
