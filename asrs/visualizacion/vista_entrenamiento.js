@@ -4,7 +4,7 @@
 (function () {
   const NOMBRES_CLASICAS = { aleatoria: 'Aleatoria', basada_en_clases: 'Basada en clases', full_turnover: 'Full-turnover', mas_cercana_es: 'Más cercana al E/S', mas_cercana_grua: 'Más cercana a la grúa' };
   const GRUPOS = ['Ocupada', 'SKU (rango)', 'Mismo SKU', 'Antigüedad (FIFO)', 'Disponible', 'Cercanía al E/S', 'Tarea y perfil'];
-  let construida = false, actual = null, ultimoN = 0, temporizadorEnt = null;
+  let construida = false, actual = null, ultimoN = 0, temporizadorEnt = null, fallosRed = 0, reconectando = false;
   let metricas = [], fotos = [], referencias = {}, evaluacion = {}, estadoEnt = 'inactivo', inicio = null, indiceFoto = 0, enVivo = true, finInfo = null, errorEnt = null;
   let zonasRed = [];
 
@@ -205,6 +205,7 @@
         (mejor ? ', ' + (valor <= mejor[1] ? 'mejor' : 'peor') + ' que la mejor política clásica (' + NOMBRES_CLASICAS[mejor[0]] + ', ' + fmt(mejor[1]) + ' s): ' + (100 * (valor / mejor[1] - 1)).toFixed(1) + ' %.' : '.');
     } else if (estadoEnt === 'cancelado') html = 'Entrenamiento detenido.';
     else if (estadoEnt === 'error') html = '<span style="color:var(--omitida)">El entrenamiento falló.</span><pre class="ent-error">' + (errorEnt || '').replace(/</g, '&lt;') + '</pre>';
+    if (reconectando && activo) html = '<span style="color:var(--omitida)">Sin respuesta del servidor, reintentando…</span> ' + html;
     caja.innerHTML = '<div>' + html + '</div>' + (activo ? '<div class="progreso"><div class="barra"><i style="width:' + pct + '%"></i></div></div>' : '');
     const sl = el('slFoto'); sl.max = Math.max(0, fotos.length - 1); sl.value = indiceFoto; el('lblFoto').textContent = fotos.length ? 'foto ' + (indiceFoto + 1) + '/' + fotos.length + ' · paso ' + fmt(fotos[indiceFoto].pasos) : '—';
     el('chkVivo').checked = enVivo;
@@ -222,9 +223,20 @@
       ultimoN = j.secuencia; metricas = metricas.concat(j.metricas);
       if (j.fotos.length) { fotos = fotos.concat(j.fotos); if (enVivo) indiceFoto = fotos.length - 1; }
       actualizarSelectorPerdida(); redibujar();
+      fallosRed = 0; reconectando = false;
       if (['listo', 'error', 'cancelado'].includes(j.estado)) return;
       temporizadorEnt = setTimeout(consultarEnt, 1000);
-    } catch (e) { estadoEnt = 'error'; errorEnt = e.message; redibujar(); }
+    } catch (e) {
+      // Un fallo de red (el servidor no respondió) no significa que el entrenamiento haya fallado: sigue en su proceso, así que se reintenta
+      if (e instanceof TypeError && fallosRed < 15) {
+        fallosRed++; reconectando = true; dibujarEstado();
+        temporizadorEnt = setTimeout(consultarEnt, 2000);
+      } else {
+        estadoEnt = 'error'; reconectando = false;
+        errorEnt = e instanceof TypeError ? 'Se perdió la conexión con el servidor. Si sigue abierto, recarga la página: el entrenamiento continúa en su proceso y la vista se reconecta sola.' : e.message;
+        redibujar();
+      }
+    }
   }
 
   async function entrenar() {
@@ -259,7 +271,7 @@
       '<div class="ent-cuadricula"><section class="ent-tarjeta"><h3>Distribución de los pesos</h3><p class="nota">Cada barra cuenta cuántos pesos tienen ese valor. Al aprender, las distribuciones se ensanchan o se desplazan.</p><canvas id="cvHist"></canvas></section>' +
       '<section class="ent-tarjeta"><h3>Pesos entre capas y hacia los canales</h3><canvas id="cvMapaPesos"></canvas></section></div>' +
       '<section class="ent-tarjeta"><h3>A qué mira cada neurona de la primera capa</h3><p class="nota">Cada cuadrícula tiene una neurona por casilla; el color indica cuánto pesa en ella ese grupo de entradas. Amarillo es mucha atención.</p><canvas id="cvAtencion"></canvas></section>';
-    el('inEntornos').value = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
+    el('inEntornos').value = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 2));     // se dejan núcleos libres para el servidor y el navegador
     el('btnEntrenar').onclick = entrenar;
     el('btnDetener').onclick = () => { if (actual) fetch('/api/entrenamiento/' + actual + '/cancelar', { method: 'POST' }); };
     el('selPerdida').onchange = dibujarCurvas;

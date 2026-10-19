@@ -44,8 +44,10 @@ class Entrenamiento:
                           "--pasos", str(escalar_pasos), "--entornos", str(escalar_entornos), "--estados", str(escalar_estados),
                           "--pruebas", str(escalar_pruebas), "--semilla", str(escalar_semilla)]
         txt_raiz = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        # En Windows el entrenamiento corre con prioridad baja, así el servidor y el navegador siguen respondiendo aunque use todos los núcleos
+        escalar_banderas = subprocess.BELOW_NORMAL_PRIORITY_CLASS if os.name == "nt" else 0
         self.proceso = subprocess.Popen(vector_comando, cwd=txt_raiz, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding="utf-8",
-                                        errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+                                        errors="replace", env={**os.environ, "PYTHONIOENCODING": "utf-8"}, creationflags=escalar_banderas)
         threading.Thread(target=self._leer_salida, daemon=True).start()
         threading.Thread(target=self._leer_errores, daemon=True).start()
 
