@@ -2,7 +2,7 @@
 import numpy as np
 
 from asrs.politicas.asignacion import PoliticaAsignacion
-from asrs.politicas.zonificacion import agrupar_skus_en_clases, construir_zonificacion
+from asrs.politicas.zonificacion import clasificar_skus, construir_zonificacion
 
 
 class PoliticaBasadaEnClases(PoliticaAsignacion):
@@ -13,7 +13,7 @@ class PoliticaBasadaEnClases(PoliticaAsignacion):
 
         # La agrupación es parte de la política: los SKUs más demandados forman la clase 1 y reciben las celdas más cercanas al punto E/S
         vector_demanda = np.asarray(config["vector_demanda_sku"], dtype=float)
-        self.vector_clase_de_sku = agrupar_skus_en_clases(vector_demanda, config["vector_proporcion_skus_por_clase"])
+        self.vector_clase_de_sku = clasificar_skus(vector_demanda, config)
 
         # El espacio de cada clase es proporcional a la demanda de sus SKUs, porque el inventario sigue a la demanda
         escalar_clases = int(self.vector_clase_de_sku.max())

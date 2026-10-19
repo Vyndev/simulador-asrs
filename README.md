@@ -25,7 +25,7 @@ Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`,
 - Grúa y E/S: velocidades, aceleraciones y deceleraciones en filas, columnas y canales, tiempo de carga y descarga, separación del riel. Cada eje acelera, avanza a la velocidad máxima y frena (perfil trapezoidal, o triangular en distancias cortas); el tramo xy dura lo que tarda el eje más lento y luego se recorre z. Con aceleración o deceleración 0 no hay límite (velocidad constante). Por defecto son 1 m/s². Ver `asrs/cinematica.py`.
 - Ocupación inicial.
 - Productos (SKU): cantidad (hasta 200), sesgo de la demanda según la curva de Hausman o una lista de demanda propia, con una vista previa de la demanda por SKU.
-- Clases de la política basada en clases: de 1 a 8, con la proporción de SKUs de cada una.
+- Clases de la política basada en clases (dentro de la propia política): los SKUs se agrupan solos según su demanda y solo se elige cómo se reparte. *En partes iguales* (de 1 a 8 clases, cada una con la misma parte de la demanda; es lo predeterminado, con 3 clases), *Pareto 80 / 15 / 5* (A con el 80 % de la demanda, B con el 15 % y C con el 5 %) o *a mano* con el porcentaje de SKUs de cada clase. Con los dos primeros no hace falta indicar cuántos SKUs tiene cada clase: salen de la curva de demanda acumulada (`agrupar_skus_por_demanda` en `asrs/politicas/zonificacion.py`), y la vista previa muestra el resultado.
 - Lista de tareas: cantidad (automática o fija) y porcentaje de almacenamientos.
 - Políticas a comparar: cualquier subconjunto de las cinco.
 - Semilla, réplicas animadas (hasta 10) y réplicas para la estadística (hasta 2000).

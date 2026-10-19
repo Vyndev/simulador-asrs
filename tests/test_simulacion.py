@@ -263,10 +263,45 @@ class PruebasPoliticas(unittest.TestCase):
         simulacion = Simulacion()
         E, G, P = simulacion.crearInstancias()
         config = dict(simulacion.config, vector_demanda_sku=np.array([0.05, 0.4, 0.1, 0.3, 0.15]), escalar_numero_skus=5,
-                      vector_proporcion_skus_por_clase=np.array([0.4, 0.6]))
+                      texto_criterio_clases="skus", vector_proporcion_skus_por_clase=np.array([0.4, 0.6]))
         politica = crear_politica('basada_en_clases', E, G, P, config)
         self.assertEqual([politica.etiquetaZona(sku) for sku in range(1, 6)], [2, 1, 2, 1, 2])
         self.assertEqual(politica.matriz_zonificacion[0, 0, 0], 1)           # la clase de los SKUs más demandados queda más cerca
+
+
+class PruebasClasesPorDemanda(unittest.TestCase):
+    def test_partes_iguales_reparte_la_demanda_sin_indicar_cuantos_skus(self):
+        from asrs.politicas.zonificacion import agrupar_skus_por_demanda
+        from asrs.generacion.probabilidades import demanda_hausman
+        demanda = demanda_hausman(30, 0.5)
+        clase = agrupar_skus_por_demanda(demanda, [1, 1, 1])
+        self.assertEqual(sorted(set(clase)), [1, 2, 3])
+        for k in (1, 2, 3):
+            self.assertAlmostEqual(float(demanda[clase == k].sum()), 1 / 3, delta=0.06)          # cada clase queda cerca de un tercio de la demanda
+        self.assertTrue(np.all(np.diff(clase[np.argsort(-demanda, kind="stable")]) >= 0))        # la clase 1 son los más demandados
+        self.assertLess(int((clase == 1).sum()), int((clase == 3).sum()))                         # pocos SKUs muy demandados y muchos poco demandados
+
+    def test_pareto_da_80_15_5_de_la_demanda(self):
+        from asrs.politicas.zonificacion import clasificar_skus
+        from asrs.generacion.probabilidades import demanda_hausman
+        demanda = demanda_hausman(30, 0.5)
+        clase = clasificar_skus(demanda, {"texto_criterio_clases": "pareto"})
+        self.assertEqual([round(float(demanda[clase == k].sum()), 2) for k in (1, 2, 3)], [0.80, 0.15, 0.05])
+
+    def test_cada_clase_tiene_al_menos_un_sku_incluso_con_demanda_muy_concentrada(self):
+        from asrs.politicas.zonificacion import agrupar_skus_por_demanda
+        demanda = np.array([0.97, 0.01, 0.01, 0.005, 0.005])
+        clase = agrupar_skus_por_demanda(demanda, [1, 1, 1, 1])
+        self.assertEqual(sorted(set(clase)), [1, 2, 3, 4])
+
+    def test_la_politica_usa_el_criterio_de_la_configuracion(self):
+        simulacion = Simulacion()
+        E, G, P = simulacion.crearInstancias()
+        por_defecto = crear_politica('basada_en_clases', E, G, P, simulacion.config)
+        self.assertEqual(simulacion.config["texto_criterio_clases"], "iguales")
+        self.assertEqual(int(por_defecto.vector_clase_de_sku.max()), 3)
+        cinco = crear_politica('basada_en_clases', E, G, P, dict(simulacion.config, escalar_numero_clases=5))
+        self.assertEqual(int(cinco.vector_clase_de_sku.max()), 5)
 
 
 class PruebasRecuperacion(unittest.TestCase):
@@ -382,7 +417,10 @@ class PruebasConfiguracion(unittest.TestCase):
             {"escalar_sigma_hausman": 1.5},
             {"vector_demanda_sku_personalizada": [0, 0]},
             {"vector_demanda_sku_personalizada": [1, -1]},
-            {"escalar_numero_skus": 3, "vector_proporcion_skus_por_clase": [1, 1, 1, 1]},
+            {"texto_criterio_clases": "skus", "escalar_numero_skus": 3, "vector_proporcion_skus_por_clase": [1, 1, 1, 1]},
+            {"texto_criterio_clases": "iguales", "escalar_numero_skus": 3, "escalar_numero_clases": 4},
+            {"texto_criterio_clases": "otro"},
+            {"escalar_numero_clases": 0},
             {"vector_proporcion_skus_por_clase": [1, 0, 1]},
             {"vector_configuracion_estanteria": [2, 2, 2], "escalar_numero_skus": 30},
             {"vector_politicas_asignacion": []},

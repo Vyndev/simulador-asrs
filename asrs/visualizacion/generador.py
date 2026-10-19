@@ -6,7 +6,7 @@ import random as rnd
 import numpy as np
 
 from asrs.control.controlador_grua import ControladorGrua
-from asrs.politicas.zonificacion import agrupar_skus_en_clases
+from asrs.politicas.zonificacion import clasificar_skus
 from asrs.simulacion.simulacion import Simulacion
 
 
@@ -79,7 +79,7 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         "skus": int(config["escalar_numero_skus"]),
         "demanda_sku": [round(float(escalar), 6) for escalar in config["vector_demanda_sku"]],
         # Clase de cada SKU según la agrupación de la política basada en clases, solo para colorear la animación
-        "clase_sku": [int(escalar) for escalar in agrupar_skus_en_clases(config["vector_demanda_sku"], config["vector_proporcion_skus_por_clase"])],
+        "clase_sku": [int(escalar) for escalar in clasificar_skus(config["vector_demanda_sku"], config)],
         # Posición de cada SKU en el ranking de rotación (0 = el más demandado), indexada por SKU - 1
         "rango_sku": [int(escalar) for escalar in _rango_por_demanda(config["vector_demanda_sku"])],
         # Etiquetas originales de los SKUs (solo con datos reales): el SKU número i se muestra con su código

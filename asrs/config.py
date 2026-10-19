@@ -39,8 +39,10 @@ def cargar_configuracion():
         "vector_demanda_sku_personalizada": None, # Opcional, demanda de cada SKU, reemplaza a los dos parámetros anteriores
         "vector_demanda_sku": None, # Se calcula a partir de lo anterior, suma 1
 
-        # Agrupación de SKUs en clases, solo la usa la política basada en clases
-        "vector_proporcion_skus_por_clase": np.array([0.2, 0.3, 0.5]), # Proporción de SKUs de cada clase, la clase 1 agrupa a los más demandados
+        # Agrupación de SKUs en clases, solo la usa la política basada en clases. La clase 1 agrupa a los más demandados
+        "texto_criterio_clases": "iguales", # 'iguales': N clases con la misma parte de la demanda; 'pareto': 80/15/5 de la demanda; 'skus': porcentaje de SKUs de cada clase a mano
+        "escalar_numero_clases": 3, # Número de clases con el criterio 'iguales'
+        "vector_proporcion_skus_por_clase": np.array([0.2, 0.3, 0.5]), # Con el criterio 'skus', proporción de SKUs de cada clase
 
         "vector_prob_acum_AR": np.array([0.5, 1]), # Vector de probabilidad acumulada, para el almacenamiento y recuperación
 
@@ -174,13 +176,20 @@ def config_desde_json(diccionario):
     if config["escalar_numero_skus"] > escalar_canales:
         raise ValueError(f"Cantidad de SKUs: hay {config['escalar_numero_skus']} SKUs y solo {escalar_canales} canales, la política full-turnover reserva al menos un canal por SKU.")
 
+    criterio = datos["texto_criterio_clases"]
+    if criterio not in ("iguales", "pareto", "skus"):
+        raise ValueError("Criterio de las clases: debe ser 'iguales', 'pareto' o 'skus'.")
+    config["texto_criterio_clases"] = criterio
+    config["escalar_numero_clases"] = _numero(datos["escalar_numero_clases"], "Número de clases", entero=True, minimo=1, maximo=LIMITE_CLASES)
     proporciones = datos["vector_proporcion_skus_por_clase"]
     if not isinstance(proporciones, (list, tuple, np.ndarray)) or not 1 <= len(proporciones) <= LIMITE_CLASES:
         raise ValueError(f"Clases de la política: debe haber entre 1 y {LIMITE_CLASES}.")
     proporciones = _vector(list(proporciones), len(proporciones), "Proporción de SKUs de la clase", minimo=0, minimo_estricto=True)
-    if len(proporciones) > config["escalar_numero_skus"]:
-        raise ValueError(f"Clases de la política: hay {len(proporciones)} clases y solo {config['escalar_numero_skus']} SKUs.")
     config["vector_proporcion_skus_por_clase"] = np.array(proporciones, dtype=float) / sum(proporciones)
+    # Cada clase necesita al menos un SKU, según el criterio elegido
+    escalar_clases_usadas = {"iguales": config["escalar_numero_clases"], "pareto": 3, "skus": len(proporciones)}[criterio]
+    if escalar_clases_usadas > config["escalar_numero_skus"]:
+        raise ValueError(f"Clases de la política: hay {escalar_clases_usadas} clases y solo {config['escalar_numero_skus']} SKUs.")
 
     if origen == "datos":
         # La mezcla de operaciones es la del archivo

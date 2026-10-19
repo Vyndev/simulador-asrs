@@ -20,6 +20,7 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }       /* el atributo hidden debe ganar a cualquier display de las clases */
   body { margin: 0; background: var(--fondo); color: var(--texto); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
   .contenedor { max-width: 1600px; margin: 0 auto; padding: 20px 16px 48px; }
   .encabezado { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
@@ -81,6 +82,7 @@
   .sub-politica[hidden] { display: none; }
   .sub-politica .nota { margin: 0; }
   .tabla-clases { display: grid; grid-template-columns: 26px 78px minmax(0, 1fr); gap: 6px 8px; align-items: center; font-size: 13.5px; }
+  .tabla-clases.auto { grid-template-columns: 26px minmax(0, 1fr); }
   .tabla-clases .enc { color: var(--suave); font-size: 12px; }
   .tabla-clases .pct { color: var(--suave); font-variant-numeric: tabular-nums; font-size: 12.5px; }
   textarea { font: 12.5px/1.35 ui-monospace, Consolas, monospace; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 6px; padding: 6px 8px; width: 100%; resize: vertical; }
@@ -238,7 +240,7 @@ const DATOS_INICIALES = /*DATOS*/null;
 
 const POLITICAS = [
   { clave: 'aleatoria', nombre: 'Aleatoria', ayuda: 'Canal al azar; dentro del canal, la celda libre más profunda.' },
-  { clave: 'basada_en_clases', nombre: 'Basada en clases', ayuda: 'Agrupa los SKUs en clases por demanda; cada clase tiene una zona fija y la clase A queda más cerca del E/S.' },
+  { clave: 'basada_en_clases', nombre: 'Basada en clases', ayuda: 'Agrupa los SKUs en clases según su demanda; cada clase tiene una zona fija y la clase A queda más cerca del E/S.' },
   { clave: 'full_turnover', nombre: 'Full-turnover', ayuda: 'Cada SKU tiene su propia zona fija, ordenadas por demanda: el SKU más demandado va más cerca.' },
   { clave: 'mas_cercana_es', nombre: 'Más cercana al E/S', ayuda: 'La celda libre más cercana al punto de entrada y salida.' },
   { clave: 'mas_cercana_grua', nombre: 'Más cercana a la grúa', ayuda: 'La celda libre más cercana a la grúa (al reubicar, a la celda del ítem que se retira).' }
@@ -1094,6 +1096,45 @@ function agruparSkus(demanda, props) {
   return clase;
 }
 
+// Clases según cómo se reparte la demanda acumulada (misma lógica que agrupar_skus_por_demanda de Python)
+function agruparPorDemanda(demanda, participacion) {
+  const n = demanda.length, k = participacion.length, total = demanda.reduce((a, b) => a + b, 0);
+  if (!(total > 0) || k > n) return null;
+  const orden = demanda.map((d, i) => i).sort((a, b) => demanda[b] - demanda[a] || a - b);
+  const sumaPart = participacion.reduce((a, b) => a + b, 0); let acum = 0;
+  const cortes = participacion.map(p => (acum += p) / sumaPart);
+  let cum = 0;
+  const claseOrdenada = orden.map(i => {
+    const parte = demanda[i] / total, medio = cum + parte / 2; cum += parte;
+    let c = cortes.findIndex(x => x >= medio) + 1;                  // primera clase cuyo corte alcanza el punto medio del SKU
+    return c === 0 ? k : Math.min(c, k);
+  });
+  const hasta = []; let anterior = 0;
+  for (let j = 0; j < k; j++) {
+    let h = claseOrdenada.filter(c => c <= j + 1).length;
+    h = Math.min(Math.max(h, anterior + 1), n - (k - 1 - j)); hasta.push(h); anterior = h;
+  }
+  const clase = new Array(n).fill(1); let ini = 0;
+  hasta.forEach((fin, j) => { orden.slice(ini, fin).forEach(i => { clase[i] = j + 1; }); ini = fin; });
+  return clase;
+}
+// Clase de cada SKU según el criterio elegido en el formulario; null si los datos no son válidos
+function clasesDelFormulario(demanda) {
+  const criterio = el('criterioClases').value;
+  if (criterio === 'iguales') {
+    const n = Math.round(Number(el('nClases').value));
+    return n >= 1 && n <= Math.min(8, demanda.length) ? agruparPorDemanda(demanda, new Array(n).fill(1)) : null;
+  }
+  if (criterio === 'pareto') return agruparPorDemanda(demanda, [0.8, 0.15, 0.05]);
+  return clasesUI.length && clasesUI.every(p => p > 0) ? agruparSkus(demanda, clasesUI) : null;
+}
+// Pone en la configuración lo que define las clases
+function asignarClases(cfg) {
+  cfg.texto_criterio_clases = el('criterioClases').value;
+  cfg.escalar_numero_clases = Number(el('nClases').value);
+  cfg.vector_proporcion_skus_por_clase = clasesUI.slice();
+}
+
 // Demanda de cada SKU según el formulario: lista personalizada o curva de Hausman; devuelve null si algo no es válido
 function demandaDelFormulario() {
   const txt = el('demandaPersonalizada').value.trim();
@@ -1108,31 +1149,40 @@ function demandaDelFormulario() {
 }
 
 function dibujarClases() {
-  const cont = el('tablaClases');
-  cont.innerHTML = '<span></span><span class="enc">% de los SKUs</span><span class="enc">Resultado</span>' + clasesUI.map((p, i) =>
-    '<span class="ficha" style="background:' + colorGrupo(i + 1) + '">' + letra(i + 1) + '</span>' +
-    '<input type="number" min="0.1" step="any" data-clase="' + i + '" value="' + p + '" aria-label="Porcentaje de SKUs de la clase ' + letra(i + 1) + '">' +
-    '<span class="pct" id="rc' + i + '"></span>').join('');
-  cont.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => { clasesUI[+inp.dataset.clase] = inp.value === '' ? 0 : +inp.value; actualizarVistaPrevia(); }));
-  el('btnMasClase').disabled = clasesUI.length >= 8; el('btnMenosClase').disabled = clasesUI.length <= 1;
+  const criterio = el('criterioClases').value, manual = criterio === 'skus', cont = el('tablaClases');
+  el('bloqueNumClases').hidden = criterio !== 'iguales'; el('botonesClases').hidden = !manual;
+  cont.className = 'tabla-clases' + (manual ? '' : ' auto');
+  if (manual) {
+    cont.innerHTML = '<span></span><span class="enc">% de los SKUs</span><span class="enc">Resultado</span>' + clasesUI.map((p, i) =>
+      '<span class="ficha" style="background:' + colorGrupo(i + 1) + '">' + letra(i + 1) + '</span>' +
+      '<input type="number" min="0.1" step="any" data-clase="' + i + '" value="' + p + '" aria-label="Porcentaje de SKUs de la clase ' + letra(i + 1) + '">' +
+      '<span class="pct" id="rc' + i + '"></span>').join('');
+    cont.querySelectorAll('input').forEach(inp => inp.addEventListener('input', () => { clasesUI[+inp.dataset.clase] = inp.value === '' ? 0 : +inp.value; actualizarVistaPrevia(); }));
+    el('btnMasClase').disabled = clasesUI.length >= 8; el('btnMenosClase').disabled = clasesUI.length <= 1;
+  }
   actualizarVistaPrevia();
 }
 
 // Gráfico de la demanda por SKU, coloreado por la clase que le asigna la política basada en clases, y resumen de cada clase
 function actualizarVistaPrevia() {
   const demanda = demandaDelFormulario(), graf = el('graficoDemanda'), resumen = el('resumenDemanda');
-  if (!demanda) { graf.innerHTML = ''; resumen.textContent = 'Revisa la cantidad de SKUs, el sesgo o la demanda personalizada.'; clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = ''; }); actualizarResumen(); return; }
-  const clase = clasesUI.length && clasesUI.every(p => p > 0) ? agruparSkus(demanda, clasesUI) : null;
+  if (!demanda) { graf.innerHTML = ''; resumen.textContent = 'Revisa la cantidad de SKUs, el sesgo o la demanda personalizada.'; clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = ''; }); if (el('criterioClases').value !== 'skus') el('tablaClases').innerHTML = ''; actualizarResumen(); return; }
+  const clase = clasesDelFormulario(demanda);
   const maximo = Math.max(...demanda);
   graf.innerHTML = demanda.map((d, i) => '<i title="SKU ' + (i + 1) + ': ' + (100 * d).toFixed(1) + ' % de la demanda" style="height:' + Math.max(3, 100 * d / maximo) + '%;background:' + (clase ? colorGrupo(clase[i]) : 'var(--acento)') + '"></i>').join('');
   const top = demanda.slice().sort((a, b) => b - a), n5 = Math.max(1, Math.round(demanda.length * 0.2));
   resumen.textContent = demanda.length + ' SKUs. El 20 % más demandado (' + n5 + ') concentra el ' + Math.round(100 * top.slice(0, n5).reduce((a, b) => a + b, 0)) + ' % de la demanda.';
-  clasesUI.forEach((_, i) => {
-    const r = el('rc' + i); if (!r) return;
-    if (!clase) { r.textContent = ''; return; }
-    const skus = clase.reduce((a, c, k) => a + (c === i + 1 ? 1 : 0), 0), dem = clase.reduce((a, c, k) => a + (c === i + 1 ? demanda[k] : 0), 0);
-    r.textContent = skus + ' SKUs · ' + Math.round(100 * dem) + ' % demanda';
-  });
+  const resumenClase = k => {
+    const skus = clase.reduce((a, c) => a + (c === k ? 1 : 0), 0), dem = clase.reduce((a, c, j) => a + (c === k ? demanda[j] : 0), 0);
+    return skus + ' SKUs (' + Math.round(100 * skus / demanda.length) + ' % de los SKUs) · ' + Math.round(100 * dem) + ' % de la demanda';
+  };
+  if (el('criterioClases').value === 'skus') {
+    clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = clase ? resumenClase(i + 1).replace(/ \(.*?\)/, '').replace('de la demanda', 'demanda') : ''; });
+  } else {
+    // Con el reparto automático el resultado se muestra directamente: cuántos SKUs y cuánta demanda tiene cada clase
+    const K = clase ? Math.max(...clase) : 0;
+    el('tablaClases').innerHTML = clase ? Array.from({ length: K }, (_, i) => '<span class="ficha" style="background:' + colorGrupo(i + 1) + '">' + letra(i + 1) + '</span><span class="pct">' + resumenClase(i + 1) + '</span>').join('') : '';
+  }
   actualizarResumen();
 }
 
@@ -1241,8 +1291,12 @@ function construirFormulario() {
         // Los parámetros propios de una política se muestran debajo de ella, solo mientras está seleccionada
         const parametrosPropios = {
           basada_en_clases: '<div class="sub-politica" id="seccionClases" hidden><b>Clases</b>' +
-            '<p class="nota">Agrupa los SKUs por demanda (la clase A con los más demandados) y reserva una zona a cada clase. Cada valor es el porcentaje de SKUs de la clase; son pesos y se normalizan.</p>' +
-            '<div class="tabla-clases" id="tablaClases"></div><div class="botones-fila"><button type="button" id="btnMasClase">Añadir clase</button><button type="button" id="btnMenosClase">Quitar última</button></div></div>'
+            '<p class="nota">Los SKUs se agrupan solos según su demanda: la clase A son los más demandados y cada clase recibe una zona, la A la más cercana al E/S. Solo eliges cómo se reparte la demanda entre las clases.</p>' +
+            '<label class="bloque"><small>Cómo se reparte la demanda</small><select id="criterioClases">' +
+            '<option value="iguales">En partes iguales</option><option value="pareto">Pareto 80 / 15 / 5 (3 clases)</option><option value="skus">Elegir a mano el % de SKUs</option></select></label>' +
+            '<label class="bloque" id="bloqueNumClases"><small>Número de clases</small><input type="number" id="nClases" min="1" max="8" step="1"></label>' +
+            '<div class="tabla-clases" id="tablaClases"></div>' +
+            '<div class="botones-fila" id="botonesClases"><button type="button" id="btnMasClase">Añadir clase</button><button type="button" id="btnMenosClase">Quitar última</button></div></div>'
         };
         cuerpo.innerHTML = POLITICAS.map(q => '<div class="politica-grupo"><label class="politica" title="' + q.ayuda + '"><input type="checkbox" data-politica="' + q.clave + '"><span>' + q.nombre + '<small>' + q.ayuda + '</small></span></label>' + (parametrosPropios[q.clave] || '') + '</div>').join('') +
           '<p class="nota">La política elegida decide dónde se almacena y también dónde se reubica. La recuperación es siempre FCFS.</p>';
@@ -1265,6 +1319,8 @@ function construirFormulario() {
   el('btnEjemploTareas').onclick = () => descargar('tareas_ejemplo.csv', 'SKU;Task\nPROD-001;A\nPROD-002;A\nPROD-001;R\nPROD-001;A\nPROD-002;R\nPROD-003;A\nPROD-001;R\nPROD-003;R\n', 'text/csv');
   el('textoTareas').addEventListener('input', () => { el('textoTareas').classList.remove('invalido'); validarTareas(); });
   el('pctHistorial').addEventListener('input', () => { el('pctHistorial').classList.remove('invalido'); validarTareas(); });
+  el('criterioClases').onchange = dibujarClases;
+  el('nClases').addEventListener('input', () => { el('nClases').classList.remove('invalido'); actualizarVistaPrevia(); });
   el('btnMasClase').onclick = () => { if (clasesUI.length < 8) { clasesUI.push(20); dibujarClases(); } };
   el('btnMenosClase').onclick = () => { if (clasesUI.length > 1) { clasesUI.pop(); dibujarClases(); } };
   el('tareasAuto').onchange = () => { el('tareasN').disabled = el('tareasAuto').checked; actualizarAuto(); actualizarResumen(); };
@@ -1298,6 +1354,7 @@ function ponerFormulario(cfg) {
   el('tareasAuto').checked = auto; el('tareasN').value = cfg.escalar_largo_secuencia; el('tareasN').disabled = auto;
   document.querySelectorAll('[data-politica]').forEach(c => { c.checked = (cfg.vector_politicas_asignacion || []).includes(c.dataset.politica); });
   el('origenTareas').value = cfg.texto_origen_tareas || 'generada'; el('textoTareas').value = cfg.texto_tareas_csv || ''; el('pctHistorial').value = cfg.escalar_porcentaje_historial || 100;
+  el('criterioClases').value = cfg.texto_criterio_clases || 'iguales'; el('nClases').value = cfg.escalar_numero_clases || 3;
   dibujarClases(); actualizarClasesActivas(); actualizarOrigen(); actualizarResumen();
 }
 
@@ -1315,7 +1372,7 @@ function leerFormulario() {
     if (!cfg.texto_tareas_csv.trim()) { el('textoTareas').classList.add('invalido'); primerError = primerError || 'Datos reales: elige un archivo o pega las filas.'; }
     if (!(cfg.escalar_porcentaje_historial > 0 && cfg.escalar_porcentaje_historial <= 100)) { el('pctHistorial').classList.add('invalido'); primerError = primerError || 'Historial: debe estar entre 1 y 100.'; }
     if (RESUMEN_DATOS === null && cfg.texto_tareas_csv.trim()) primerError = primerError || 'Datos reales: revisa el mensaje de error del archivo.';
-    cfg.vector_proporcion_skus_por_clase = clasesUI.slice();
+    asignarClases(cfg);
     cfg.escalar_largo_secuencia = RESUMEN_DATOS ? RESUMEN_DATOS.tareas : 1;
     if (primerError) { mostrarPrimerError(); throw new Error(primerError); }
     return cfg;
@@ -1330,7 +1387,8 @@ function leerFormulario() {
   cfg.escalar_numero_skus = Number(el('nSkus').value); cfg.escalar_sigma_hausman = Number(el('sigma').value);
   if (!txtDemanda && !(cfg.escalar_numero_skus >= 1)) { el('nSkus').classList.add('invalido'); primerError = primerError || 'Cantidad de SKUs: falta el valor.'; }
   if (!txtDemanda && !(cfg.escalar_sigma_hausman > 0)) { el('sigma').classList.add('invalido'); primerError = primerError || 'Sesgo de la demanda: debe estar entre 0 y 1.'; }
-  cfg.vector_proporcion_skus_por_clase = clasesUI.slice();
+  asignarClases(cfg);
+  if (cfg.texto_criterio_clases === 'iguales' && !(cfg.escalar_numero_clases >= 1 && cfg.escalar_numero_clases <= 8 && Number.isInteger(cfg.escalar_numero_clases))) { el('nClases').classList.add('invalido'); primerError = primerError || 'Número de clases: debe ser un entero entre 1 y 8.'; }
   const pct = Number(el('pctAlmacenar').value);
   if (el('pctAlmacenar').value === '' || !isFinite(pct) || pct < 0 || pct > 100) { el('pctAlmacenar').classList.add('invalido'); primerError = primerError || '% almacenar: debe estar entre 0 y 100.'; }
   cfg.vector_prob_acum_AR = [pct / 100, 1];
