@@ -16,6 +16,3 @@ visualizacion.html
 .DS_Store
 Thumbs.db
 
-# Modelos entrenados
-modelos/
-resultados_rl.csv
