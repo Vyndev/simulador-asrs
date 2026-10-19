@@ -1291,9 +1291,9 @@ function construirFormulario() {
         // Los parámetros propios de una política se muestran debajo de ella, solo mientras está seleccionada
         const parametrosPropios = {
           basada_en_clases: '<div class="sub-politica" id="seccionClases" hidden><b>Clases</b>' +
-            '<p class="nota">Los SKUs se agrupan solos según su demanda: la clase A son los más demandados y cada clase recibe una zona, la A la más cercana al E/S. Solo eliges cómo se reparte la demanda entre las clases.</p>' +
-            '<label class="bloque"><small>Cómo se reparte la demanda</small><select id="criterioClases">' +
-            '<option value="iguales">En partes iguales</option><option value="pareto">Pareto 80 / 15 / 5 (3 clases)</option><option value="skus">Elegir a mano el % de SKUs</option></select></label>' +
+            '<p class="nota">Aquí no se cambia la demanda (eso está en la pestaña Demanda): esta política solo decide cómo agrupar los SKUs, tomando la demanda tal como está. La clase A son los más demandados y cada clase recibe una zona, la A la más cercana al E/S.</p>' +
+            '<label class="bloque"><small>Cómo forma las clases</small><select id="criterioClases">' +
+            '<option value="iguales">Misma demanda en cada clase</option><option value="pareto">ABC clásico: 80 / 15 / 5 % de la demanda (3 clases)</option><option value="skus">Yo defino el % de SKUs de cada clase</option></select></label>' +
             '<label class="bloque" id="bloqueNumClases"><small>Número de clases</small><input type="number" id="nClases" min="1" max="8" step="1"></label>' +
             '<div class="tabla-clases" id="tablaClases"></div>' +
             '<div class="botones-fila" id="botonesClases"><button type="button" id="btnMasClase">Añadir clase</button><button type="button" id="btnMenosClase">Quitar última</button></div></div>'
