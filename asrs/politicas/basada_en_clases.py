@@ -1,6 +1,7 @@
 """Política basada en clases: los SKUs se agrupan en clases y cada clase tiene una zona fija."""
 import numpy as np
 
+from asrs.generacion.probabilidades import perfil_inventario
 from asrs.politicas.asignacion import PoliticaAsignacion
 from asrs.politicas.zonificacion import clasificar_skus, construir_zonificacion
 
@@ -15,9 +16,10 @@ class PoliticaBasadaEnClases(PoliticaAsignacion):
         vector_demanda = np.asarray(config["vector_demanda_sku"], dtype=float)
         self.vector_clase_de_sku = clasificar_skus(vector_demanda, config)
 
-        # El espacio de cada clase es proporcional a la demanda de sus SKUs, porque el inventario sigue a la demanda
+        # El espacio de cada clase es proporcional al inventario de sus SKUs (según el perfil de inventario), no a su demanda
         escalar_clases = int(self.vector_clase_de_sku.max())
-        vector_espacio = np.array([vector_demanda[self.vector_clase_de_sku == clase].sum() for clase in range(1, escalar_clases + 1)])
+        vector_inventario = perfil_inventario(vector_demanda, config["texto_perfil_inventario"])
+        vector_espacio = np.array([vector_inventario[self.vector_clase_de_sku == clase].sum() for clase in range(1, escalar_clases + 1)])
         self.matriz_zonificacion = construir_zonificacion(
             self.tiempoChebyshevXY(instancia_puntoES.vector_posicion),
             vector_espacio,

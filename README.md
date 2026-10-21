@@ -29,7 +29,7 @@ Si recargas la página mientras corre una simulación, se reconecta y sigue su p
 - Estantería: filas, columnas, capas de profundidad, medidas de la celda, posición y centro de referencia de la celda.
 - Origen de las tareas: generadas con una demanda por SKU (Hausman o lista propia) o **datos reales** desde un CSV con una tarea por fila y dos columnas, `SKU` y `Task` (A o R; separador y encabezado se detectan solos). Con datos reales la cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla de operaciones salen del archivo, y los SKUs se numeran por frecuencia (el 1 es el más frecuente) conservando su código en la animación. Las políticas planifican (llenado inicial y clases) con el primer porcentaje de la lista que se indique como historial, y después se ejecuta la lista completa, lo que permite medir cuánto afecta que la demanda real cambie respecto de la conocida. Todas las réplicas usan la misma lista y solo cambia el llenado inicial.
 - Grúa y E/S: velocidades, aceleraciones y deceleraciones en filas, columnas y canales, tiempo de carga y descarga, separación del riel. Cada eje acelera, avanza a la velocidad máxima y frena (perfil trapezoidal, o triangular en distancias cortas); el tramo xy dura lo que tarda el eje más lento y luego se recorre z. Con aceleración o deceleración 0 no hay límite (velocidad constante). Por defecto son 1 m/s². Ver `asrs/cinematica.py`.
-- Ocupación inicial.
+- Ocupación inicial y perfil de inventario (cuántas unidades de cada SKU hay guardadas, ver más abajo).
 - Productos (SKU): cantidad (hasta 200), sesgo de la demanda según la curva de Hausman o una lista de demanda propia, con una vista previa de la demanda por SKU.
 - Clases de la política basada en clases (dentro de la propia política): la política agrupa los SKUs sola con la demanda definida en la pestaña Demanda (no la modifica) y solo se elige cómo formar las clases. *Misma demanda en cada clase* (de 1 a 8 clases, cada una con la misma parte de la demanda; es lo predeterminado, con 3 clases), *Pareto 80 / 15 / 5* (A con el 80 % de la demanda, B con el 15 % y C con el 5 %) o *a mano* con el porcentaje de SKUs de cada clase. Con los dos primeros no hace falta indicar cuántos SKUs tiene cada clase: salen de la curva de demanda acumulada (`agrupar_skus_por_demanda` en `asrs/politicas/zonificacion.py`), y la vista previa muestra el resultado.
 - Lista de tareas: cantidad (automática o fija) y porcentaje de almacenamientos.
@@ -60,7 +60,13 @@ python -m unittest discover -s tests
 
 ## Modelo de políticas
 
-Toda combinación de decisiones es una **política de asignación de almacenamiento**. La misma política decide dónde almacenar y dónde reubicar: reubicar es almacenar un ítem que ya está en la estantería, tomando como referencia la celda de ese ítem. La recuperación es siempre FCFS (se retira el ítem más antiguo de la clase solicitada).
+Toda combinación de decisiones es una **política de asignación de almacenamiento**. La misma política decide dónde almacenar y dónde reubicar: reubicar es almacenar un ítem que ya está en la estantería, tomando como referencia la celda de ese ítem.
+
+La **regla de recuperación** decide qué unidad del SKU pedido se retira y es la misma para todas las políticas (`texto_regla_recuperacion`, `asrs/politicas/recuperacion.py`):
+- *FCFS estricto* (`fcfs`, por defecto): la unidad más antigua del SKU, aunque haya que reubicar lo que tiene delante. Corresponde a un almacén con control de lote o de vencimiento.
+- *FCFS accesible* (`fcfs_accesible`): la más antigua entre las que no tienen nada delante; solo si ninguna está libre se retira la más antigua y se reubica. Corresponde a un almacén donde las unidades de un SKU son intercambiables.
+
+Como los canales se llenan desde el fondo, con FCFS estricto la unidad más antigua suele quedar detrás de otra más nueva, y casi todas las recuperaciones obligan a reubicar.
 
 | Clave de configuración | Nombre en resultados | Criterio |
 |---|---|---|
@@ -72,7 +78,13 @@ Toda combinación de decisiones es una **política de asignación de almacenamie
 
 La cercanía es el tiempo de viaje Chebyshev en el plano xy, `max(x/vx, y/vy)`.
 
-Las zonas se reparten por **canales completos** y el espacio de cada clase o SKU es proporcional a su demanda (el inventario sigue a la demanda), con al menos un canal por zona. Con FCFS, `full_turnover` suele reubicar más que `basada_en_clases`: el ítem más antiguo de un SKU queda al fondo del canal, con ítems del mismo SKU delante.
+Las zonas se reparten por **canales completos** y el espacio de cada clase o SKU es proporcional a su inventario, con al menos un canal por zona. El orden de las zonas (cuál queda más cerca del E/S) es por demanda.
+
+**Perfil de inventario.** La demanda dice cuántas veces se pide cada SKU; el perfil de inventario dice cuántas unidades suyas hay guardadas. Define el llenado inicial y el tamaño de las zonas (`perfil_inventario` en `asrs/generacion/probabilidades.py`):
+- *Lote económico (EOQ)*, por defecto. Cada SKU se repone en lotes de `Q = √(2·D·S/H)` y su inventario promedio es `Q/2`, así que crece con la raíz de la demanda: un SKU que se pide 4 veces más tiene 2 veces más unidades y cada una se pide 2 veces más seguido. Se supone el mismo costo de pedir (S) y de mantener (H) para todos los SKUs, por eso se cancelan al normalizar y no hace falta conocerlos. Como demanda ÷ inventario = √demanda, ordenar por demanda es lo mismo que ordenar por rotación (índice COI de Heskett).
+- *Proporcional a la demanda*. Cada unidad guardada se pide con la misma frecuencia, sea del SKU que sea, así que ninguna asignación por rotación puede reducir el recorrido: solo cuenta tener el inventario compacto cerca del E/S.
+
+Durante la lista de tareas cada SKU entra y sale al ritmo de su demanda, así que el perfil inicial se conserva en promedio. Con FCFS, `full_turnover` suele reubicar más que `basada_en_clases`: el ítem más antiguo de un SKU queda al fondo del canal, con ítems del mismo SKU delante.
 
 ## Lista de tareas
 

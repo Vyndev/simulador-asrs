@@ -167,6 +167,28 @@ class PruebasGeneradorTareas(unittest.TestCase):
         self.assertAlmostEqual(float(sesgada.sum()), 1.0)
         self.assertTrue(np.all(np.diff(sesgada) < 0))          # el SKU 1 es el más demandado
 
+    def test_perfil_de_inventario(self):
+        from asrs.generacion.probabilidades import perfil_inventario
+        demanda = np.array([0.64, 0.16, 0.16, 0.04])
+        # EOQ: el inventario crece con la raíz de la demanda (0.8, 0.4, 0.4, 0.2 normalizado)
+        self.assertTrue(np.allclose(perfil_inventario(demanda, "eoq"), np.array([0.8, 0.4, 0.4, 0.2]) / 1.8))
+        self.assertTrue(np.allclose(perfil_inventario(demanda, "demanda"), demanda))
+        # con EOQ el SKU más demandado rota más rápido por unidad guardada; proporcional, todos rotan igual
+        self.assertGreater(*(demanda / perfil_inventario(demanda, "eoq"))[[0, 3]])
+        self.assertTrue(np.allclose(demanda / perfil_inventario(demanda, "demanda"), 1))
+
+    def test_el_llenado_sigue_el_perfil_de_inventario(self):
+        from asrs.generacion.probabilidades import perfil_inventario
+        from asrs.utilidades import repartir_entero
+        for txt_perfil in ("eoq", "demanda"):
+            simulacion = Simulacion(dict(cargar_configuracion(), texto_perfil_inventario=txt_perfil))
+            random.seed(3)
+            SA, S = simulacion.generarSecuencias()
+            cfg = simulacion.config
+            conteo = [sum(1 for _, sku in SA if sku == i) for i in range(1, cfg["escalar_numero_skus"] + 1)]
+            esperado = repartir_entero(len(SA), perfil_inventario(cfg["vector_demanda_sku"], txt_perfil))
+            self.assertEqual(conteo, list(esperado), txt_perfil)
+
 
 class PruebasDatosReales(unittest.TestCase):
     CSV = "SKU;Task\nX1;A\nX2;A\nX1;R\nX1;A\nX2;R\nZ9;A\nX1;R\n"
@@ -259,6 +281,19 @@ class PruebasPoliticas(unittest.TestCase):
         self.assertEqual(sorted(set(politica.matriz_zonificacion.ravel().tolist())), [1, 2, 3])
         self.assertEqual(politica.etiquetaZona(2), 2)
 
+    def test_las_zonas_se_dimensionan_con_el_inventario(self):
+        from asrs.generacion.probabilidades import perfil_inventario
+        from asrs.utilidades import repartir_entero
+        simulacion = Simulacion()
+        E, G, P = simulacion.crearInstancias()
+        demanda = np.array([0.64, 0.16, 0.16, 0.04])
+        canales = E.matriz_contenedor_items.shape[0] * E.matriz_contenedor_items.shape[1]
+        for txt_perfil in ("eoq", "demanda"):
+            config = dict(simulacion.config, vector_demanda_sku=demanda, escalar_numero_skus=4, texto_perfil_inventario=txt_perfil)
+            politica = crear_politica('full_turnover', E, G, P, config)
+            canales_por_sku = [int((politica.matriz_zonificacion[:, :, 0] == sku).sum()) for sku in range(1, 5)]
+            self.assertEqual(canales_por_sku, list(repartir_entero(canales, perfil_inventario(demanda, txt_perfil), escalar_minimo=1)), txt_perfil)
+
     def test_basada_en_clases_agrupa_los_skus_ella_misma(self):
         simulacion = Simulacion()
         E, G, P = simulacion.crearInstancias()
@@ -314,6 +349,20 @@ class PruebasRecuperacion(unittest.TestCase):
         indice = PoliticaRecuperacionFCFS().seleccionar(E, 1)
         self.assertEqual(indice, (2, 2, 0))
         self.assertEqual(PoliticaRecuperacionFCFS().seleccionar(E, 3), ())
+
+    def test_fcfs_accesible_prefiere_el_mas_antiguo_sin_nada_delante(self):
+        from asrs.politicas.recuperacion import PoliticaRecuperacionFCFSAccesible
+        simulacion = Simulacion()
+        E, _, _ = simulacion.crearInstancias()
+        E.matriz_contenedor_items[3, 3, 0] = Item(1)  # el más antiguo, al fondo
+        E.matriz_contenedor_items[3, 3, 1] = Item(1)  # más nuevo, delante
+        E.matriz_contenedor_items[5, 5, 0] = Item(1)  # el más nuevo, al fondo pero sin nada delante
+        self.assertEqual(PoliticaRecuperacionFCFS().seleccionar(E, 1), (3, 3, 0))
+        self.assertEqual(PoliticaRecuperacionFCFSAccesible().seleccionar(E, 1), (3, 3, 1))
+        # si ninguna unidad del SKU está accesible, se retira la más antigua (y habrá que reubicar)
+        E.matriz_contenedor_items[6, 6, 0] = Item(2)
+        E.matriz_contenedor_items[6, 6, 1] = Item(3)
+        self.assertEqual(PoliticaRecuperacionFCFSAccesible().seleccionar(E, 2), (6, 6, 0))
 
     def test_tras_reubicar_va_directo_a_la_celda_objetivo(self):
         from asrs.control.controlador_grua import ControladorGrua
@@ -450,6 +499,8 @@ class PruebasConfiguracion(unittest.TestCase):
             {"vector_politicas_asignacion": ["inexistente"]},
             {"escalar_semilla": "abc"},
             {"vector_prob_acum_AR": [0.5, 0.9]},
+            {"texto_perfil_inventario": "otro"},
+            {"texto_regla_recuperacion": "lifo"},
         ]
         for caso in invalidos:
             with self.assertRaises(ValueError, msg=str(caso)):

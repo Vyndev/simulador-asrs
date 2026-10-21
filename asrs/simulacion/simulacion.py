@@ -10,8 +10,9 @@ from asrs.dominio.estanteria import Estanteria
 from asrs.dominio.grua import Grua
 from asrs.dominio.item import Item
 from asrs.dominio.punto_es import PuntoES
+from asrs.generacion.probabilidades import perfil_inventario
 from asrs.generacion.secuencia import GeneradorSecuencia
-from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS
+from asrs.politicas.recuperacion import crear_politica_recuperacion
 from asrs.politicas.registro import crear_politica
 from asrs.simulacion.resultados import guardar_resultados_csv
 
@@ -49,11 +50,15 @@ class Simulacion:
         vector_prob_acum_sku = np.cumsum(cfg["vector_demanda_sku"])
         vector_prob_acum_sku[-1] = 1.0
 
+        # El llenado inicial sigue el perfil de inventario: cuántas unidades de cada SKU hay guardadas (no cuántas veces se piden)
+        vector_prob_acum_inventario = np.cumsum(perfil_inventario(cfg["vector_demanda_sku"], cfg["texto_perfil_inventario"]))
+        vector_prob_acum_inventario[-1] = 1.0
+
         # Se calcula la cantidad de almacenamientos a realizar en el llenado, con el fin de alcanzar el nivel de ocupación fijado
         escalar_capacidad_total = int(np.prod(cfg["vector_configuracion_estanteria"]))
         escalar_largo_secuencia_llenado = int(escalar_capacidad_total * cfg["escalar_nivel_ocupacion"])
 
-        SA = GeneradorSecuencia(escalar_largo_secuencia_llenado, np.array([1, 1]), vector_prob_acum_sku).generarSecuencia()
+        SA = GeneradorSecuencia(escalar_largo_secuencia_llenado, np.array([1, 1]), vector_prob_acum_inventario).generarSecuencia()
         if cfg.get("texto_origen_tareas") == "datos":
             # Lista real: es la misma en todas las réplicas, solo cambia el llenado inicial
             S = [(int(escalar_actividad), int(escalar_sku)) for escalar_actividad, escalar_sku in cfg["secuencia_real"]]
@@ -70,7 +75,7 @@ class Simulacion:
 
         E, G, P = self.crearInstancias()
         instancia_politica = crear_politica(txt_clave_politica, E, G, P, self.config)
-        instancia_politica_recuperacion = PoliticaRecuperacionFCFS()
+        instancia_politica_recuperacion = crear_politica_recuperacion(self.config["texto_regla_recuperacion"])
 
         # Se ejecuta la secuencia de llenado al nivel de ocupación fijado
         ControladorGrua(E, G, P, SA, instancia_politica, instancia_politica_recuperacion).ejecutarSecuencia()

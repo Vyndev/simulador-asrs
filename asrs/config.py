@@ -2,7 +2,7 @@
 import numpy as np
 
 from asrs.generacion.datos_reales import leer_tareas, preparar_datos_reales
-from asrs.generacion.probabilidades import demanda_hausman
+from asrs.generacion.probabilidades import PERFILES_INVENTARIO, demanda_hausman
 
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
 LIMITE_CELDAS = 6000
@@ -26,6 +26,7 @@ def cargar_configuracion():
         "vector_cotas_estanteria": np.array([1.6, 0.9, 1.1]), # (alto de fila, ancho de columna, profundid de celda)
         "vector_centro_celda_estanteria": np.array([0, 0, 0]), # (% verical, % horizontal, % profundidad), representa un traslación del punto de referencia dentro de la celda
         "escalar_nivel_ocupacion": 0.85, # Porcentaje de la estatería que esta ocupada, intervalo [0, 1]
+        "texto_perfil_inventario": "eoq", # Cuánto inventario tiene cada SKU: 'eoq' (lote económico, crece con la raíz de la demanda) o 'demanda' (proporcional)
         "escalar_separacion_riel_grua": 0.5, # Unidades de separación entre la cara frontal de la estantería y el riel de la grúa
         "vector_velocidad_grua": np.array([1, 1.5, 0.7]), #(Velocidad en filas, velocidad en columnas, velocidad a lo largo de canales)
         "vector_aceleracion_grua": np.array([1.0, 1.0, 1.0]), # Aceleración de cada eje (filas, columnas, canales), 0 significa sin límite: el eje alcanza la velocidad al instante
@@ -58,6 +59,9 @@ def cargar_configuracion():
         # Políticas de asignación de almacenamiento a comparar, también gobiernan la reubicación
         # Disponibles: 'aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'
         "vector_politicas_asignacion": ('aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'),
+        # Qué ítem del SKU se retira, igual para todas las políticas: 'fcfs' (el más antiguo, aunque esté bloqueado; control de lote)
+        # o 'fcfs_accesible' (el más antiguo entre los que no tienen nada delante; unidades intercambiables)
+        "texto_regla_recuperacion": "fcfs",
     }
     # Se calcula el largo de secuencia y la demanda de cada SKU
     config["escalar_largo_secuencia"] = round(np.prod(config["vector_configuracion_estanteria"]) * 0.1)
@@ -111,6 +115,7 @@ def _vector(valor, cantidad, txt_nombre, **restricciones):
 def config_desde_json(diccionario):
     # Construye una configuración válida a partir de un diccionario, completando con los valores por defecto lo que falte
     # Lanza ValueError con un mensaje en español si algún parámetro no es válido
+    from asrs.politicas.recuperacion import REGLAS_RECUPERACION
     from asrs.politicas.registro import POLITICAS_ASIGNACION
 
     if not isinstance(diccionario, dict):
@@ -129,6 +134,9 @@ def config_desde_json(diccionario):
     config["vector_posicion_estanteria"] = np.array(_vector(datos["vector_posicion_estanteria"], 3, "Posición de la estantería", minimo=-1000, maximo=1000), dtype=float)
 
     config["escalar_nivel_ocupacion"] = _numero(datos["escalar_nivel_ocupacion"], "Nivel de ocupación", minimo=0, maximo=1)
+    if datos["texto_perfil_inventario"] not in PERFILES_INVENTARIO:
+        raise ValueError(f"Perfil de inventario: debe ser {' o '.join(repr(p) for p in PERFILES_INVENTARIO)}.")
+    config["texto_perfil_inventario"] = datos["texto_perfil_inventario"]
     config["escalar_separacion_riel_grua"] = _numero(datos["escalar_separacion_riel_grua"], "Separación del riel", minimo=0, maximo=100)
     config["vector_velocidad_grua"] = np.array(_vector(datos["vector_velocidad_grua"], 3, "Velocidad de la grúa", minimo=0, minimo_estricto=True, maximo=1000), dtype=float)
     config["vector_aceleracion_grua"] = np.array(_vector(datos["vector_aceleracion_grua"], 3, "Aceleración de la grúa", minimo=0, maximo=1000), dtype=float)
@@ -219,5 +227,9 @@ def config_desde_json(diccionario):
     if len(set(politicas)) != len(politicas):
         raise ValueError("Políticas: hay políticas repetidas.")
     config["vector_politicas_asignacion"] = tuple(politicas)
+
+    if datos["texto_regla_recuperacion"] not in REGLAS_RECUPERACION:
+        raise ValueError(f"Regla de recuperación: debe ser {' o '.join(repr(r) for r in REGLAS_RECUPERACION)}.")
+    config["texto_regla_recuperacion"] = datos["texto_regla_recuperacion"]
 
     return config

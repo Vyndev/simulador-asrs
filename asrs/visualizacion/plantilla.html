@@ -1132,7 +1132,9 @@ const PESTANAS = [
       { fila: campo('escalar_separacion_riel_grua', null, 'Separación del riel', { unidad: 'm', min: 0, paso: 0.1, ayuda: 'Distancia entre la cara de la estantería y el riel de la grúa' }) }
     ] },
     { titulo: 'Ocupación inicial', items: [
-      { fila: campo('escalar_nivel_ocupacion', null, 'Estantería ocupada al empezar', { unidad: '%', factor: 100, min: 0, max: 100, paso: 1, ayuda: 'Se llena con cada política antes de la lista de tareas' }) }
+      { fila: campo('escalar_nivel_ocupacion', null, 'Estantería ocupada al empezar', { unidad: '%', factor: 100, min: 0, max: 100, paso: 1, ayuda: 'Se llena con cada política antes de la lista de tareas' }) },
+      { selector: 'perfilInventario', etiqueta: 'Inventario de cada SKU', opciones: [['eoq', 'Lote económico (EOQ)'], ['demanda', 'Proporcional a la demanda']] },
+      { nota: '', id: 'notaPerfil' }
     ] },
     { titulo: 'Avanzado: posición y referencia', plegable: true, items: [
       { trio: 'Posición de la estantería', unidad: 'm', campos: [
@@ -1225,6 +1227,30 @@ function agruparPorDemanda(demanda, participacion) {
   hasta.forEach((fin, j) => { orden.slice(ini, fin).forEach(i => { clase[i] = j + 1; }); ini = fin; });
   return clase;
 }
+// Parte del inventario de cada SKU (misma regla que perfil_inventario de Python): con EOQ crece con la raíz de la demanda
+function perfilInventario(demanda) {
+  const v = el('perfilInventario').value === 'eoq' ? demanda.map(Math.sqrt) : demanda.slice(), s = v.reduce((a, b) => a + b, 0);
+  return v.map(x => x / s);
+}
+// Explica con los números del escenario qué significa el perfil de inventario elegido
+function explicarPerfil(demanda) {
+  const nota = el('notaPerfil'); if (!nota) return;
+  const eoq = el('perfilInventario').value === 'eoq';
+  if (!demanda || origenDatos()) {
+    nota.textContent = eoq ? 'El inventario de cada SKU es proporcional a la raíz de su demanda (lote económico de pedido): los SKUs más demandados rotan más rápido por unidad guardada.' :
+      'Cada SKU tiene inventario en proporción a su demanda: todas las unidades guardadas rotan igual.';
+    return;
+  }
+  const inv = perfilInventario(demanda), i = demanda.indexOf(Math.max(...demanda)), j = demanda.indexOf(Math.min(...demanda));
+  nota.textContent = eoq ? 'El SKU más demandado tiene el ' + pct1(100 * demanda[i]) + ' % de la demanda pero el ' + pct1(100 * inv[i]) + ' % del inventario: cada unidad suya se pide ' +
+      fmt1((demanda[i] / inv[i]) / (demanda[j] / inv[j])) + ' veces más que una del menos demandado. Por eso conviene tenerlo cerca del E/S. Se supone el mismo costo de pedir y de mantener para todos los SKUs.' :
+    'El SKU más demandado tiene el ' + pct1(100 * demanda[i]) + ' % de la demanda y también del inventario: cada unidad guardada se pide con la misma frecuencia, sea del SKU que sea, así que ordenar por rotación no da ventaja.';
+}
+function explicarRecuperacion() {
+  el('notaRecuperacion').textContent = el('reglaRecuperacion').value === 'fcfs' ?
+    'Sale siempre la unidad más antigua del SKU, aunque haya que reubicar lo que tiene delante. Corresponde a un almacén con control de lote o de vencimiento.' :
+    'Sale la unidad más antigua entre las que no tienen nada delante; solo si ninguna está libre se retira la más antigua y se reubica. Corresponde a un almacén donde las unidades de un SKU son intercambiables.';
+}
 // Clase de cada SKU según el criterio elegido en el formulario; null si los datos no son válidos
 function clasesDelFormulario(demanda) {
   const criterio = el('criterioClases').value;
@@ -1273,15 +1299,18 @@ function dibujarClases() {
 // Gráfico de la demanda por SKU, coloreado por la clase que le asigna la política basada en clases, y resumen de cada clase
 function actualizarVistaPrevia() {
   const demanda = demandaDelFormulario(), graf = el('graficoDemanda'), resumen = el('resumenDemanda');
+  explicarPerfil(demanda);
   if (!demanda) { graf.innerHTML = ''; resumen.textContent = 'Revisa la cantidad de SKUs, el sesgo o la demanda personalizada.'; clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = ''; }); if (el('criterioClases').value !== 'skus') el('tablaClases').innerHTML = ''; actualizarResumen(); return; }
   const clase = clasesDelFormulario(demanda);
   const maximo = Math.max(...demanda);
   graf.innerHTML = demanda.map((d, i) => '<i title="SKU ' + (i + 1) + ': ' + pct1(100 * d) + ' % de la demanda" style="height:' + Math.max(3, 100 * d / maximo) + '%;background:var(--acento)"></i>').join('');
   const top = demanda.slice().sort((a, b) => b - a), n5 = Math.max(1, Math.round(demanda.length * 0.2));
   resumen.textContent = demanda.length + ' SKUs. El 20 % más demandado (' + n5 + ') concentra el ' + Math.round(100 * top.slice(0, n5).reduce((a, b) => a + b, 0)) + ' % de la demanda.';
+  const inventario = perfilInventario(demanda);
   const resumenClase = k => {
     const skus = clase.reduce((a, c) => a + (c === k ? 1 : 0), 0), dem = clase.reduce((a, c, j) => a + (c === k ? demanda[j] : 0), 0);
-    return skus + ' SKUs (' + Math.round(100 * skus / demanda.length) + ' % de los SKUs) · ' + Math.round(100 * dem) + ' % de la demanda';
+    const esp = clase.reduce((a, c, j) => a + (c === k ? inventario[j] : 0), 0);
+    return skus + ' SKUs (' + Math.round(100 * skus / demanda.length) + ' % de los SKUs) · ' + Math.round(100 * dem) + ' % de la demanda · ' + Math.round(100 * esp) + ' % del espacio';
   };
   if (el('criterioClases').value === 'skus') {
     clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = clase ? resumenClase(i + 1).replace(/ \(.*?\)/, '').replace('de la demanda', 'demanda') : ''; });
@@ -1329,6 +1358,7 @@ function actualizarOrigen() {
   const datos = origenDatos();
   el('seccionDatos').hidden = !datos; el('seccionProductos').hidden = datos; el('seccionTareas').hidden = datos;
   el('notaOrigen').textContent = datos ? 'Subir archivo: la cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla de operaciones salen del archivo. Todas las réplicas usan la misma lista; solo cambia el llenado inicial.' : 'Simulada: la lista se genera al azar según la demanda de cada SKU y el porcentaje de almacenar.';
+  explicarPerfil(demandaDelFormulario());
   if (datos) validarTareas(); else { RESUMEN_DATOS = null; actualizarResumen(); }
 }
 // Valida el archivo con el servidor y muestra su resumen
@@ -1405,11 +1435,19 @@ function construirFormulario() {
             '<div class="botones-fila" id="botonesClases"><button type="button" id="btnMasClase">Añadir clase</button><button type="button" id="btnMenosClase">Quitar última</button></div></div>'
         };
         cuerpo.innerHTML = POLITICAS.map(q => '<div class="politica-grupo"><label class="politica" title="' + q.ayuda + '"><input type="checkbox" data-politica="' + q.clave + '"><span>' + q.nombre + '<small>' + q.ayuda + '</small></span></label>' + (parametrosPropios[q.clave] || '') + '</div>').join('') +
-          '<p class="nota">La política elegida decide dónde se almacena y también dónde se reubica. La recuperación es siempre FCFS.</p>';
+          '<p class="nota">La política elegida decide dónde se almacena y también dónde se reubica.</p>' +
+          '<label class="bloque"><small>Qué ítem se retira al recuperar (igual en todas las políticas)</small><select id="reglaRecuperacion">' +
+          '<option value="fcfs">FCFS estricto</option><option value="fcfs_accesible">FCFS accesible</option></select></label>' +
+          '<p class="nota" id="notaRecuperacion"></p>';
       } else {
         s.items.forEach(it => {
           if (it.trio) cuerpo.appendChild(crearTrio(it));
           else if (it.fila) cuerpo.appendChild(crearFila(it.fila));
+          else if (it.selector) {
+            const l = document.createElement('label'); l.className = 'bloque';
+            l.innerHTML = '<small>' + it.etiqueta + '</small><select id="' + it.selector + '">' + it.opciones.map(([v, t]) => '<option value="' + v + '">' + t + '</option>').join('') + '</select>';
+            cuerpo.appendChild(l);
+          }
           else { const n = document.createElement('p'); n.className = 'nota'; n.textContent = it.nota; if (it.id) n.id = it.id; cuerpo.appendChild(n); }
         });
       }
@@ -1417,6 +1455,8 @@ function construirFormulario() {
     });
   });
   el('origenTareas').onchange = actualizarOrigen;
+  el('perfilInventario').onchange = actualizarVistaPrevia;
+  el('reglaRecuperacion').onchange = explicarRecuperacion;
   el('btnArchivoTareas').onclick = () => el('archivoTareas').click();
   el('archivoTareas').onchange = ev => {
     const f = ev.target.files[0]; if (!f) return;
@@ -1460,6 +1500,8 @@ function ponerFormulario(cfg) {
   const celdas = cfg.vector_configuracion_estanteria.reduce((a, b) => a * b, 1), auto = Math.round(celdas * 0.1) === cfg.escalar_largo_secuencia;
   el('tareasAuto').checked = auto; el('tareasN').value = cfg.escalar_largo_secuencia; el('tareasN').disabled = auto;
   document.querySelectorAll('[data-politica]').forEach(c => { c.checked = (cfg.vector_politicas_asignacion || []).includes(c.dataset.politica); });
+  el('perfilInventario').value = cfg.texto_perfil_inventario || 'eoq';
+  el('reglaRecuperacion').value = cfg.texto_regla_recuperacion || 'fcfs'; explicarRecuperacion();
   el('origenTareas').value = cfg.texto_origen_tareas || 'generada'; el('textoTareas').value = cfg.texto_tareas_csv || ''; el('pctHistorial').value = cfg.escalar_porcentaje_historial || 100;
   el('criterioClases').value = cfg.texto_criterio_clases || 'iguales'; el('nClases').value = cfg.escalar_numero_clases || 3;
   dibujarClases(); actualizarClasesActivas(); actualizarOrigen(); actualizarResumen(); dibujarEsquemaRack();
@@ -1473,6 +1515,7 @@ function leerFormulario() {
     if (!isFinite(v)) { inp.classList.add('invalido'); primerError = primerError || ((c.nombreError || c.etiqueta) + ': falta el valor.'); return; }
     if (c.indice === null) cfg[c.clave] = v; else cfg[c.clave][c.indice] = v;
   });
+  cfg.texto_perfil_inventario = el('perfilInventario').value; cfg.texto_regla_recuperacion = el('reglaRecuperacion').value;
   cfg.texto_origen_tareas = el('origenTareas').value; cfg.texto_tareas_csv = el('textoTareas').value; cfg.escalar_porcentaje_historial = Number(el('pctHistorial').value);
   if (origenDatos()) {
     // Con datos reales los campos de la demanda generada no se usan y no deben bloquear la simulación
