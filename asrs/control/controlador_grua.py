@@ -73,8 +73,10 @@ class ControladorGrua:
 
         return escalar_tiempo
 
-    def reubicar(self, vector_lista_indices_obstruyen):
+    def reubicar(self, vector_lista_indices_obstruyen, booleano_volver_esquina = True):
         # Esta función realiza las actividades de reubicación de los ítems que obstruyen según la lista recbida como argumento
+        # booleano_volver_esquina: si es False y la grúa termina dentro de la estantería, se queda en la última celda de reubicación
+        # (la recuperación sigue desde ahí directo a la celda objetivo, sin volver a la esquina)
 
         # Se llaman a las variables relevantes
         instancia_grua = self.instancia_grua
@@ -148,12 +150,14 @@ class ControladorGrua:
                 booleano_irAEstanteria = False
 
         # Finalizado el proceso de reubicación, se dejá la grúa en la esquina de la estantería
+        # Salvo que se pida lo contrario y la grúa siga dentro de la estantería (la última reubicación fue regular)
         # El tiempo se atribuye a reubicación regular solo si hubo alguna, de lo contrario a la predeterminada
-        escalar_tiempo_retorno_esquina = instancia_grua.irAEsquinaEstanteria(instancia_estanteria)
-        if booleano_reubicacion_regular or not booleano_reubicacion_predeterminada:
-            escalar_tiempo_total_reubicaciones_regulares += escalar_tiempo_retorno_esquina
-        else:
-            escalar_tiempo_total_reubicaciones_predeterminadas += escalar_tiempo_retorno_esquina
+        if booleano_volver_esquina or not booleano_irAEstanteria:
+            escalar_tiempo_retorno_esquina = instancia_grua.irAEsquinaEstanteria(instancia_estanteria)
+            if booleano_reubicacion_regular or not booleano_reubicacion_predeterminada:
+                escalar_tiempo_total_reubicaciones_regulares += escalar_tiempo_retorno_esquina
+            else:
+                escalar_tiempo_total_reubicaciones_predeterminadas += escalar_tiempo_retorno_esquina
 
         # Se registran las métricas
         self.instancia_metricas.registrarReubicacion(escalar_tiempo_total_reubicaciones_regulares + escalar_tiempo_total_reubicaciones_predeterminadas)
@@ -251,13 +255,16 @@ class ControladorGrua:
         # Se evalúa si hay celdas que obstruyen
         if len(vector_lista_indices_obstruyen):
             # En caso de verdadero se realiza la reubicación con el método 'reubicar'
-            booleano_reubicacion_predeterminada, escalar_tiempo_total_reubicaciones_regulares_recuperacion, escalar_tiempo_total_reubicaciones_predeterminadas_recuperacion = self.reubicar(vector_lista_indices_obstruyen)
+            # Si la última reubicación fue regular, la grúa no vuelve a la esquina: sigue desde esa celda directo a la celda objetivo
+            booleano_reubicacion_predeterminada, escalar_tiempo_total_reubicaciones_regulares_recuperacion, escalar_tiempo_total_reubicaciones_predeterminadas_recuperacion = self.reubicar(vector_lista_indices_obstruyen, booleano_volver_esquina = False)
 
             # Se evalúa si se realizó reubicación predeterminada
             if booleano_reubicacion_predeterminada:
 
                 # En este punto el ítem ya se encuentra despejado, entonces se realiza la rutina de recuperación
-                escalar_tiempo_recuperacion += instancia_grua.irAEsquinaEstanteria(instancia_estanteria)
+                # Si la grúa ya está dentro de la estantería va directo a la celda objetivo
+                if instancia_grua.instancia_estanteria_actual is not instancia_estanteria:
+                    escalar_tiempo_recuperacion += instancia_grua.irAEsquinaEstanteria(instancia_estanteria)
                 escalar_tiempo_recuperacion += instancia_grua.moverEnEstanteria(vector_indice_recuperacion)
                 escalar_tiempo_recuperacion += instancia_grua.cargarItemDeEstanteria(vector_indice_recuperacion)
                 escalar_tiempo_recuperacion += instancia_grua.volverAplano()
@@ -279,7 +286,9 @@ class ControladorGrua:
         # Luego de realizar todas las reubicaciones si las hubiere, se evalúa si el ítem objetivo aún no ha sido recuperado
         if not booleano_item_recuperado:
             # en caso de que aún no se haya almacenado, entonces se realiza la rutina de recuperación
-            escalar_tiempo_recuperacion += instancia_grua.irAEsquinaEstanteria(instancia_estanteria)
+            # Si la grúa viene de reubicar ya está dentro de la estantería y va directo a la celda objetivo
+            if instancia_grua.instancia_estanteria_actual is not instancia_estanteria:
+                escalar_tiempo_recuperacion += instancia_grua.irAEsquinaEstanteria(instancia_estanteria)
             escalar_tiempo_recuperacion += instancia_grua.moverEnEstanteria(vector_indice_recuperacion)
             escalar_tiempo_recuperacion += instancia_grua.cargarItemDeEstanteria(vector_indice_recuperacion)
             escalar_tiempo_recuperacion += instancia_grua.volverAplano()

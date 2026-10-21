@@ -315,6 +315,29 @@ class PruebasRecuperacion(unittest.TestCase):
         self.assertEqual(indice, (2, 2, 0))
         self.assertEqual(PoliticaRecuperacionFCFS().seleccionar(E, 3), ())
 
+    def test_tras_reubicar_va_directo_a_la_celda_objetivo(self):
+        from asrs.control.controlador_grua import ControladorGrua
+        simulacion = Simulacion()
+        E, G, P = simulacion.crearInstancias()
+        objetivo, bloquea = (4, 6, 0), (4, 6, 1)
+        E.matriz_contenedor_items[objetivo] = Item(1)
+        E.matriz_contenedor_items[bloquea] = Item(2)
+        random.seed(1)
+        G.vector_eventos = []
+        ControladorGrua(E, G, P, [(1, 1)], crear_politica('aleatoria', E, G, P, simulacion.config)).ejecutarSecuencia()
+
+        eventos = G.vector_eventos
+        indice_dejar = next(i for i, e in enumerate(eventos) if e[1] == 'D')          # la grúa deja el ítem que estorbaba
+        indice_retirar = next(i for i, e in enumerate(eventos) if e[1] == 'P' and tuple(e[2:5]) == objetivo)
+        destino_reubicacion = E.posicionesCeldas()[tuple(eventos[indice_dejar][2:5])][:2]
+        self.assertTrue(np.any(destino_reubicacion != E.vector_posicion[:2]))     # lejos de la esquina, así volver a ella costaría tiempo
+        movimientos = [e for e in eventos[indice_dejar + 1:indice_retirar] if e[1] == 'M' and e[2] > 0]
+        # Sale del canal y va de la celda de reubicación a la celda objetivo (xy y luego z hasta el fondo), sin pasar por la esquina
+        self.assertEqual(len(movimientos), 2)
+        self.assertEqual(movimientos[1][3:5], [round(float(x), 4) for x in destino_reubicacion])
+        self.assertEqual(movimientos[1][5:7], [round(float(x), 4) for x in E.posicionesCeldas()[objetivo][:2]])
+        self.assertIsInstance(E.matriz_contenedor_items[objetivo], int)
+
 
 class PruebasEscenarios(unittest.TestCase):
     @classmethod

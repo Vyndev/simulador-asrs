@@ -86,6 +86,8 @@ La lista de tareas solo conoce **SKUs**: cada tarea es un par `(actividad, SKU)`
 
 Si no hay celda factible al reubicar, el ítem se lleva temporalmente al E/S y se devuelve a la estantería al terminar la operación.
 
+**Recorrido de una recuperación con reubicación.** La grúa va a la estantería, saca cada ítem que obstruye y lo deja en la celda que elige la política. Si la última reubicación fue dentro de la estantería, sigue desde esa celda directo a la celda objetivo, sin volver a la esquina; ese tramo cuenta como tiempo de recuperación. Si la última reubicación dejó el ítem en el E/S, la grúa sale desde ahí. Después retira el ítem, lo entrega en el E/S y vuelve al reposo.
+
 ## Arquitectura
 
 ```
