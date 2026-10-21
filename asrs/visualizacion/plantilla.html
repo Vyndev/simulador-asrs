@@ -199,6 +199,7 @@
   th { color: var(--suave); font-weight: 600; font-size: 13px; }
   td.num, th.num { text-align: right; }
   tr.mejor td { font-weight: 700; }
+  td .ns { color: var(--oro); font-weight: 600; cursor: help; }
   .celda-barra { position: relative; min-width: 110px; }
   .celda-barra .b { position: absolute; left: 0; top: 50%; height: 14px; transform: translateY(-50%); background: var(--acento); opacity: .22; border-radius: 3px; }
   .celda-barra .e { position: absolute; top: 50%; height: 2px; transform: translateY(-50%); background: var(--texto); opacity: .7; }
@@ -322,6 +323,7 @@ function colorRotacion(t) {
 }
 const fmt = n => Math.round(n).toLocaleString('es');
 const fmt1 = n => (Math.round(n * 10) / 10).toLocaleString('es');
+const pct1 = n => n.toLocaleString('es', { minimumFractionDigits: 1, maximumFractionDigits: 1 });   // porcentaje con un decimal y coma decimal
 const el = id => document.getElementById(id);
 
 // ================= escena 3D (se recalcula con cada simulación) =================
@@ -423,7 +425,7 @@ function rotulo(texto, color, tam, borde) {
 const GEO_CAJA = new THREE.BoxGeometry(1, 1, 1), GEO_CILINDRO = new THREE.CylinderGeometry(1, 1, 1, 8), GEO_CONO = new THREE.ConeGeometry(1, 1, 16), GEO_ESFERA = new THREE.SphereGeometry(1, 16, 12);
 const MAX_DASHES = 700;
 
-let replicaActual = 0, paneles = [], t = 0, jugando = false, ultimo = 0, lugarSiguiente = 1;
+let replicaActual = 0, paneles = [], t = 0, jugando = false, ultimo = 0;
 
 class Panel {
   constructor(datos, tarjeta) {
@@ -460,7 +462,12 @@ class Panel {
     if (this.modoColor === 'clase') return colorGrupo(CLASE_SKU[s - 1] || 1);
     const n = DATOS.skus; return colorRotacion(n > 1 ? (RANGO_SKU[s - 1] || 0) / (n - 1) : 0);
   }
-  celda(e) { return 'fila ' + (e[2] + 1) + ', col. ' + (e[3] + 1) + ', ' + (e[4] === 0 ? 'fondo' : 'frente'); }
+  celda(e) { return 'fila ' + (e[2] + 1) + ', col. ' + (e[3] + 1) + (CAPAS === 1 ? '' : ', ' + (e[4] === 0 ? 'fondo' : e[4] === CAPAS - 1 ? 'frente' : 'capa ' + (e[4] + 1) + ' de ' + CAPAS)); }
+  // Pone el puesto de llegada en la insignia del panel
+  ponerLugar(n) {
+    this.lugar = n; this.insignia.textContent = n + '.º';
+    this.insignia.className = 'insignia' + (n <= 3 ? ' l' + n : '');
+  }
 
   aplicar(e) {
     const tipo = e[1];
@@ -476,7 +483,7 @@ class Panel {
       this.textoAccion = e[4] === 1 ? '' : (e[2] === 0 ? 'No hay espacio libre para almacenar' : 'No hay ítems de ese SKU');
     } else if (tipo === 'A') {
       this.io.push(e[2]); this.anims.push({ tipo: 'entra', clase: e[2], t0: performance.now() });
-      this.textoAccion = 'Llega el SKU ' + e[2] + ' a la ENTRADA del E/S';
+      this.textoAccion = 'Llega el ' + nombreSku(e[2]) + ' a la ENTRADA del E/S';
     } else if (tipo === 'M') {
       // las posiciones se pasan a coordenadas de la estantería (se resta su posición en el modelo)
       this.mov = { t0: e[0], dur: e[2], x0: e[3] - POS[0], y0: e[4] - POS[1], x1: e[5] - POS[0], y1: e[6] - POS[1], txy: e[7], z0: e[8] - POS[2], z1: e[9] - POS[2], ini: e[10], fin: e[11] };
@@ -505,29 +512,28 @@ class Panel {
     } else if (tipo === 'P') {
       const i = (e[2] * COLUMNAS + e[3]) * CAPAS + e[4]; this.mano = this.estante[i]; this.estante[i] = 0; this.cambios.push([e[2], e[3], e[4]]);
       if (this.destino) this.destino.fin = performance.now();
-      this.textoAccion = 'Retira el SKU ' + this.mano + ' de ' + this.celda(e);
+      this.textoAccion = 'Retira el ' + nombreSku(this.mano) + ' de ' + this.celda(e);
     } else if (tipo === 'D') {
       const i = (e[2] * COLUMNAS + e[3]) * CAPAS + e[4]; this.estante[i] = this.mano; this.cambios.push([e[2], e[3], e[4]]);
       if (this.destino) this.destino.fin = performance.now();
-      this.textoAccion = 'Deja el SKU ' + this.mano + ' en ' + this.celda(e); this.mano = 0;
+      this.textoAccion = 'Deja el ' + nombreSku(this.mano) + ' en ' + this.celda(e); this.mano = 0;
     } else if (tipo === 'J') {
       const clase = this.io.splice(e[2], 1)[0] || 0; this.mano = clase;
-      this.textoAccion = 'La grúa toma el SKU ' + clase + ' de la ENTRADA';
+      this.textoAccion = 'La grúa toma el ' + nombreSku(clase) + ' de la ENTRADA';
     } else if (tipo === 'I') {
-      this.io.push(this.mano); this.textoAccion = 'Deja el SKU ' + this.mano + ' en la ENTRADA (reubicación temporal)'; this.mano = 0;
+      this.io.push(this.mano); this.textoAccion = 'Deja el ' + nombreSku(this.mano) + ' en la ENTRADA (reubicación temporal)'; this.mano = 0;
     } else if (tipo === 'S') {
       this.anims.push({ tipo: 'sale', clase: this.mano, t0: performance.now() });
       if (this.destinoES) this.destinoES.fin = performance.now();
-      this.textoAccion = 'Entrega el SKU ' + this.mano + ' a la SALIDA del E/S'; this.mano = 0;
+      this.textoAccion = 'Entrega el ' + nombreSku(this.mano) + ' a la SALIDA del E/S'; this.mano = 0;
     } else if (tipo === 'F') {
       if (this.tarea >= 0 && this.ticks[this.tarea].className.indexOf('omitida') < 0) {
         this.ticks[this.tarea].classList.remove('actual'); this.ticks[this.tarea].classList.add('hecha');
       }
-      this.hechas = totalTareas; this.fin = e[0]; this.lugar = lugarSiguiente++;
+      // el puesto definitivo lo fija ordenarLlegadas(): en un mismo cuadro pueden terminar varias políticas
+      this.hechas = totalTareas; this.fin = e[0]; this.ponerLugar(paneles.filter(p => p.fin !== null).length);
       this.tipoTarea = 'TERMINADO'; this.claseTarea = 0; this.textoAccion = 'Lista completa, la grúa vuelve al reposo';
       this.tarjeta.classList.add('termino');
-      this.insignia.textContent = this.lugar + '.º';
-      this.insignia.className = 'insignia' + (this.lugar <= 3 ? ' l' + this.lugar : '');
     }
   }
   avanzar(tiempo) {
@@ -875,7 +881,7 @@ function construir() {
 
 function reiniciar() {
   el('btnVerResultados').hidden = true;
-  t = 0; lugarSiguiente = 1; jugando = false;
+  t = 0; jugando = false;
   el('jugar').textContent = 'Iniciar';
   paneles.forEach(p => p.reiniciar());
   paso(0);
@@ -912,11 +918,18 @@ function resultados() {
 // Vuelve a dibujar todos los paneles sin avanzar el reloj (al mover la cámara)
 function redibujar() { paneles.forEach(p => p.dibujar(t)); }
 
+// Puestos de llegada por tiempo de término: a velocidades altas varias políticas terminan en el mismo cuadro y el orden en que
+// se procesan no es el de llegada. Las que aún corren terminarán después de t, así que el puesto de las que ya terminaron es definitivo
+function ordenarLlegadas() {
+  paneles.filter(p => p.fin !== null).sort((a, b) => a.fin - b.fin).forEach((p, i) => { if (p.lugar !== i + 1) p.ponerLugar(i + 1); });
+}
+
 let ultimoMarcador = 0;
 function paso(dt) {
   if (!paneles.length) return;
   t += dt;
-  paneles.forEach(p => { p.avanzar(t); p.dibujar(t); p.actualizarPie(t); });
+  paneles.forEach(p => p.avanzar(t)); ordenarLlegadas();
+  paneles.forEach(p => { p.dibujar(t); p.actualizarPie(t); });
   el('reloj').textContent = fmt(t);
   const ahora = performance.now();
   if (ahora - ultimoMarcador > 150 || dt === 0) { marcador(); ultimoMarcador = ahora; }
@@ -947,7 +960,7 @@ el('reiniciar').onclick = reiniciar;
 el('final').onclick = () => {
   if (!paneles.length) return;
   jugando = false; el('jugar').textContent = 'Repetir';
-  paneles.forEach(p => p.reiniciar()); lugarSiguiente = 1; t = 0;
+  paneles.forEach(p => p.reiniciar()); t = 0;
   // se avanza en pasos pequeños para que los lugares de llegada respeten el orden de tiempo
   const maximo = Math.max(...paneles.map(p => p.d.eventos[p.d.eventos.length - 1][0]));
   const salto = Math.max(1, maximo / 4000);
@@ -1004,7 +1017,7 @@ function mostrarVeredicto() {
   const caja = el('veredicto'), est = ESTADISTICA && ESTADISTICA.replicas ? ESTADISTICA : null;
   let filas = null, base = '';
   if (est) {
-    filas = est.politicas.map(f => ({ nombre: f.nombre, media: f.tiempo_total.media, ic: f.tiempo_total.ic95, victorias: f.victorias })).sort((a, b) => a.media - b.media);
+    filas = est.politicas.map(f => ({ nombre: f.nombre, media: f.tiempo_total.media, ic: f.tiempo_total.ic95, victorias: f.victorias, dif: f.tiempo_total.vs_mejor })).sort((a, b) => a.media - b.media);
     base = 'promedio de ' + est.replicas + (est.replicas === 1 ? ' réplica' : ' réplicas');
   } else if (paneles.length && paneles.every(p => p.fin !== null)) {
     filas = paneles.map(p => ({ nombre: p.d.nombre, media: p.fin, ic: 0, victorias: null })).sort((a, b) => a.media - b.media);
@@ -1015,13 +1028,18 @@ function mostrarVeredicto() {
   const nom = f => NOMBRES[f.nombre] || f.nombre, [a, b] = filas;
   if (!b) { caja.hidden = false; caja.className = 'veredicto'; caja.innerHTML = '<h2>' + nom(a) + '</h2><p>Solo hay una política en el escenario: ' + fmt(a.media) + ' s (' + base + ').</p>'; return; }
   const menos = b.media > 0 ? 100 * (b.media - a.media) / b.media : 0;
-  const dudoso = est ? a.media + a.ic >= b.media - b.ic : false;
+  // Todas las políticas corren las mismas secuencias, así que se compara réplica a réplica: la diferencia con la segunda
+  // es significativa si su intervalo de confianza del 95 % no incluye el cero. Con una réplica no hay con qué estimar la variación
+  const pareado = est && est.replicas > 1 && b.dif ? b.dif : null;
+  const dudoso = pareado ? pareado.media - pareado.ic95 <= 0 : false;
+  const txtDif = pareado ? 'La diferencia con ' + nom(b) + ' es de ' + fmt1(pareado.media) + ' ± ' + fmt1(pareado.ic95) + ' s por réplica (IC 95 %, comparación pareada)' : '';
   caja.hidden = false; caja.className = 'veredicto' + (dudoso ? ' dudoso' : '');
   caja.innerHTML = '<h2>' + (dudoso ? nom(a) + ' y ' + nom(b) + ' quedan muy parejas' : nom(a) + ' es la más rápida') + '</h2>' +
-    '<p>' + (dudoso ? 'Sus intervalos de confianza se solapan, así que la diferencia no es concluyente. Prueba con más réplicas en el escenario.' :
-      (est ? 'Termina la lista de tareas antes que las demás de forma consistente.' : 'Con una sola réplica no se sabe si la ventaja es real: aumenta las réplicas para tener estadística.')) + '</p>' +
+    '<p>' + (!pareado ? 'Con una sola réplica no se sabe si la ventaja es real: aumenta las réplicas para tener estadística.' :
+      dudoso ? txtDif + ' y ese intervalo incluye el cero, así que la diferencia no es concluyente. Prueba con más réplicas en el escenario.' :
+      txtDif + ': el intervalo no incluye el cero, así que la ventaja es estadísticamente significativa.') + '</p>' +
     '<div class="cifras"><div><b>' + fmt(a.media) + ' s</b><small>tiempo total (' + base + (est ? ', ± ' + fmt(a.ic) : '') + ')</small></div>' +
-    '<div><b>' + menos.toFixed(1) + ' %</b><small>menos tiempo que la segunda (' + nom(b) + ')</small></div>' +
+    '<div><b>' + pct1(menos) + ' %</b><small>menos tiempo que la segunda (' + nom(b) + ')</small></div>' +
     (a.victorias !== null ? '<div><b>' + a.victorias + ' de ' + est.replicas + '</b><small>réplicas en las que termina primera</small></div>' : '') + '</div>';
 }
 
@@ -1045,12 +1063,15 @@ function mostrarEstadistica(est) {
     return '<tr class="' + (i === 0 ? 'mejor' : '') + '"><td>' + (NOMBRES[f.nombre] || f.nombre) + '</td>' +
       '<td class="celda-barra"><i class="b" style="width:' + ancho + '%"></i><i class="e" style="left:' + inicioErr + '%;width:' + anchoErr + '%"></i><span>' + nf(s.media) + ' ± ' + nf(s.ic95) + '</span></td>' +
       '<td class="num">' + nf(s.desviacion) + '</td><td class="num">' + nf(s.minimo) + '</td><td class="num">' + nf(s.maximo) + '</td>' +
-      '<td class="num">' + (i === 0 || mejor === 0 ? '–' : '+' + (100 * (s.media - mejor) / mejor).toFixed(1) + ' %') + '</td>' +
+      '<td class="num">' + (i === 0 || mejor === 0 ? '–' : '+' + pct1(100 * (s.media - mejor) / mejor) + ' %' +
+        (est.replicas > 1 && s.vs_mejor && s.vs_mejor.media - s.vs_mejor.ic95 <= 0 ? ' <small class="ns" title="El IC 95 % de la diferencia réplica a réplica incluye el cero">n. s.</small>' : '')) + '</td>' +
       '<td class="num">' + f.victorias + ' (' + (100 * f.victorias / est.replicas).toFixed(0) + ' %)</td></tr>';
   }).join('');
   const sem = ULTIMA_CONFIG ? ULTIMA_CONFIG.escalar_semilla : null;
-  el('notaEstadistica').textContent = 'Cada réplica usa una secuencia de llegadas distinta' + (sem !== null ? ' (semillas ' + sem + ' a ' + (sem + est.replicas - 1) + ')' : '') +
-    '. "Veces mejor" cuenta en cuántas réplicas esa política terminó primero o empató; las barras muestran el promedio y el intervalo de confianza.';
+  const conArchivo = ULTIMA_CONFIG && ULTIMA_CONFIG.texto_origen_tareas === 'datos';
+  el('notaEstadistica').textContent = (conArchivo ? 'Todas las réplicas ejecutan la lista del archivo; cambia el llenado inicial' : 'Cada réplica usa una secuencia de llegadas distinta') +
+    (sem !== null ? ' (semillas ' + sem + ' a ' + (sem + est.replicas - 1) + ')' : '') +
+    '. Las barras muestran el promedio y su intervalo de confianza del 95 % (t de Student). "vs. la mejor" compara cada réplica con la de la mejor política, porque todas corren las mismas secuencias; "n. s." indica que esa diferencia no es significativa (su intervalo incluye el cero). "Veces mejor" cuenta en cuántas réplicas esa política terminó primero o empató, siempre por tiempo total.';
 }
 
 el('metrica').onchange = () => mostrarEstadistica(ESTADISTICA);
@@ -1255,7 +1276,7 @@ function actualizarVistaPrevia() {
   if (!demanda) { graf.innerHTML = ''; resumen.textContent = 'Revisa la cantidad de SKUs, el sesgo o la demanda personalizada.'; clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = ''; }); if (el('criterioClases').value !== 'skus') el('tablaClases').innerHTML = ''; actualizarResumen(); return; }
   const clase = clasesDelFormulario(demanda);
   const maximo = Math.max(...demanda);
-  graf.innerHTML = demanda.map((d, i) => '<i title="SKU ' + (i + 1) + ': ' + (100 * d).toFixed(1) + ' % de la demanda" style="height:' + Math.max(3, 100 * d / maximo) + '%;background:var(--acento)"></i>').join('');
+  graf.innerHTML = demanda.map((d, i) => '<i title="SKU ' + (i + 1) + ': ' + pct1(100 * d) + ' % de la demanda" style="height:' + Math.max(3, 100 * d / maximo) + '%;background:var(--acento)"></i>').join('');
   const top = demanda.slice().sort((a, b) => b - a), n5 = Math.max(1, Math.round(demanda.length * 0.2));
   resumen.textContent = demanda.length + ' SKUs. El 20 % más demandado (' + n5 + ') concentra el ' + Math.round(100 * top.slice(0, n5).reduce((a, b) => a + b, 0)) + ' % de la demanda.';
   const resumenClase = k => {
@@ -1580,6 +1601,7 @@ async function consultar() {
 function terminar(resultado, segundos) {
   el('btnSimular').disabled = false;
   HAY_SIMULACION = true; CAMBIOS = false; el('estadoEscenario').hidden = true; habilitarPasos();
+  if (resultado.configuracion) ULTIMA_CONFIG = resultado.configuracion;     // la que usó el servidor, también al reconectarse tras recargar
   cargarDatos(resultado.datos);
   mostrarEstadistica(resultado.estadistica);
   actualizarSubpasos();

@@ -448,8 +448,35 @@ class PruebasEstadistica(unittest.TestCase):
         self.assertEqual(b["tiempo_total"]["desviacion"], 0)
         self.assertEqual(a["tiempo_total"]["minimo"], 100)
 
+    def test_cuantil_t_de_student(self):
+        from asrs.simulacion.estadistica import cuantil_t_975
+        # Valores de tabla de la t de Student para el 95 % bilateral
+        for escalar_gl, escalar_tabla in ((1, 12.706), (2, 4.303), (3, 3.182), (10, 2.228), (19, 2.093), (30, 2.042), (1000, 1.962)):
+            self.assertAlmostEqual(cuantil_t_975(escalar_gl) / escalar_tabla, 1, delta=0.002, msg=str(escalar_gl))
+
+    def test_comparacion_pareada_con_la_mejor(self):
+        from asrs.simulacion.estadistica import resumir
+
+        def fila(nombre, total):
+            return [nombre] + [0] * 27 + [10, total]
+
+        # B tarda siempre 10 s más que A: los intervalos de cada una se solapan, pero la diferencia réplica a réplica es constante
+        resultado = resumir([[fila("A", total), fila("B", total + 10)] for total in (100, 300, 200)])
+        a, b = resultado["politicas"]
+        self.assertIsNone(a["tiempo_total"]["vs_mejor"])
+        self.assertEqual(b["tiempo_total"]["vs_mejor"]["media"], 10)
+        self.assertEqual(b["tiempo_total"]["vs_mejor"]["ic95"], 0)
+        self.assertGreater(a["tiempo_total"]["media"] + a["tiempo_total"]["ic95"], b["tiempo_total"]["media"] - b["tiempo_total"]["ic95"])
+
 
 class PruebasServidor(unittest.TestCase):
+    def test_la_solicitud_admite_el_maximo_de_tareas(self):
+        import json
+        from asrs.config import LIMITE_TAREAS
+        from asrs.visualizacion.servidor import LIMITE_CUERPO
+        txt_csv = "SKU;Task\n" + "".join(f"PROD-{i % 200:05d};{'A' if i % 2 else 'R'}\n" for i in range(LIMITE_TAREAS))
+        self.assertLess(len(json.dumps({"config": {"texto_tareas_csv": txt_csv}}).encode("utf-8")), LIMITE_CUERPO)
+
     def test_un_segundo_servidor_en_el_mismo_puerto_falla(self):
         from asrs.visualizacion.servidor import crear_servidor
         primero = crear_servidor(0)
