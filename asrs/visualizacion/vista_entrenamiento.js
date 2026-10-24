@@ -19,7 +19,7 @@
     const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, alto);
     return { g, w, h: alto };
   }
-  const texto = (g, s, x, y, o = {}) => { g.fillStyle = o.color || css('--suave'); g.font = (o.peso || 400) + ' ' + (o.tam || 11) + 'px system-ui, sans-serif'; g.textAlign = o.alin || 'left'; g.textBaseline = o.base || 'alphabetic'; g.fillText(s, x, y); };
+  const texto = (g, s, x, y, o = {}) => { g.fillStyle = o.color || css('--suave'); g.font = (o.peso || 400) + ' ' + (o.tam || 11) + 'px ' + FUENTE_MONO; g.textAlign = o.alin || 'left'; g.textBaseline = o.base || 'alphabetic'; g.fillText(s, x, y); };
 
   // ---------- gráfico de líneas ----------
   function lineas(id, alto, series, refs, opc = {}) {
@@ -207,6 +207,7 @@
     else if (estadoEnt === 'error') html = '<span style="color:var(--omitida)">El entrenamiento falló.</span><pre class="ent-error">' + (errorEnt || '').replace(/</g, '&lt;') + '</pre>';
     if (reconectando && activo) html = '<span style="color:var(--omitida)">Sin respuesta del servidor, reintentando…</span> ' + html;
     caja.innerHTML = '<div>' + html + '</div>' + (activo ? '<div class="progreso"><div class="barra"><i style="width:' + pct + '%"></i></div></div>' : '');
+    caja.style.borderLeftColor = activo ? 'var(--acento)' : (estadoEnt === 'listo' ? 'var(--almacenar)' : (estadoEnt === 'error' ? 'var(--omitida)' : ''));
     const sl = el('slFoto'); sl.max = Math.max(0, fotos.length - 1); sl.value = indiceFoto; el('lblFoto').textContent = fotos.length ? 'foto ' + (indiceFoto + 1) + '/' + fotos.length + ' · paso ' + fmt(fotos[indiceFoto].pasos) : '—';
     el('chkVivo').checked = enVivo;
   }
@@ -255,22 +256,23 @@
   function construir() {
     if (construida) return; construida = true;
     const vista = el('vistaEntrenamiento');
+    const cab = (n, titulo, extra) => '<div class="tarjeta-cab"><span class="n">' + n + '</span>' + titulo + (extra ? '<div class="der">' + extra + '</div>' : '') + '</div>';
     vista.innerHTML =
-      '<section class="ent-tarjeta"><div class="ent-controles">' +
-      '<label>Algoritmo <select id="selAlgoritmo"><option value="ppo">PPO</option><option value="dqn">DQN</option></select></label>' +
-      '<label>Pasos <input type="number" id="inPasos" min="1000" max="2000000" step="1000" value="20000"></label>' +
-      '<label title="Cada entorno corre en un núcleo del procesador">Entornos en paralelo <input type="number" id="inEntornos" min="1" max="64" step="1"></label>' +
-      '<button id="btnEntrenar" class="primario">Entrenar</button><button id="btnDetener" disabled>Detener</button></div>' +
+      '<section class="tarjeta">' + cab('RL', 'Agente de aprendizaje por refuerzo') + '<div class="tarjeta-cuerpo"><div class="ent-controles">' +
+      '<label class="ctl"><small>Algoritmo</small><div><select id="selAlgoritmo"><option value="ppo">PPO</option><option value="dqn">DQN</option></select></div></label>' +
+      '<label class="ctl"><small>Pasos</small><div><input type="number" id="inPasos" min="1000" max="2000000" step="1000" value="20000"></div></label>' +
+      '<label class="ctl" title="Cada entorno corre en un núcleo del procesador"><small>Entornos en paralelo</small><div><input type="number" id="inEntornos" min="1" max="64" step="1"></div></label>' +
+      '<button id="btnEntrenar" class="primario"><svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg>Entrenar</button><button id="btnDetener" disabled><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>Detener</button></div>' +
       '<div id="entEstado" class="ent-estado"></div>' +
-      '<p class="nota">El agente aprende en qué posición almacenar cada ítem y dónde reubicar los que estorban. Usa el almacén, la demanda y las tareas de los parámetros de la izquierda. Se compara con las políticas clásicas en estados de prueba que no ve al entrenar.</p></section>' +
-      '<div class="ent-cuadricula"><section class="ent-tarjeta"><h3>Curva de aprendizaje</h3><p class="nota">Tiempo total de la lista de tareas por episodio (media de los últimos 30; menos es mejor). Las líneas punteadas son las políticas clásicas.</p><canvas id="cvCurva"></canvas></section>' +
-      '<section class="ent-tarjeta"><h3>Pérdidas <select id="selPerdida"></select></h3><p class="nota">Cuánto se equivoca la red en cada actualización. En DQN, epsilon es la parte de decisiones al azar (exploración).</p><canvas id="cvPerdida"></canvas></section></div>' +
-      '<section class="ent-tarjeta"><div class="ent-cabecera"><h3>La red por dentro</h3><div class="ent-replay"><label><input type="checkbox" id="chkVivo" checked> En vivo</label><input type="range" id="slFoto" min="0" max="0" value="0"><span id="lblFoto">—</span></div></div>' +
-      '<p class="nota">La red mira siempre la misma situación de la estantería (cada fila de un mapa es un nivel y las capas de profundidad de una columna quedan juntas) y, con el avance del entrenamiento, cambia lo que decide. Desliza para comparar el principio con el final. Pasa el ratón sobre una neurona para ver su activación.</p>' +
-      '<canvas id="cvRed"></canvas><div id="entTip" class="nota">&nbsp;</div></section>' +
-      '<div class="ent-cuadricula"><section class="ent-tarjeta"><h3>Distribución de los pesos</h3><p class="nota">Cada barra cuenta cuántos pesos tienen ese valor. Al aprender, las distribuciones se ensanchan o se desplazan.</p><canvas id="cvHist"></canvas></section>' +
-      '<section class="ent-tarjeta"><h3>Pesos entre capas y hacia los canales</h3><canvas id="cvMapaPesos"></canvas></section></div>' +
-      '<section class="ent-tarjeta"><h3>A qué mira cada neurona de la primera capa</h3><p class="nota">Cada cuadrícula tiene una neurona por casilla; el color indica cuánto pesa en ella ese grupo de entradas. Amarillo es mucha atención.</p><canvas id="cvAtencion"></canvas></section>';
+      '<p class="nota">El agente aprende en qué posición almacenar cada ítem y dónde reubicar los que estorban. Usa el almacén, la demanda y las tareas de la hoja de parámetros. Se compara con las políticas clásicas en estados de prueba que no ve al entrenar.</p></div></section>' +
+      '<div class="ent-cuadricula"><section class="tarjeta">' + cab('01', 'Curva de aprendizaje') + '<div class="tarjeta-cuerpo"><p class="nota">Tiempo total de la lista de tareas por episodio (media de los últimos 30; menos es mejor). Las líneas punteadas son las políticas clásicas.</p><canvas id="cvCurva"></canvas></div></section>' +
+      '<section class="tarjeta">' + cab('02', 'Pérdidas', '<select id="selPerdida" aria-label="Pérdida"></select>') + '<div class="tarjeta-cuerpo"><p class="nota">Cuánto se equivoca la red en cada actualización. En DQN, epsilon es la parte de decisiones al azar (exploración).</p><canvas id="cvPerdida"></canvas></div></section></div>' +
+      '<section class="tarjeta">' + cab('03', 'La red por dentro', '<div class="ent-replay"><label><input type="checkbox" id="chkVivo" checked> En vivo</label><input type="range" id="slFoto" min="0" max="0" value="0"><span id="lblFoto">—</span></div>') +
+      '<div class="tarjeta-cuerpo"><p class="nota">La red mira siempre la misma situación de la estantería (cada fila de un mapa es un nivel y las capas de profundidad de una columna quedan juntas) y, con el avance del entrenamiento, cambia lo que decide. Desliza para comparar el principio con el final. Pasa el ratón sobre una neurona para ver su activación.</p>' +
+      '<canvas id="cvRed"></canvas><div id="entTip" class="nota">&nbsp;</div></div></section>' +
+      '<div class="ent-cuadricula"><section class="tarjeta">' + cab('04', 'Distribución de los pesos') + '<div class="tarjeta-cuerpo"><p class="nota">Cada barra cuenta cuántos pesos tienen ese valor. Al aprender, las distribuciones se ensanchan o se desplazan.</p><canvas id="cvHist"></canvas></div></section>' +
+      '<section class="tarjeta">' + cab('05', 'Pesos entre capas y hacia las posiciones') + '<div class="tarjeta-cuerpo"><canvas id="cvMapaPesos"></canvas></div></section></div>' +
+      '<section class="tarjeta">' + cab('06', 'A qué mira cada neurona de la primera capa') + '<div class="tarjeta-cuerpo"><p class="nota">Cada cuadrícula tiene una neurona por casilla; el color indica cuánto pesa en ella ese grupo de entradas. Amarillo es mucha atención.</p><canvas id="cvAtencion"></canvas></div></section>';
     el('inEntornos').value = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 2));     // se dejan núcleos libres para el servidor y el navegador
     el('btnEntrenar').onclick = entrenar;
     el('btnDetener').onclick = () => { if (actual) fetch('/api/entrenamiento/' + actual + '/cancelar', { method: 'POST' }); };
