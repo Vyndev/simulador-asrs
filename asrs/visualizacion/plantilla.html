@@ -260,6 +260,7 @@
   .ctl { display: grid; gap: 1px; }
   .ctl > small { font: 600 9px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--tenue); }
   .ctl > div { display: flex; align-items: center; gap: 8px; }
+  .ctl > .segmentado { display: inline-flex; gap: 0; justify-self: start; }
   .ctl select { height: 26px; }
   #velocidadTexto { font: 500 11.5px var(--mono); color: var(--suave); min-width: 64px; }
   .segmentado { display: inline-flex; border: 1px solid var(--linea-fuerte); border-radius: 3px; overflow: hidden; }
@@ -465,11 +466,11 @@
           <button id="final" class="icono" title="Ir al final" aria-label="Ir al final"><svg viewBox="0 0 24 24"><path d="M5 5l10 7-10 7z"/><path d="M19 5v14"/></svg></button>
         </div>
         <div class="grupo">
-          <label class="ctl"><small>Réplica</small><div><select id="replica"></select></div></label>
           <label class="ctl"><small>Velocidad</small><div><input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></div></label>
         </div>
         <div class="grupo">
           <div class="ctl"><small>Vista · cámara común</small><div class="segmentado" id="vistas"><button data-vista="iso" class="activa" title="Isométrica">ISO</button><button data-vista="frente" title="Frente">FRT</button><button data-vista="lateral" title="Lateral">LAT</button><button data-vista="superior" title="Superior">SUP</button></div></div>
+          <div class="ctl"><small>Detalle · <span class="tecla">D</span></small><div class="segmentado"><button id="btnDetalle" class="activa" aria-pressed="true" title="Mostrar u ocultar el recuadro que sigue a la grúa (tecla D)">GRÚA</button></div></div>
         </div>
         <div class="grupo reloj">
           <div class="ctl"><small>Tiempo simulado · <span class="tecla">Espacio</span></small><div><span id="reloj">0</span><span>s</span></div></div>
@@ -485,7 +486,7 @@
       </div>
 
       <section class="resultados tarjeta" id="resultados">
-        <div class="tarjeta-cab"><span class="n">R</span>Resultado de esta réplica</div>
+        <div class="tarjeta-cab"><span class="n">R</span>Resultado de la carrera</div>
         <div class="tabla-ancha"><table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table></div>
       </section>
 
@@ -596,12 +597,12 @@ function prepararEscena() {
   ES_H = -POS[0] - CEN[0] * FIL_M + FIL_M / 2; ES_X = -POS[1] - CEN[1] * COL_M + COL_M / 2;
   // el suelo baja si el E/S queda por debajo de la base de la estantería
   SUELO = Math.min(0, ES_H - FIL_M / 2);
-  // Estación E/S al otro lado del pasillo, frente a la grúa, con la superficie a la altura de la carga:
-  // mesa de transferencia en el punto E/S, cinta de entrada a su izquierda (los ítems esperan en cola) y cinta de salida a su derecha
-  ESTACION = { z: RIEL + 0.95, z0: RIEL + 0.45, z1: RIEL + 1.45, h: ES_H + 0.05, mesa: 0.55, cinta: 3.4, paso: 1 };
+  // Punto E/S al otro lado del pasillo, frente a la grúa, a la altura de la carga (z0..z1). Detrás, alejándose del pasillo,
+  // una zona de espera (z1..zC) para los ítems que aguardan su turno: el que llega mientras otro sale y los que se reubican temporalmente
+  ESTACION = { h: ES_H + 0.05, mesa: 0.55, z0: RIEL + 0.45, z1: RIEL + 1.45, z: RIEL + 0.95, paso: 1, lugares: 3 };
+  ESTACION.zC = ESTACION.z1 + 0.15 + ESTACION.lugares * ESTACION.paso;
   // el margen derecho y el frontal dejan sitio a las cotas del largo y la altura
-  const anchoES = ESTACION.mesa + ESTACION.cinta + 0.6;
-  LIM = { x0: Math.min(-2, ES_X - anchoES), x1: Math.max(LARGO + 2.4, ES_X + anchoES), y0: Math.min(0, RIEL - 1.2), y1: Math.max(FONDO, ESTACION.z1) + 2.1, h0: SUELO, h1: Math.max(ALTURA, ESTACION.h) + 1.6 };
+  LIM = { x0: Math.min(-2, ES_X - 1.5), x1: Math.max(LARGO + 2.4, ES_X + 1.5), y0: Math.min(0, RIEL - 1.2), y1: Math.max(FONDO, ESTACION.zC) + 2.1, h0: SUELO, h1: Math.max(ALTURA, ESTACION.h) + 1.6 };
   // la horquilla llega al centro del hueco cuando está dentro del canal; esta distancia reparte la transición desde el pasillo
   DEN_Z = Math.max(RIEL - ((CAPAS - 1) * PRO_M + CEN[2] * PRO_M), 1e-6);
   // Proporción del panel: la de la escena vista en isométrico, para no dejar márgenes vacíos
@@ -728,7 +729,7 @@ class Panel {
       // el ítem ya recorrió la cinta de entrada (ver planificarLlegadas) y espera en la cola hasta que la grúa lo toma
       const ll = this.llegadas.find(x => x.i === this.idx);
       this.cola.push(this.pieza(e[2], [this.ranura(this.cola.length)], e[0], 0, { dur: 400, entra: !ll || ll.t1 <= ll.t0 }));
-      this.textoAccion = 'Llega el SKU ' + e[2] + ' por la cinta de entrada';
+      this.textoAccion = 'Llega el SKU ' + e[2] + ' al E/S';
     } else if (tipo === 'M') {
       // las posiciones se pasan a coordenadas de la estantería (se resta su posición en el modelo)
       this.mov = { t0: e[0], dur: e[2], x0: e[3] - POS[0], y0: e[4] - POS[1], x1: e[5] - POS[0], y1: e[6] - POS[1], txy: e[7], z0: e[8] - POS[2], z1: e[9] - POS[2], ini: e[10], fin: e[11] };
@@ -757,7 +758,7 @@ class Panel {
           const tk = ev[k][1];
           if (tk === 'J') {
             const pz = this.cola[ev[k][2] < 0 ? this.cola.length + ev[k][2] : ev[k][2]];
-            if (pz) pz.prepos = { t0: e[0], t1: e[0] + e[2], desde: this.puntoPieza(pz, e[0]).pos };
+            if (pz) pz.prepos = { t0: e[0], t1: e[0] + e[2], pts: [this.puntoPieza(pz, e[0]).pos, this.puntoMesa()] };
           }
           if (tk === 'J' || tk === 'I' || tk === 'S' || tk === 'T') break;
         }
@@ -780,26 +781,27 @@ class Panel {
       const pz = this.cola.splice(e[2], 1)[0];
       this.mano = pz ? pz.sku : 0;
       if (pz) {
-        const desde = this.puntoPieza(pz, e[0]).pos, mesa = this.puntoMesa(), dist = Math.hypot(desde[0] - mesa[0], desde[1] - mesa[1]);
-        // si en el mismo instante otro ítem sale por la mesa, la cinta espera a que la deje libre
-        const previa = this.salidas[this.salidas.length - 1], libre = previa && previa.t0 === e[0] ? previa.tv0 + 0.3 * previa.dur : relojVisual;
-        this.trans = this.pieza(pz.sku, [desde], e[0], dsim, { tipo: 'J', d1: dist > 0.01 ? 250 + 250 * dist : 0, tv0: Math.max(relojVisual, libre) });
+        const ruta = this.rutaAMesa(pz, e[0]), largo = this.largo(ruta);
+        // si en ese momento otro ítem se está retirando del punto E/S, este espera a que quede libre
+        this.trans = this.pieza(pz.sku, ruta, e[0], dsim, { tipo: 'J', d1: largo > 0.01 ? 250 + 260 * largo : 0, tv0: Math.max(relojVisual, this.puntoLibre()) });
       }
       this.reacomodarCola(e[0]);
-      this.textoAccion = 'La grúa toma el SKU ' + this.mano + ' de la cinta de entrada';
+      this.textoAccion = 'La grúa toma el SKU ' + this.mano + ' en el E/S';
     } else if (tipo === 'I') {
-      // reubicación temporal: la horquilla deja el ítem en la mesa y la cinta lo lleva al final de la cola
+      // reubicación temporal: la horquilla deja el ítem en el punto E/S y de ahí pasa a la zona de espera
       this.terminarTransferencia();
-      this.trans = this.pieza(this.mano, [this.puntoCargaES(), this.puntoMesa(), this.ranura(this.cola.length)], e[0], dsim, { dur: 900, tipo: 'I' });
+      const ruta = [this.puntoCargaES(), this.puntoMesa(), this.ranura(this.cola.length)];
+      this.trans = this.pieza(this.mano, ruta, e[0], dsim, { dur: this.duracion(ruta), tipo: 'I' });
       this.cola.push(this.trans);
-      this.textoAccion = 'Deja el SKU ' + this.mano + ' en la cinta de entrada (espera temporal)'; this.mano = 0;
+      this.textoAccion = 'Deja el SKU ' + this.mano + ' en espera en el E/S (reubicación temporal)'; this.mano = 0;
     } else if (tipo === 'S') {
-      // la horquilla deja el ítem en la mesa y la cinta de salida se lo lleva; sigue avanzando aunque la grúa ya haga otra cosa
+      // la horquilla deja el ítem en el punto E/S y el ítem se retira del sistema; sigue aunque la grúa ya haga otra cosa
       this.terminarTransferencia();
-      this.trans = this.pieza(this.mano, [this.puntoCargaES(), this.puntoMesa(), this.finSalida()], e[0], dsim, { dur: 1300, tipo: 'S', sale: true });
+      const mesa = this.puntoMesa(), ruta = [this.puntoCargaES(), mesa, this.arriba(mesa)];
+      this.trans = this.pieza(this.mano, ruta, e[0], dsim, { dur: 1100, tipo: 'S', sale: true });
       this.salidas.push(this.trans);
       if (this.destinoES) this.destinoES.fin = relojVisual;
-      this.textoAccion = 'Entrega el SKU ' + this.mano + ' a la cinta de salida'; this.mano = 0;
+      this.textoAccion = 'Entrega el SKU ' + this.mano + ' en el E/S'; this.mano = 0;
     } else if (tipo === 'F') {
       if (this.tarea >= 0 && this.ticks[this.tarea].className.indexOf('omitida') < 0) {
         this.ticks[this.tarea].classList.remove('actual'); this.ticks[this.tarea].classList.add('hecha');
@@ -830,17 +832,40 @@ class Panel {
   puntoPieza(pz, tiempo, carga) {
     // ítem de la cola que la cinta adelanta hasta la mesa, en tiempo de simulación
     if (pz.prepos && tiempo >= pz.prepos.t0) {
-      const a = pz.prepos.desde, b = this.puntoMesa(), f = Math.min(1, (tiempo - pz.prepos.t0) / (pz.prepos.t1 - pz.prepos.t0)), k = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
-      return { pos: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k], seg: 0, local: f, p: f };
+      const f = Math.min(1, (tiempo - pz.prepos.t0) / (pz.prepos.t1 - pz.prepos.t0));
+      return Object.assign(this.recorrer(pz.prepos.pts, f), { p: f });
     }
     if (pz.tipo === 'J') return this.puntoToma(pz, tiempo, carga);
-    const p = this.progresoPieza(pz, tiempo), pts = pz.pts;
+    const p = this.progresoPieza(pz, tiempo);
+    return Object.assign(this.recorrer(pz.pts, p), { p });
+  }
+  // Punto de una polilínea en la fracción f del recorrido: el tiempo se reparte según el largo de cada tramo y cada tramo arranca y frena suave
+  recorrer(pts, f) {
     const largos = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1], q[2] - pts[i][2])), total = largos.reduce((a, b) => a + b, 0);
-    if (total < 1e-6 || p >= 1) return { pos: pts[pts.length - 1], seg: largos.length - 1, local: 1, p };
-    let d = p * total, seg = 0;
+    if (total < 1e-6 || f >= 1) return { pos: pts[pts.length - 1], seg: Math.max(0, largos.length - 1), local: 1 };
+    let d = Math.max(0, f) * total, seg = 0;
     while (seg < largos.length - 1 && d > largos[seg]) { d -= largos[seg]; seg++; }
-    const f = largos[seg] > 0 ? Math.min(1, d / largos[seg]) : 1, k = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2, a = pts[seg], b = pts[seg + 1];
-    return { pos: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k], seg, local: f, p };
+    const g = largos[seg] > 0 ? Math.min(1, d / largos[seg]) : 1, k = g < 0.5 ? 2 * g * g : 1 - Math.pow(-2 * g + 2, 2) / 2, a = pts[seg], b = pts[seg + 1];
+    return { pos: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k], seg, local: g };
+  }
+  largo(pts) { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1], pts[i][2] - pts[i - 1][2]); return L; }
+  // milisegundos reales que tarda una pieza en recorrer una polilínea
+  duracion(pts) { return 300 + 280 * this.largo(pts); }
+  // Lo que le falta a un ítem de la zona de espera para llegar al punto E/S
+  // Si la cinta ya lo estaba adelantando (prepos), sigue desde donde va
+  rutaAMesa(pz, tiempo) {
+    const mesa = this.puntoMesa();
+    if (pz.prepos) {
+      const f = Math.max(0, Math.min(1, (tiempo - pz.prepos.t0) / (pz.prepos.t1 - pz.prepos.t0))), q = this.recorrer(pz.prepos.pts, f);
+      return f >= 1 ? [mesa] : [q.pos].concat(pz.prepos.pts.slice(q.seg + 1));
+    }
+    return [this.puntoPieza(pz, tiempo).pos, mesa];
+  }
+  // Instante (reloj visual) en que el último ítem entregado ya se retiró y deja libre el punto E/S
+  puntoLibre() {
+    let libre = relojVisual;
+    this.salidas.forEach(sz => { libre = Math.max(libre, sz.tv0 + sz.dur * 0.7); });
+    return libre;
   }
   // Toma de la cola en dos fases: la cinta lleva el ítem hasta la mesa (d1 ms) y la horquilla lo sube al carro (d2 ms)
   // La subida se dibuja relativa al carro: con carga y descarga instantáneas la grúa arranca en el mismo instante,
@@ -852,17 +877,17 @@ class Panel {
     if (pz.dsim > 0) ms = Math.min(ms, Math.max(0, (tiempo - pz.t0) / pz.dsim) * (d1 + d2));
     if (pz.listo || ms >= d1 + d2) return { pos: c, seg: 1, local: 1, p: 1 };
     const suave = f => { f = Math.max(0, Math.min(1, f)); return f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2; };
-    if (ms < d1) { const f = ms / d1, k = suave(f), a = pz.pts[0]; return { pos: [a[0] + (mesa[0] - a[0]) * k, a[1] + (mesa[1] - a[1]) * k, a[2] + (mesa[2] - a[2]) * k], seg: 0, local: Math.max(0, f), p: 0 }; }
+    if (ms < d1) { const f = Math.max(0, ms / d1); return { pos: this.recorrer(pz.pts, f).pos, seg: 0, local: f, p: 0 }; }
     const f = (ms - d1) / d2, k = 1 - suave(f);
     return { pos: [c[0] + (mesa[0] - cES[0]) * k, c[1] + (mesa[1] - cES[1]) * k, c[2] + (mesa[2] - cES[2]) * k], seg: 1, local: f, p: (ms / (d1 + d2)) };
   }
-  // Puntos de la estación (centro del ítem): la ranura 0 de la cola es la más cercana a la mesa; si no caben, se apilan en la última
+  // Puntos de la estación (centro del ítem). La ranura 0 de la zona de espera es la más cercana al punto E/S; si no caben, se apilan en la última
   ranura(i) {
-    const S = ESTACION, n = Math.floor(S.cinta / S.paso), j = Math.min(i, n - 1);
-    return [ES_X - S.mesa - S.paso / 2 - j * S.paso, S.h + 0.35 + 0.72 * Math.max(0, i - n + 1), S.z];
+    const S = ESTACION, j = Math.min(i, S.lugares - 1);
+    return [ES_X, S.h + 0.35 + 0.72 * Math.max(0, i - S.lugares + 1), S.z1 + 0.15 + S.paso / 2 + j * S.paso];
   }
-  inicioEntrada() { const S = ESTACION; return [ES_X - S.mesa - S.cinta + 0.4, S.h + 0.35, S.z]; }
-  finSalida() { const S = ESTACION; return [ES_X + S.mesa + S.cinta - 0.4, S.h + 0.35, S.z]; }
+  // los ítems entran y salen del sistema por el punto E/S: aparecen bajando sobre él y se retiran subiendo
+  arriba(q) { return [q[0], q[1] + 1.1, q[2]]; }
   puntoMesa() { return [ES_X, ESTACION.h + 0.35, ESTACION.z]; }
   puntoCargaES() { return [ES_X, ES_H + 0.4, RIEL]; }
   // Cuando sale un ítem de la cola, los que esperan detrás avanzan una ranura
@@ -879,9 +904,9 @@ class Panel {
     if (this.trans && this.trans.tipo === 'J') this.trans.listo = true;
     this.trans = null;
   }
-  // Llegadas por la cinta de entrada. En el modelo el ítem aparece en el E/S al empezar su tarea (evento A) y suele tomarse en el mismo instante,
-  // así que se dibuja recorriendo la cinta durante el final de la tarea anterior y llega justo en ese instante, en tiempo de simulación
-  // Se detiene en la cola, junto a la mesa: la mesa queda libre para el ítem que entrega la tarea anterior en ese mismo instante
+  // Llegadas al E/S. En el modelo el ítem aparece en el E/S al empezar su tarea (evento A) y suele tomarse en el mismo instante,
+  // así que se dibuja bajando sobre la zona de espera durante el final de la tarea anterior y queda ahí justo en ese instante, en tiempo de simulación
+  // Espera junto al punto E/S y no sobre él: el punto queda libre para el ítem que entrega la tarea anterior en ese mismo instante
   planificarLlegadas() {
     const ev = this.d.eventos; this.llegadas = [];
     let n = 0, tLibre = 0, tAnterior = 0, tActual = 0;
@@ -890,21 +915,21 @@ class Panel {
       if (e[1] === 'T') { tAnterior = tActual; tActual = e[0]; }
       else if (e[1] === 'A') {
         const t0 = Math.max(tLibre, tAnterior);
-        this.llegadas.push({ i, sku: e[2], t0: e[0] - 0.6 * (e[0] - t0), t1: e[0], ranura: n });
+        this.llegadas.push({ i, sku: e[2], t0: e[0] - 0.25 * (e[0] - t0), t1: e[0], ranura: n });
         n++;
       } else if (e[1] === 'I') { n++; tLibre = e[0]; }
       else if (e[1] === 'J') { n = Math.max(0, n - 1); tLibre = e[0]; }
     }
   }
-  // Ítem que todavía recorre la cinta de entrada en el instante dado (o null)
+  // Ítem que todavía está llegando en el instante dado (o null)
   llegadaEnCurso(tiempo) {
     const L = this.llegadas;
     while (this.iLlegada < L.length && L[this.iLlegada].t1 <= tiempo) this.iLlegada++;
     const ll = L[this.iLlegada];
     if (!ll || tiempo < ll.t0 || ll.t1 <= ll.t0) return null;
-    const a = this.inicioEntrada(), b = this.ranura(ll.ranura), f = (tiempo - ll.t0) / (ll.t1 - ll.t0);
+    const b = this.ranura(ll.ranura), a = this.arriba(b), f = (tiempo - ll.t0) / (ll.t1 - ll.t0);
     const k = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
-    return { sku: ll.sku, pos: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k], op: Math.min(1, f / 0.15) };
+    return { sku: ll.sku, pos: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k], op: Math.min(1, f / 0.4) };
   }
   // Al saltar al final no hay nada que animar: todo queda en su sitio
   asentar() {
@@ -957,7 +982,8 @@ class Panel {
       grua: std(0.5, 0.15), carro: std(0.5, 0.15), horquilla: std(0.5, 0.2), carga: std(0.6, 0.02),
       sombraTray: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 }), tray: new THREE.MeshBasicMaterial({ color: 0xffffff }),
       destino: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.3, depthWrite: false }), bordeDestino: new THREE.LineBasicMaterial({ transparent: true }),
-      rejilla: new THREE.LineBasicMaterial(), rejillaFuerte: new THREE.LineBasicMaterial(), cota: new THREE.LineBasicMaterial() };
+      rejilla: new THREE.LineBasicMaterial(), rejillaFuerte: new THREE.LineBasicMaterial(), cota: new THREE.LineBasicMaterial(),
+      discontinua: new THREE.LineDashedMaterial({ dashSize: 0.18, gapSize: 0.12 }) };
     const caja = (mat, sx, sy, sz, x, y, z) => {
       const m = new THREE.Mesh(GEO_CAJA, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); esc.add(m); return m;
     };
@@ -997,32 +1023,26 @@ class Panel {
     esc.add(items);
     this.matriz = new THREE.Matrix4(); this.colorTmp = new THREE.Color();
 
-    // Estación E/S: mesa de transferencia frente a la grúa, cinta de entrada a la izquierda y cinta de salida a la derecha
-    // Las dos cintas avanzan en el mismo sentido del pasillo: los ítems llegan por la izquierda y se van por la derecha
-    const S = ESTACION, hondo = S.z1 - S.z0, altoM = S.h - SUELO, altoPata = S.h - 0.1 - SUELO;
-    caja(M.plataforma, 2 * S.mesa, altoM, hondo, ES_X, SUELO + altoM / 2, S.z);
-    const nR = Math.round(S.cinta / 0.25), rodillos = new THREE.InstancedMesh(GEO_CAJA, M.rodillo, 2 * nR);
-    rodillos.frustumCulled = false; esc.add(rodillos);
-    const flecha = new THREE.Shape(); flecha.moveTo(0.2, 0); flecha.lineTo(-0.12, 0.24); flecha.lineTo(-0.12, -0.24); flecha.closePath();
-    const geoFlecha = new THREE.ShapeGeometry(flecha); this.propios.push(geoFlecha);
-    const contorno = (x, ancho) => {
-      const b = new THREE.LineSegments(new THREE.EdgesGeometry(GEO_CAJA), new THREE.LineBasicMaterial({ transparent: true }));
-      b.scale.set(ancho + 0.2, 0.04, hondo + 0.2); b.position.set(x, S.h + 0.02, S.z); b.visible = false; esc.add(b); this.propios.push(b.geometry); return b;
+    // Punto E/S: una placa delgada (no un bloque) con contorno, cruz de centrado y una línea de referencia discontinua hasta el suelo
+    // Detrás, la zona de espera, marcada solo con un contorno discontinuo
+    const S = ESTACION, hondo = S.z1 - S.z0, ancho = 2 * S.mesa;
+    this.placaES = caja(M.plataforma, ancho, 0.03, hondo, ES_X, S.h - 0.015, S.z);
+    const marca = [], r = 0.22, xm = ES_X, ym = S.h + 0.004, zm = S.z;
+    marca.push(xm - r, ym, zm, xm + r, ym, zm, xm, ym, zm - r, xm, ym, zm + r);
+    lineas(marca, M.cota);
+    const discontinua = (puntos) => {
+      const geo = new THREE.BufferGeometry().setFromPoints(puntos.map(q => new THREE.Vector3(...q)));
+      const l = new THREE.Line(geo, M.discontinua); l.computeLineDistances(); esc.add(l); this.propios.push(geo); return l;
     };
-    this.cintas = [-1, 1].map((lado, j) => {
-      const x0 = lado < 0 ? ES_X - S.mesa - S.cinta : ES_X + S.mesa, xc = x0 + S.cinta / 2;
-      // largueros, patas y rodillos
-      [S.z0 + 0.03, S.z1 - 0.03].forEach(z => {
-        caja(M.acero, S.cinta, 0.1, 0.06, xc, S.h - 0.04, z);
-        [x0 + 0.1, x0 + S.cinta - 0.1].forEach(x => caja(M.acero, 0.06, altoPata, 0.06, x, SUELO + altoPata / 2, z));
-      });
-      for (let k = 0; k < nR; k++) rodillos.setMatrixAt(j * nR + k, tmp.compose(pos.set(x0 + (k + 0.5) * S.cinta / nR, S.h - 0.03, S.z), q, esq.set(0.05, 0.05, hondo - 0.1)));
-      // flechas del sentido de avance, pintadas sobre los rodillos
-      const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
-      [0.3, 0.7].forEach(f => { const m = new THREE.Mesh(geoFlecha, mat); m.rotation.x = -Math.PI / 2; m.position.set(x0 + f * S.cinta, S.h + 0.004, S.z); esc.add(m); });
-      return { mat, borde: contorno(xc, S.cinta), xc };
-    });
-    this.bordeMesa = contorno(ES_X, 2 * S.mesa);
+    if (S.h - SUELO > 0.15) discontinua([[ES_X, SUELO + 0.01, S.z], [ES_X, S.h - 0.03, S.z]]);
+    const z0c = S.z1 + 0.15, x0c = ES_X - S.mesa, x1c = ES_X + S.mesa, yc = S.h + 0.004;
+    discontinua([[x0c, yc, z0c], [x1c, yc, z0c], [x1c, yc, S.zC], [x0c, yc, S.zC], [x0c, yc, z0c]]);
+    const contorno = (z, fondo) => {
+      const c = new THREE.LineSegments(new THREE.EdgesGeometry(GEO_CAJA), new THREE.LineBasicMaterial({ transparent: true }));
+      c.scale.set(ancho + 0.2, 0.04, fondo + 0.2); c.position.set(ES_X, S.h + 0.02, z); c.visible = false; esc.add(c); this.propios.push(c.geometry); return c;
+    };
+    this.bordeMesa = contorno(S.z, hondo);
+    this.bordeCola = contorno((z0c + S.zC) / 2, S.zC - z0c);
 
     // rieles del pasillo (suelo y techo) y sus postes
     // el riel cubre la estantería y el E/S
@@ -1064,7 +1084,7 @@ class Panel {
     this.trayecto = new THREE.Group(); this.trayecto.visible = false;
     this.trayecto.add(this.sombraTray, this.dashes, this.flecha, this.codo); esc.add(this.trayecto);
 
-    // rótulos de la estantería (números y cotas) y de la estación E/S, aparte para que el detalle del E/S muestre solo los suyos
+    // rótulos de la estantería (números y cotas) y del punto E/S, aparte: el detalle de la grúa oculta los de la estantería
     this.rotulos = new THREE.Group(); this.rotulosES = new THREE.Group(); esc.add(this.rotulos, this.rotulosES);
     this.aplicarTema();
   }
@@ -1074,7 +1094,7 @@ class Panel {
     const M = this.mat, T = this.tema = { almacenar: css('--almacenar'), recuperar: css('--recuperar'), acento: css('--acento'), suave: css('--suave'), tenue: css('--tenue'), texto: css('--texto'),
       tinta: css('--vp-tinta'), carro: css('--vp-carro'), acero: css('--vp-acero'), fondo: css('--vp-fondo') };
     M.suelo.color.set(css('--vp-suelo')); M.pasillo.color.set(css('--vp-pasillo')); M.fondo.color.set(css('--hueco'));
-    M.rejilla.color.set(css('--vp-rejilla')); M.rejillaFuerte.color.set(css('--vp-rejilla-fuerte')); M.cota.color.set(T.tenue);
+    M.rejilla.color.set(css('--vp-rejilla')); M.rejillaFuerte.color.set(css('--vp-rejilla-fuerte')); M.cota.color.set(T.tenue); M.discontinua.color.set(T.suave);
     M.acero.color.set(T.acero); M.plataforma.color.set(T.tinta); M.rodillo.color.set(T.acero);
     M.grua.color.set(T.texto); M.carro.color.set(T.carro); M.horquilla.color.set(T.acero);
     this.bordeCarro.material.color.set(T.texto);
@@ -1086,19 +1106,17 @@ class Panel {
     const paso = n => n <= 12 ? 1 : (n <= 30 ? 5 : 10);
     // en estanterías grandes los rótulos crecen con la escena para seguir siendo legibles
     const k = Math.max(1, Math.min(2.4, Math.max(LARGO, ALTURA) / 12));
-    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % paso(COLUMNAS) === 0 || c === COLUMNAS - 1) sprite(rotulo(String(c + 1), T.suave, 72), (c + 0.5) * COL_M, 0.05, ESTACION.z1 + 0.5, 0.9 * k, 0.45 * k);
+    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % paso(COLUMNAS) === 0 || c === COLUMNAS - 1) sprite(rotulo(String(c + 1), T.suave, 72), (c + 0.5) * COL_M, 0.05, (FONDO + ESTACION.z0) / 2, 0.9 * k, 0.45 * k);
     for (let f = 0; f < FILAS; f++) if (f === 0 || (f + 1) % paso(FILAS) === 0 || f === FILAS - 1) sprite(rotulo(String(f + 1), T.suave, 72), -0.45 - 0.2 * k, (f + 0.5) * FIL_M, FONDO, 0.9 * k, 0.45 * k);
     // valor de las cotas, en metros
     const { zC, xC } = this.cotas;
     sprite(rotulo(fmt1(LARGO) + ' m', T.suave, 60), LARGO / 2, 0.05, zC + 0.3 + 0.15 * k, 1.5 * k, 0.75 * k);
     sprite(rotulo(fmt1(ALTURA) + ' m', T.suave, 60), xC + 0.3 + 0.5 * k, ALTURA / 2, 0, 1.5 * k, 0.75 * k);
-    const S = ESTACION, [ent, sal] = this.cintas;
+    const S = ESTACION;
     rot = this.rotulosES;
     sprite(rotulo('E/S', '#ffffff', 96, true), ES_X, S.h + 1.35, S.z, 1.8, 0.9);
-    sprite(rotulo('ENTRADA', T.almacenar, 52, true), ES_X - S.mesa - S.cinta + 0.9, S.h + 0.95, S.z, 1.7, 0.85);
-    sprite(rotulo('SALIDA', T.recuperar, 52, true), ES_X + S.mesa + S.cinta - 0.9, S.h + 0.95, S.z, 1.7, 0.85);
-    ent.mat.color.set(tono(T.almacenar, 0.85)); sal.mat.color.set(tono(T.recuperar, 0.85));
-    ent.borde.material.color.set(T.almacenar); sal.borde.material.color.set(T.recuperar); this.bordeMesa.material.color.set(T.acento);
+    sprite(rotulo('ESPERA', T.suave, 52, true), ES_X, S.h + 0.12, S.zC + 0.45, 1.5, 0.75);
+    this.bordeMesa.material.color.set(T.acento); this.bordeCola.material.color.set(T.almacenar);
     this.sucioItems = true;
   }
   liberar() {
@@ -1228,12 +1246,13 @@ class Panel {
       m.material.opacity = op; m.material.depthWrite = op > 0.99;
       m.material.color.set(this.colorSku(pz.sku)); m.position.set(q.pos[0], q.pos[1], q.pos[2]); m.visible = true;
     });
-    // la cinta de entrada se marca mientras hay ítems esperando y la de salida cuando un ítem va hacia ella o la recorre
+    // la zona de espera se marca mientras hay ítems esperando y el punto E/S durante una transferencia o cuando la grúa va a entregar
     if (this.destinoES && this.destinoES.fin && ahora - this.destinoES.fin > 500) this.destinoES = null;
-    const [ent, sal] = this.cintas;
-    ent.borde.visible = this.cola.length > 0 || !!llega; ent.borde.material.opacity = pulso;
-    sal.borde.visible = this.salidas.length > 0 || !!this.destinoES; sal.borde.material.opacity = pulso;
-    this.bordeMesa.visible = !!this.trans; this.bordeMesa.material.opacity = pulso;
+    this.bordeCola.visible = this.cola.length > 0 || !!llega; this.bordeCola.material.opacity = pulso;
+    const marcaES = this.trans || this.salidas.length || this.destinoES;
+    this.bordeMesa.visible = !!marcaES; this.bordeMesa.material.opacity = pulso;
+    const tipoES = this.trans ? this.trans.tipo : 'S';
+    this.bordeMesa.material.color.set(tipoES === 'J' ? T.almacenar : tipoES === 'S' ? T.recuperar : T.acento);
     // la horquilla sale hacia la mesa durante la transferencia, solo si la grúa sigue frente a ella
     let alcance = 0;
     const frenteES = Math.abs(e.X - ES_X) < 0.05 && Math.abs(e.H - ES_H) < 0.05 && e.Y >= RIEL - 0.02;
@@ -1283,18 +1302,20 @@ class Panel {
     g.clearRect(0, 0, ANCHO, ALTO);
     g.drawImage(RENDER.domElement, 0, 0, ANCHO, ALTO);
     this.dibujarEjes();
-    this.dibujarDetalle();
+    this.dibujarDetalle(e);
   }
 
-  // Detalle del E/S: en estanterías grandes la estación ocupa pocos píxeles, así que se repite ampliada en una esquina
-  // con la misma orientación de la cámara; si con el zoom ya se ve grande, el recuadro no aparece
-  dibujarDetalle() {
-    const S = ESTACION, cam = this.camara, w = Math.round(Math.min(300, ANCHO * 0.4)), h = Math.round(w * 0.6), x = ANCHO - w - 10, y = ALTO - h - 10;
-    const extremo = sx => new THREE.Vector3(ES_X + sx * (S.mesa + S.cinta), S.h, S.z).project(cam);
-    const anchoPx = Math.abs(extremo(1).x - extremo(-1).x) / 2 * ANCHO, semi = 5.2;
-    if (anchoPx > w * (2 * (S.mesa + S.cinta)) / (2 * semi)) return;
+  // Detalle de la grúa: en estanterías grandes el carro y la horquilla ocupan pocos píxeles, así que se repiten ampliados en una esquina,
+  // siguiendo al carro y con la misma orientación de la cámara; si con el zoom ya se ven grandes, el recuadro no aparece
+  dibujarDetalle(e) {
+    if (!mostrarDetalle) return;
+    const cam = this.camara, w = Math.round(Math.min(300, ANCHO * 0.4)), h = Math.round(w * 0.6), x = ANCHO - w - 10, y = ALTO - h - 10, semi = 3.4;
+    // píxeles por metro en la vista principal, medidos en la posición del carro
+    const a = new THREE.Vector3(e.X, e.H, RIEL).project(cam), b = new THREE.Vector3(e.X + 1, e.H, RIEL).project(cam);
+    if (Math.hypot(b.x - a.x, (b.y - a.y) * ALTO / ANCHO) / 2 * ANCHO > 0.8 * w / (2 * semi)) return;
     const c = this.camDetalle || (this.camDetalle = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, this.diag * 3));
-    const centro = new THREE.Vector3(ES_X, ES_H + 0.3, S.z - 0.3);
+    // centrado en el carro, entre la cara de la estantería y el riel, para que se vean la celda y la horquilla
+    const centro = new THREE.Vector3(e.X, e.H + 0.2, RIEL - 0.3);
     c.position.copy(centro).add(new THREE.Vector3().subVectors(cam.position, this.objetivo)); c.lookAt(centro);
     c.left = -semi; c.right = semi; c.top = semi * h / w; c.bottom = -semi * h / w; c.updateProjectionMatrix();
     RENDER.setScissorTest(true); RENDER.setViewport(x, ALTO - y - h, w, h); RENDER.setScissor(x, ALTO - y - h, w, h);
@@ -1304,7 +1325,10 @@ class Panel {
     g.fillStyle = this.tema.fondo; g.fillRect(x, y, w, h);
     g.drawImage(RENDER.domElement, x * DPR, y * DPR, w * DPR, h * DPR, x, y, w, h);
     g.strokeStyle = this.tema.tenue; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-    g.font = '600 9px ' + FUENTE_MONO; g.textBaseline = 'top'; g.fillStyle = this.tema.suave; g.fillText('DETALLE E/S', x + 8, y + 7);
+    g.font = '600 9px ' + FUENTE_MONO; g.textBaseline = 'top';
+    const titulo = 'DETALLE GRÚA', tw = g.measureText(titulo).width;
+    g.fillStyle = this.tema.fondo; g.fillRect(x + 1, y + 1, tw + 14, 18);
+    g.fillStyle = this.tema.suave; g.fillText(titulo, x + 8, y + 6);
   }
   actualizarPie(tiempo) {
     const t = this.fin !== null ? this.fin : tiempo;
@@ -1447,7 +1471,23 @@ el('final').onclick = () => {
   paso(0);
 };
 el('velocidad').oninput = mostrarVelocidad;
-document.addEventListener('keydown', e => { if (e.code === 'Space' && !['SELECT', 'INPUT', 'TEXTAREA', 'BUTTON'].includes(e.target.tagName) && !el('vistaCarrera').hidden) { e.preventDefault(); el('jugar').click(); } });
+
+// Recuadro de detalle de la grúa: se puede ocultar si tapa parte de la escena; la elección se recuerda en este navegador
+let mostrarDetalle = true;
+try { mostrarDetalle = localStorage.getItem('asrs_detalle') !== 'no'; } catch (e) {}
+function ponerDetalle(v) {
+  mostrarDetalle = v;
+  const b = el('btnDetalle'); b.classList.toggle('activa', v); b.setAttribute('aria-pressed', String(v));
+  try { localStorage.setItem('asrs_detalle', v ? 'si' : 'no'); } catch (e) {}
+  redibujar();
+}
+el('btnDetalle').onclick = () => ponerDetalle(!mostrarDetalle);
+ponerDetalle(mostrarDetalle);
+document.addEventListener('keydown', e => {
+  if (['SELECT', 'INPUT', 'TEXTAREA', 'BUTTON'].includes(e.target.tagName) || el('vistaCarrera').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code === 'Space') { e.preventDefault(); el('jugar').click(); }
+  else if (e.code === 'KeyD') { e.preventDefault(); ponerDetalle(!mostrarDetalle); }
+});
 
 // Tema: automático (sigue al sistema), claro u oscuro
 const TEMAS = ['auto', 'claro', 'oscuro'], NOMBRES_TEMA = { auto: 'Auto', claro: 'Claro', oscuro: 'Oscuro' };
@@ -1469,7 +1509,6 @@ el('btnTema').onclick = () => {
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (temaActual === 'auto') aplicarTemaPagina(); });
 
 document.querySelectorAll('#vistas button').forEach(b => { b.onclick = () => { Object.assign(CAM, VISTAS[b.dataset.vista], { zoom: 1 }); marcarVista(b.dataset.vista); redibujar(); }; });
-el('replica').onchange = () => { replicaActual = +el('replica').value; construir(); };
 
 function construirLeyenda() {
   const item = (muestra, texto) => '<li>' + muestra + '<span>' + texto + '</span></li>';
@@ -1478,16 +1517,15 @@ function construirLeyenda() {
     item('<i class="punto" style="background:var(--recuperar)"></i>', '<b>Recuperar</b>: tarea, hueco del que se retira el ítem o ítem que sale por el E/S') +
     item('<i class="punto tray"></i>', '<b>Trayectoria Chebyshev</b>: x e y a la vez, cada eje a su velocidad; el punto marca dónde llega el eje más rápido') +
     item('<i class="punto" style="background:var(--acento)"></i>', '<b>Carro y horquilla</b> en naranja: la grúa entra o sale de un canal (eje z)') +
-    item('<i class="punto" style="background:var(--vp-tinta)"></i>', '<b>Estación E/S</b>: los ítems llegan por la cinta de entrada y esperan en cola; la horquilla los toma de la mesa y deja ahí los que salen, que se van por la cinta de salida') +
-    '</ul><p class="nota">Arrastra para girar, rueda para acercar, doble clic para restablecer. Fila 1 y columna 1 abajo a la izquierda; cada celda tiene ' + CAPAS + (CAPAS === 1 ? ' lugar' : ' lugares') +
+    item('<i class="punto" style="background:var(--vp-tinta)"></i>', '<b>Punto E/S</b>: placa frente a la grúa por donde entran y salen los ítems. Los que llegan bajan sobre la zona de espera (contorno discontinuo) hasta que la grúa los toma; los entregados se retiran subiendo. El borde se ilumina en verde al tomar y en azul al entregar') +
+    '</ul><p class="nota">Arrastra para girar, rueda para acercar, doble clic para restablecer; la tecla D muestra u oculta el detalle de la grúa. Fila 1 y columna 1 abajo a la izquierda; cada celda tiene ' + CAPAS + (CAPAS === 1 ? ' lugar' : ' lugares') +
     ' en profundidad. El color de los ítems depende de la política: mira la clave al pie de cada visor. Las cotas dan el largo y la altura de la estantería.</p>';
 }
 
 function cargarDatos(datos) {
+  // la carrera muestra la primera réplica; las demás siguen en los datos y cuentan en la estadística
   DATOS = datos; replicaActual = 0;
   prepararEscena();
-  const sel = el('replica'); sel.innerHTML = '';
-  DATOS.replicas.forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = String(i + 1).padStart(2, '0') + ' · semilla ' + r.semilla; sel.appendChild(o); });
   construirLeyenda();
   construir();
 }
@@ -1497,7 +1535,7 @@ function escenaVacia(texto) {
   paneles = []; DATOS = null;
   el('paneles').innerHTML = '<div class="vacio-escena"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="14" width="40" height="36"/><path d="M8 26h40M8 38h40M21 14v36M34 14v36"/><path class="ac" d="M54 8v48M50 30h8"/></svg><p>' + texto + '</p></div>';
   el('tablero').classList.add('vacio');
-  el('marcador').innerHTML = ''; el('leyenda').innerHTML = ''; el('replica').innerHTML = '';
+  el('marcador').innerHTML = ''; el('leyenda').innerHTML = '';
   el('resultados').classList.remove('visible'); el('estadistica').classList.remove('visible');
 }
 
@@ -1619,7 +1657,6 @@ const PESTANAS = [
   { id: 'ejecucion', nombre: 'Ejecución', secciones: [
     { titulo: 'Réplicas y semilla', items: [
       { fila: campo('escalar_semilla', null, 'Semilla', { entero: true, min: 0, max: 2147483647, ayuda: 'La réplica i usa semilla + i; misma semilla, mismo resultado' }) },
-      { fila: campo('escalar_replicas_animadas', null, 'Réplicas animadas', { entero: true, min: 1, max: 10, ayuda: 'Las que se pueden ver en la carrera' }) },
       { fila: campo('escalar_cantidad_replicas', null, 'Réplicas para la estadística', { entero: true, min: 0, max: 2000, ayuda: '0 para omitir la estadística' }) },
       { nota: 'Las réplicas de la estadística se ejecutan en paralelo y pueden tardar según el tamaño de la estantería.' }
     ] }
@@ -1887,6 +1924,8 @@ function leerFormulario() {
     if (!isFinite(v)) { inp.classList.add('invalido'); primerError = primerError || ((c.nombreError || c.etiqueta) + ': falta el valor.'); return; }
     if (c.indice === null) cfg[c.clave] = v; else cfg[c.clave][c.indice] = v;
   });
+  // la carrera anima solo la primera réplica, así que no se graban más; la estadística usa todas las réplicas pedidas
+  cfg.escalar_replicas_animadas = 1;
   cfg.texto_origen_tareas = el('origenTareas').value; cfg.texto_tareas_csv = el('textoTareas').value; cfg.escalar_porcentaje_historial = Number(el('pctHistorial').value);
   if (origenDatos()) {
     // Con datos reales los campos de la demanda generada no se usan y no deben bloquear la simulación
