@@ -4,294 +4,552 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Simulador ASRS</title>
+<script>
+  // El tema elegido se aplica antes de pintar para que la página no parpadee
+  try { const t = localStorage.getItem('asrs_tema'); if (t === 'claro') document.documentElement.dataset.theme = 'light'; else if (t === 'oscuro') document.documentElement.dataset.theme = 'dark'; } catch (e) {}
+</script>
 <style>
+  /* ================= tokens =================
+     Concepto: estación de ingeniería. Papel y tinta, líneas de 1 px, un solo acento (naranja de seguridad),
+     números en monoespaciada y rótulos pequeños en versalitas como en un cajetín de plano. */
   :root {
-    --fondo: #f6f7f9; --tarjeta: #ffffff; --borde: #dde1e7; --texto: #1c2430; --suave: #5b6675;
-    --vacio: #e6e9ee; --hueco: #cfd5de; --acento: #2563eb; --oro: #c9962b; --plata: #8791a0; --bronce: #a8683b;
-    --clase1: #3b82f6; --clase2: #f59e0b; --clase3: #a855f7; --pendiente: #cfd5de;
-    --almacenar: #0d9488; --recuperar: #db2777; --omitida: #dc2626; --error-fondo: #fde8e8; --exito: #15803d;
+    color-scheme: light;
+    --fondo: #e8eaed; --superficie: #f6f7f8; --elevado: #ffffff; --hundido: #eef0f2;
+    --linea: #d6dade; --linea-fuerte: #b3bac2; --texto: #121519; --suave: #56606a; --tenue: #88909a;
+    --acento: #ff5a1f; --sobre-acento: #ffffff;
+    --almacenar: #0ca678; --recuperar: #3b5bdb; --omitida: #e03131; --exito: #0ca678; --error-fondo: #fdecec;
+    --clase1: #f59f00; --clase2: #15aabf; --clase3: #ae3ec9;
+    --tarjeta: #f6f7f8; --borde: #d6dade; --vacio: #dfe3e7; --hueco: #e9ecef; --pendiente: #cfd5db;
+    --cuadricula: rgba(18, 21, 25, .055);
+    /* escena 3D */
+    --vp-fondo: #fbfbfc; --vp-suelo: #f1f3f5; --vp-pasillo: #e6e9ed; --vp-rejilla: #dde1e6; --vp-rejilla-fuerte: #c3cad2;
+    --vp-acero: #59616b; --vp-tinta: #22272e; --vp-carro: #f8f9fa;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", "JetBrainsMono Nerd Font", "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+    --alto-barra: 52px;
   }
   @media (prefers-color-scheme: dark) {
-    :root {
-      --fondo: #12161c; --tarjeta: #1a2029; --borde: #2c3542; --texto: #e6eaf0; --suave: #93a0b2;
-      --vacio: #262e3a; --hueco: #171d26; --acento: #5b9bff; --oro: #e3b341; --plata: #a1abb9; --bronce: #cd8a57;
-      --clase1: #5b9bff; --clase2: #fbbf24; --clase3: #c084fc; --pendiente: #323c4a;
-      --almacenar: #2dd4bf; --recuperar: #f472b6; --omitida: #f87171; --error-fondo: #3a1d1f; --exito: #4ade80;
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --fondo: #0b0c0e; --superficie: #131518; --elevado: #191c20; --hundido: #0f1113;
+      --linea: #262a30; --linea-fuerte: #3a4048; --texto: #e8ebee; --suave: #9aa3ac; --tenue: #69717a;
+      --acento: #ff6b35;
+      --almacenar: #20c997; --recuperar: #6d8bff; --omitida: #ff6b6b; --exito: #20c997; --error-fondo: #2a1416;
+      --clase1: #fcc419; --clase2: #3bc9db; --clase3: #da77f2;
+      --tarjeta: #131518; --borde: #262a30; --vacio: #20242a; --hueco: #171a1e; --pendiente: #2c3138;
+      --cuadricula: rgba(232, 235, 238, .04);
+      --vp-fondo: #0f1114; --vp-suelo: #14171b; --vp-pasillo: #1b1f24; --vp-rejilla: #1f2328; --vp-rejilla-fuerte: #2d333a;
+      --vp-acero: #7d8691; --vp-tinta: #3d444d; --vp-carro: #2b3138;
     }
   }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --fondo: #0b0c0e; --superficie: #131518; --elevado: #191c20; --hundido: #0f1113;
+    --linea: #262a30; --linea-fuerte: #3a4048; --texto: #e8ebee; --suave: #9aa3ac; --tenue: #69717a;
+    --acento: #ff6b35;
+    --almacenar: #20c997; --recuperar: #6d8bff; --omitida: #ff6b6b; --exito: #20c997; --error-fondo: #2a1416;
+    --clase1: #fcc419; --clase2: #3bc9db; --clase3: #da77f2;
+    --tarjeta: #131518; --borde: #262a30; --vacio: #20242a; --hueco: #171a1e; --pendiente: #2c3138;
+    --cuadricula: rgba(232, 235, 238, .04);
+    --vp-fondo: #0f1114; --vp-suelo: #14171b; --vp-pasillo: #1b1f24; --vp-rejilla: #1f2328; --vp-rejilla-fuerte: #2d333a;
+    --vp-acero: #7d8691; --vp-tinta: #3d444d; --vp-carro: #2b3138;
+  }
+
+  /* ================= base ================= */
   * { box-sizing: border-box; }
-  [hidden] { display: none !important; }       /* el atributo hidden debe ganar a cualquier display de las clases */
-  body { margin: 0; background: var(--fondo); color: var(--texto); font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
-  .contenedor { max-width: 1680px; margin: 0 auto; padding: 0 16px 48px; }
-  /* barra superior fija: marca, pasos, estado y acción principal */
-  .barra-sup { position: sticky; top: 0; z-index: 30; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px 24px;
-    margin: 0 -16px 16px; padding: 10px 16px; background: var(--fondo); border-bottom: 1px solid var(--borde); }
-  h1 { font-size: 19px; margin: 0; line-height: 1.2; }
-  .sub { color: var(--suave); margin: 0; font-size: 12.5px; }
-  .pasos { display: flex; justify-content: center; gap: 6px; min-width: 0; }
-  .pasos button { display: flex; align-items: center; gap: 10px; text-align: left; border: 1px solid transparent; background: transparent; padding: 6px 14px 6px 8px; border-radius: 12px; color: var(--suave); min-width: 0; }
-  .pasos button b { display: inline-flex; flex: none; width: 26px; height: 26px; border-radius: 50%; align-items: center; justify-content: center; background: var(--vacio); font-size: 13px; }
-  .pasos button span { display: grid; line-height: 1.2; font-weight: 600; min-width: 0; }
-  .pasos button small { font-weight: 400; font-size: 11.5px; color: var(--suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
-  .pasos button.activo { background: var(--tarjeta); border-color: var(--borde); color: var(--texto); }
-  .pasos button.activo b { background: var(--acento); color: #fff; }
-  .pasos button:disabled { opacity: .45; }
-  .barra-accion { display: flex; align-items: center; gap: 10px; justify-self: end; }
-  .barra-accion .primario { padding: 8px 22px; }
-  .cambios { color: var(--oro); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+  [hidden] { display: none !important; }       /* el atributo hidden gana a cualquier display de las clases */
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; color: var(--texto); font: 14px/1.45 var(--sans);
+    background-color: var(--fondo);
+    background-image: linear-gradient(var(--cuadricula) 1px, transparent 1px), linear-gradient(90deg, var(--cuadricula) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .mono, .micro { font-family: var(--mono); }
+  .micro { font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--tenue); }
+  b { font-weight: 600; }
+  code { font: 12px var(--mono); background: var(--hundido); border: 1px solid var(--linea); border-radius: 2px; padding: 1px 4px; }
+
+  button, select, input, textarea { font: inherit; color: var(--texto); }
+  button, select {
+    height: 30px; padding: 0 10px; border: 1px solid var(--linea-fuerte); border-radius: 3px; background: var(--elevado);
+    font: 500 12.5px var(--sans); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    transition: border-color .12s, background-color .12s, color .12s;
+  }
+  button:hover, select:hover { border-color: var(--texto); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:disabled:hover { border-color: var(--linea-fuerte); }
+  button.primario { background: var(--acento); border-color: var(--acento); color: var(--sobre-acento); font-weight: 600; }
+  button.primario:hover { border-color: var(--acento); filter: brightness(1.07); }
+  button.icono { width: 30px; padding: 0; }
+  button.fantasma { background: transparent; border-color: transparent; color: var(--suave); }
+  button.fantasma:hover { border-color: var(--linea-fuerte); color: var(--texto); }
+  button svg, .ico { width: 15px; height: 15px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+  select {
+    appearance: none; -webkit-appearance: none; padding-right: 26px; justify-content: flex-start; font-family: var(--mono); font-size: 12px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2388909a' stroke-width='1.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 9px center;
+  }
+  input[type=number], input[type=text] {
+    height: 28px; width: 100%; min-width: 0; padding: 0 8px; border: 1px solid var(--linea); border-radius: 3px; background: var(--elevado);
+    font: 500 12.5px var(--mono); font-variant-numeric: tabular-nums;
+  }
+  input[type=number] { text-align: right; -moz-appearance: textfield; }
+  input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+  input[type=text] { font-family: var(--sans); }
+  input:hover { border-color: var(--linea-fuerte); }
+  input:disabled { color: var(--tenue); background: var(--hundido); }
+  input:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
+  input.invalido, textarea.invalido { border-color: var(--omitida); background: var(--error-fondo); }
+  input[type=checkbox] {
+    appearance: none; -webkit-appearance: none; width: 14px; height: 14px; margin: 2px 0 0; flex: none; cursor: pointer;
+    border: 1px solid var(--linea-fuerte); border-radius: 2px; background: var(--elevado); display: inline-grid; place-content: center;
+  }
+  input[type=checkbox]:checked { background: var(--acento); border-color: var(--acento); }
+  input[type=checkbox]:checked::after { content: ''; width: 7px; height: 3.5px; border-left: 2px solid #fff; border-bottom: 2px solid #fff; transform: translateY(-1px) rotate(-45deg); }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 130px; height: 18px; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 2px; background: var(--linea-fuerte); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 9px; height: 16px; margin-top: -7px; background: var(--texto); border-radius: 1px; }
+  input[type=range]::-moz-range-track { height: 2px; background: var(--linea-fuerte); }
+  input[type=range]::-moz-range-thumb { width: 9px; height: 16px; border: 0; background: var(--texto); border-radius: 1px; }
+  textarea {
+    width: 100%; resize: vertical; padding: 6px 8px; border: 1px solid var(--linea); border-radius: 3px; background: var(--elevado);
+    font: 12px/1.4 var(--mono);
+  }
+  .nota { margin: 0; font-size: 12px; line-height: 1.5; color: var(--tenue); }
+
+  /* ================= barra superior (cajetín) ================= */
+  header.barra {
+    position: sticky; top: 0; z-index: 30; min-height: 52px; display: flex; align-items: stretch;
+    background: var(--superficie); border-bottom: 1px solid var(--linea);
+  }
+  header.barra > * { display: flex; align-items: center; }
+  .marca { gap: 10px; padding: 0 18px 0 16px; border-right: 1px solid var(--linea); min-width: 0; }
+  .marca svg { width: 26px; height: 26px; flex: none; }
+  .marca div { display: grid; line-height: 1.15; min-width: 0; }
+  .marca strong { font-size: 14px; font-weight: 650; letter-spacing: .005em; white-space: nowrap; }
+  .marca small { font: 500 10px var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--tenue); white-space: nowrap; }
+  /* pasos de la herramienta: escenario, carrera y resultados */
+  .pasos { gap: 0; padding: 0 6px; min-width: 0; }
+  .pasos button {
+    height: 100%; border: 0; border-radius: 0; background: none; padding: 0 14px; gap: 10px; justify-content: flex-start; text-align: left;
+    color: var(--suave); box-shadow: inset 0 -2px 0 transparent; min-width: 0;
+  }
+  .pasos button > span:first-child { font: 600 11px var(--mono); color: var(--tenue); }
+  .pasos .paso-txt { display: grid; line-height: 1.25; min-width: 0; }
+  .pasos strong { font: 600 11px var(--mono); letter-spacing: .07em; text-transform: uppercase; }
+  .pasos small { font: 400 11px var(--sans); color: var(--tenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px; }
+  .pasos button:hover:not(:disabled) { color: var(--texto); }
+  .pasos button.activa { color: var(--texto); box-shadow: inset 0 -2px 0 var(--acento); }
+  .pasos button.activa > span:first-child { color: var(--acento); }
+  .pasos button:disabled:hover { border-color: transparent; }
+  .barra-der { margin-left: auto; gap: 8px; padding: 0 12px; }
+  .estado-sis {
+    display: inline-flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px;
+    font: 600 10.5px var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--suave);
+    border: 1px solid var(--linea); border-radius: 3px; background: var(--hundido); white-space: nowrap;
+  }
+  .estado-sis i { width: 7px; height: 7px; border-radius: 50%; background: var(--tenue); }
+  .estado-sis.trabajando i { background: var(--acento); animation: latido 1s ease-in-out infinite; }
+  .estado-sis.listo i { background: var(--almacenar); }
+  .estado-sis.error { color: var(--omitida); } .estado-sis.error i { background: var(--omitida); }
+  .cambios { font: 600 10.5px var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--acento); white-space: nowrap; }
+  .barra-accion { display: flex; align-items: center; gap: 6px; }
+  .barra-accion .primario { min-width: 104px; }
   .menu-mas { position: relative; }
-  .menu-mas summary { list-style: none; cursor: pointer; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--borde); border-radius: 8px; background: var(--tarjeta); font-size: 18px; line-height: 1; }
+  .menu-mas summary {
+    list-style: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; cursor: pointer;
+    border: 1px solid var(--linea-fuerte); border-radius: 3px; background: var(--elevado); color: var(--suave);
+  }
+  .menu-mas summary:hover, .menu-mas[open] summary { border-color: var(--texto); color: var(--texto); }
   .menu-mas summary::-webkit-details-marker { display: none; }
-  .menu-lista { position: absolute; right: 0; top: 40px; display: grid; gap: 2px; min-width: 200px; padding: 6px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.28); z-index: 40; }
-  .menu-lista button { text-align: left; border: 0; background: transparent; padding: 8px 10px; }
-  .menu-lista button:hover { background: var(--vacio); }
-  .vista-app { min-width: 0; }
-  @media (max-width: 1100px) { .barra-sup { grid-template-columns: 1fr auto; } .pasos { grid-column: 1 / -1; grid-row: 2; justify-content: stretch; } .pasos button { flex: 1; } }
-  @media (max-width: 640px) { .pasos button small, .sub { display: none; } .pasos { gap: 4px; } .pasos button { padding: 6px 6px 6px 4px; gap: 5px; font-size: 13.5px; } .pasos button b { width: 22px; height: 22px; font-size: 12px; } .pasos button span { overflow: hidden; text-overflow: ellipsis; } .barra-accion .primario { padding: 8px 14px; } }
-  button, select, input { font: inherit; color: var(--texto); }
-  button, select { background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
-  button:hover, select:hover { border-color: var(--acento); }
-  button.primario { background: var(--acento); border-color: var(--acento); color: #fff; font-weight: 600; min-width: 96px; }
-  button:disabled { opacity: .55; cursor: not-allowed; }
-  select { max-width: 100%; min-width: 0; text-overflow: ellipsis; }
-  input[type=number], input[type=text] { background: var(--fondo); border: 1px solid var(--borde); border-radius: 6px; padding: 4px 8px; width: 100%; min-width: 0; }
-  input:focus-visible, button:focus-visible, select:focus-visible { outline: 2px solid var(--acento); outline-offset: 1px; }
-  input.invalido { border-color: var(--omitida); }
-  label { color: var(--suave); display: flex; align-items: center; gap: 8px; }
-  input[type=range] { width: 150px; accent-color: var(--acento); }
+  .menu-lista {
+    position: absolute; right: 0; top: 36px; z-index: 40; display: grid; gap: 2px; min-width: 210px; padding: 4px;
+    background: var(--elevado); border: 1px solid var(--linea-fuerte); border-radius: 3px; box-shadow: 0 12px 32px -12px rgba(0, 0, 0, .45);
+  }
+  .menu-lista button { justify-content: flex-start; border-color: transparent; background: transparent; }
+  .menu-lista button:hover { background: var(--hundido); border-color: transparent; }
+  @keyframes latido { 50% { opacity: .25; } }
+  #btnTema { font: 600 10.5px var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--suave); }
 
-  /* escenario: cuatro tarjetas que se reparten el ancho, sin pestañas que escondan nada */
-  .esc-cabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; margin-bottom: 14px; }
-  .esc-cabecera .nota { margin: 0; }
+  /* ================= estructura ================= */
+  main { min-width: 0; padding: 16px 20px 56px; }
+
+  /* ================= paso 1: escenario en cuatro tarjetas, sin pestañas que escondan nada ================= */
+  .esc-cabecera { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 24px; margin-bottom: 14px; }
+  .esc-cabecera .resumen-param { flex: 0 1 560px; }
+  .esc-cabecera .nota { max-width: 62ch; }
+  .resumen-param { display: grid; grid-template-columns: 1.45fr 1fr 1fr 1fr; border: 1px solid var(--linea); border-radius: 3px; background: var(--hundido); }
+  .ficha-res { min-width: 0; padding: 6px 8px 7px; border-left: 1px solid var(--linea); font: 600 13px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ficha-res:first-child { border-left: 0; }
+  .ficha-res small { display: block; margin-bottom: 1px; font: 600 9px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--tenue); }
+  .ficha-res.mal { color: var(--omitida); background: var(--error-fondo); }
   /* Almacén a la izquierda; a la derecha Demanda y, a su lado o debajo, Políticas y Ejecución: el orden de lectura sigue la numeración */
-  .escenario { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 16px; align-items: start; }
-  .esc-der { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; min-width: 0; }
-  .esc-col { display: grid; gap: 16px; align-content: start; min-width: 0; }
-  @media (max-width: 1200px) { .escenario { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .esc-der { grid-template-columns: minmax(0, 1fr); } }
-  @media (max-width: 720px) { .escenario { grid-template-columns: minmax(0, 1fr); } }
-  .esc-tarjeta { min-width: 0; grid-template-columns: minmax(0, 1fr); margin: 0; padding: 14px 14px 4px; background: var(--vacio); border: 1px solid var(--borde); border-radius: 14px; display: grid; gap: 10px; }
-  .esc-tarjeta > header { display: grid; grid-template-columns: auto 1fr; align-items: center; column-gap: 10px; margin-bottom: 2px; }
-  .esc-tarjeta > header b { display: inline-flex; width: 26px; height: 26px; border-radius: 8px; align-items: center; justify-content: center; background: var(--acento); color: #fff; font-size: 13px; grid-row: 1 / 3; }
-  .esc-tarjeta > header h2 { margin: 0; font-size: 16px; }
-  .esc-tarjeta > header p { margin: 0; color: var(--suave); font-size: 12.5px; }
-  .esquema-rack { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 6px; }
-  .esquema-rack svg { display: block; width: 100%; height: auto; max-height: 200px; }
-  .resumen-param { display: flex; flex-wrap: wrap; gap: 8px; }
-  .ficha-res { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 6px 14px; min-width: 96px; font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .ficha-res small { display: block; color: var(--suave); font-weight: 400; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; }
-  .ficha-res.mal { border-color: var(--omitida); color: var(--omitida); }
-  .seccion { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 12px 12px; }
-  .seccion > h3, .seccion > summary { margin: 0 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--suave); }
-  .seccion > summary { cursor: pointer; margin: 0; list-style: none; display: flex; justify-content: space-between; }
-  .seccion > summary::-webkit-details-marker { display: none; }
-  .seccion > summary::after { content: '+'; font-weight: 400; }
-  details.seccion[open] > summary { margin-bottom: 8px; } details.seccion[open] > summary::after { content: '–'; }
-  .seccion.inactivo > .cuerpo-seccion { opacity: .5; }
-  .cuerpo-seccion { display: grid; gap: 10px; }
-  .campo { display: grid; grid-template-columns: minmax(0, 1fr) 92px; align-items: center; gap: 10px; font-size: 14px; }
-  .campo .etq { color: var(--texto); }
-  .campo .etq small, .trio-tit small { color: var(--suave); margin-left: 5px; font-size: 12px; font-weight: 400; }
-  .trio { display: grid; gap: 4px; }
-  .trio-tit { font-size: 13.5px; font-weight: 600; }
-  .trio-campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .trio-campos.dos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .trio-campos label, .bloque { display: grid; gap: 2px; color: var(--texto); }
-  .trio-campos small, .bloque small { color: var(--suave); font-size: 12px; }
-  .bloque small em { font-style: normal; opacity: .85; }
-  .nota { color: var(--suave); font-size: 12.5px; margin: 0; }
-  .politica-grupo { display: grid; gap: 6px; }
-  .sub-politica { margin: 0 0 4px 26px; padding: 8px 10px 10px; display: grid; gap: 8px; border-left: 3px solid var(--acento); background: var(--fondo); border-radius: 0 8px 8px 0; font-size: 13.5px; }
-  .sub-politica[hidden] { display: none; }
-  .sub-politica .nota { margin: 0; }
-  .tabla-clases { display: grid; grid-template-columns: 26px 78px minmax(0, 1fr); gap: 6px 8px; align-items: center; font-size: 13.5px; }
-  .tabla-clases.auto { grid-template-columns: 26px minmax(0, 1fr); }
-  .tabla-clases .enc { color: var(--suave); font-size: 12px; }
-  .tabla-clases .pct { color: var(--suave); font-variant-numeric: tabular-nums; font-size: 12.5px; }
-  textarea { font: 12.5px/1.35 ui-monospace, Consolas, monospace; color: var(--texto); background: var(--fondo); border: 1px solid var(--borde); border-radius: 6px; padding: 6px 8px; width: 100%; resize: vertical; }
-  textarea.invalido { border-color: var(--omitida); }
-  .resumen-datos { font-size: 13px; color: var(--suave); background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; padding: 8px 10px; overflow-wrap: anywhere; }
-  .resumen-datos.ok { color: var(--texto); border-color: var(--almacenar); }
-  .resumen-datos.error { color: var(--omitida); border-color: var(--omitida); }
+  .escenario { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 14px; align-items: start; }
+  .esc-der { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; min-width: 0; }
+  .esc-col { display: grid; gap: 14px; align-content: start; min-width: 0; }
+  .esc-tarjeta { counter-reset: seccion; }
+  .esc-tarjeta .tarjeta-cab .der { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--tenue); font-family: var(--sans); font-weight: 400; font-size: 11.5px; }
+  .esc-cuerpo { padding: 0 14px; }
+  .esquema-rack { margin-top: 14px; padding: 6px; border: 1px solid var(--linea); border-radius: 3px; background: var(--hundido); }
+  .esquema-rack svg { display: block; width: 100%; height: auto; max-height: 210px; }
+  .esquema-rack .nota { margin: 6px; }
+  .seccion { counter-increment: seccion; }
+  .seccion { padding: 14px 0 16px; border-bottom: 1px dashed var(--linea); }
+  .seccion:last-child { border-bottom: 0; }
   .seccion[hidden] { display: none; }
-  .grafico-demanda { display: flex; align-items: flex-end; gap: 1px; height: 64px; padding: 4px; background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px; }
-  .grafico-demanda i { flex: 1; min-width: 1px; border-radius: 2px 2px 0 0; }
-  .ficha { display: inline-flex; width: 22px; height: 22px; border-radius: 6px; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; color: #10151c; }
-  .botones-fila { display: flex; flex-wrap: wrap; gap: 8px; }
-  .politica { display: flex; gap: 8px; align-items: flex-start; color: var(--texto); font-size: 14px; }
-  .politica input { margin-top: 3px; accent-color: var(--acento); }
-  .politica small { display: block; color: var(--suave); font-size: 12.5px; }
+  .seccion > h3, .seccion > summary {
+    display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+    font: 600 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--suave);
+  }
+  .seccion > h3::before, .seccion > summary::before { content: attr(data-p) "." counter(seccion); color: var(--acento); }
+  .seccion > h3::after { content: ''; flex: 1; height: 1px; background: var(--linea); }
+  .seccion > summary { cursor: pointer; list-style: none; margin: 0; }
+  .seccion > summary::-webkit-details-marker { display: none; }
+  .seccion > summary::after { content: '+'; margin-left: auto; font-size: 14px; color: var(--tenue); }
+  details.seccion[open] > summary { margin-bottom: 12px; }
+  details.seccion[open] > summary::after { content: '−'; }
+  .seccion.inactivo > .cuerpo-seccion { opacity: .45; }
+  .cuerpo-seccion { display: grid; gap: 12px; }
+  .campo { display: grid; grid-template-columns: minmax(0, 1fr) 118px; align-items: center; gap: 10px; font-size: 13px; }
+  .campo .etq { color: var(--texto); }
+  .entrada { position: relative; display: block; min-width: 0; }
+  .entrada .u { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 500 10.5px var(--mono); color: var(--tenue); pointer-events: none; }
+  .trio { display: grid; gap: 5px; }
+  .trio-tit { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: var(--texto); }
+  .trio-tit small { font: 500 10.5px var(--mono); color: var(--tenue); }
+  .trio-campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .trio-campos.dos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .trio-campos label, .bloque { display: grid; gap: 3px; min-width: 0; }
+  .bloque select { width: 100%; min-width: 0; }
+  .trio-campos small, .bloque small { font: 600 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--tenue); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bloque small em { font-style: normal; text-transform: none; letter-spacing: 0; font-family: var(--sans); font-weight: 400; }
+  .tabla-clases { display: grid; grid-template-columns: 24px 92px minmax(0, 1fr); gap: 6px 10px; align-items: center; font-size: 13px; }
+  .tabla-clases .enc { font: 600 9.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--tenue); }
+  .tabla-clases .pct { font: 500 11.5px var(--mono); color: var(--suave); }
+  .tabla-clases.auto { grid-template-columns: 24px minmax(0, 1fr); }
+  .politica-grupo { display: grid; gap: 6px; }
+  /* parámetros propios de una política: debajo de ella y solo mientras está seleccionada */
+  .sub-politica { margin-left: 24px; padding: 10px 12px 12px; display: grid; gap: 10px; border-left: 2px solid var(--acento); background: var(--hundido); }
+  .sub-politica > b { font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--suave); }
+  .resumen-datos { padding: 8px 10px; border: 1px solid var(--linea); border-left-width: 3px; border-radius: 3px; background: var(--hundido); font-size: 12.5px; color: var(--suave); overflow-wrap: anywhere; }
+  .resumen-datos.ok { color: var(--texto); border-left-color: var(--almacenar); }
+  .resumen-datos.error { color: var(--omitida); border-left-color: var(--omitida); }
+  .grafico-demanda {
+    display: flex; align-items: flex-end; gap: 1px; height: 72px; padding: 6px 6px 0; border: 1px solid var(--linea); border-radius: 3px;
+    background-color: var(--hundido);
+    background-image: linear-gradient(var(--linea) 1px, transparent 1px); background-size: 100% 25%; background-position: 0 6px;
+  }
+  .grafico-demanda i { flex: 1; min-width: 1px; }
+  .ficha { display: inline-flex; width: 22px; height: 22px; border-radius: 2px; align-items: center; justify-content: center; font: 700 12px var(--mono); color: #10151c; }
+  .botones-fila { display: flex; gap: 6px; flex-wrap: wrap; }
+  .politica {
+    display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 10px; align-items: start; padding: 9px 10px; cursor: pointer;
+    border: 1px solid var(--linea); border-radius: 3px; background: var(--elevado); font-size: 13px; color: var(--texto);
+  }
+  .politica:hover { border-color: var(--linea-fuerte); }
+  .politica:has(input:checked) { border-color: var(--texto); }
+  .politica small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--tenue); }
 
-  /* avisos y progreso */
+  /* ================= avisos y progreso ================= */
   /* avisos flotantes abajo: no tapan la barra ni los controles; los de éxito se van solos */
-  .aviso { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: max-content; max-width: min(760px, calc(100% - 32px)); z-index: 50; display: none; border-radius: 12px; padding: 10px 14px; font-size: 14px; border: 1px solid var(--borde); background: var(--tarjeta); box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+  .aviso {
+    position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50; width: max-content; max-width: min(760px, calc(100% - 32px));
+    display: none; align-items: center; gap: 10px; padding: 9px 10px 9px 12px;
+    border: 1px solid var(--linea-fuerte); border-left: 3px solid var(--tenue); border-radius: 3px; background: var(--elevado); font-size: 13px;
+    box-shadow: 0 14px 36px -14px rgba(0, 0, 0, .5);
+  }
+  .aviso.visible { display: flex; }
   .aviso .progreso { min-width: min(520px, calc(100vw - 64px)); }
-  .aviso .cerrar-aviso { margin-left: 10px; border: 0; background: transparent; padding: 0 4px; color: var(--suave); }
-  .aviso.visible { display: flex; align-items: center; gap: 6px; }
-  .aviso.error { background: var(--error-fondo); border-color: var(--omitida); color: var(--omitida); }
-  .aviso.exito { border-color: var(--exito); }
-  .progreso { display: flex; align-items: center; gap: 12px; }
-  .progreso .barra { flex: 1; height: 10px; background: var(--vacio); border-radius: 5px; overflow: hidden; }
+  .aviso .cerrar-aviso { flex: none; width: 24px; height: 24px; padding: 0; border-color: transparent; background: transparent; color: var(--tenue); }
+  .aviso .cerrar-aviso:hover { color: var(--texto); border-color: var(--linea-fuerte); }
+  .aviso.error { border-left-color: var(--omitida); color: var(--omitida); background: var(--error-fondo); }
+  .aviso.exito { border-left-color: var(--almacenar); }
+  .progreso { display: flex; align-items: center; gap: 12px; width: 100%; font: 500 12px var(--mono); }
+  .progreso .barra { flex: 1; height: 4px; background: var(--vacio); overflow: hidden; }
   .progreso .barra i { display: block; height: 100%; width: 0; background: var(--acento); transition: width .25s; }
+  .progreso button { height: 26px; }
 
-  /* carrera */
-  .controles { position: sticky; top: var(--alto-barra, 66px); z-index: 5; box-shadow: 0 6px 16px -8px rgba(0,0,0,.45); display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
-  .reloj { margin-left: auto; font-variant-numeric: tabular-nums; font-weight: 600; font-size: 18px; }
-  .reloj small { color: var(--suave); font-weight: 400; font-size: 13px; }
-  .vistas { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0; padding-top: 8px; border-top: 1px solid var(--borde); font-size: 13px; color: var(--suave); }
-  .vistas button { padding: 3px 10px; font-size: 13px; }
-  .vistas small { margin-left: 6px; }
-  .ayuda { margin: 0 0 12px; font-size: 13px; color: var(--suave); }
-  .ayuda summary { cursor: pointer; width: fit-content; padding: 2px 0; }
-  .ayuda summary:hover { color: var(--texto); }
-  .leyenda { display: flex; flex-direction: column; gap: 4px; color: var(--suave); font-size: 13px; margin: 6px 0 0; padding: 10px 14px; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; }
-  .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
-  .punto { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
-  .marcador { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; }
-  .marcador h2, .resultados h2, .estadistica h2 { font-size: 14px; margin: 0 0 8px; color: var(--suave); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-  .fila { display: grid; grid-template-columns: 34px 170px 1fr 120px; align-items: center; gap: 10px; padding: 1px 0; }
-  .fila .lugar { font-weight: 700; color: var(--suave); text-align: center; }
-  .fila .barra { height: 12px; background: var(--vacio); border-radius: 6px; overflow: hidden; }
-  .fila .barra i { display: block; height: 100%; width: 0; background: var(--acento); border-radius: 6px; }
-  .fila .valor { text-align: right; font-variant-numeric: tabular-nums; color: var(--suave); }
+  /* ================= barra de transporte ================= */
+  .controles {
+    position: sticky; top: calc(var(--alto-barra) + 10px); z-index: 10; display: flex; flex-wrap: wrap; align-items: stretch;
+    margin-bottom: 14px; background: var(--superficie); border: 1px solid var(--linea); border-radius: 4px;
+    box-shadow: 0 10px 24px -18px rgba(0, 0, 0, .55);
+  }
+  .controles > .grupo { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-right: 1px solid var(--linea); }
+  .controles > .grupo:last-child { border-right: 0; }
+  #jugar { min-width: 112px; }
+  .ctl { display: grid; gap: 1px; }
+  .ctl > small { font: 600 9px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--tenue); }
+  .ctl > div { display: flex; align-items: center; gap: 8px; }
+  .ctl > .segmentado { display: inline-flex; gap: 0; justify-self: start; }
+  .ctl select { height: 26px; }
+  #velocidadTexto { font: 500 11.5px var(--mono); color: var(--suave); min-width: 64px; }
+  .segmentado { display: inline-flex; border: 1px solid var(--linea-fuerte); border-radius: 3px; overflow: hidden; }
+  .segmentado button { height: 26px; border: 0; border-radius: 0; border-left: 1px solid var(--linea); background: var(--elevado); padding: 0 9px; font: 600 10.5px var(--mono); letter-spacing: .05em; color: var(--suave); }
+  .segmentado button:first-child { border-left: 0; }
+  .segmentado button:hover { color: var(--texto); }
+  .segmentado button.activa { background: var(--texto); color: var(--superficie); }
+  .reloj { margin-left: auto; justify-content: flex-end; text-align: right; }
+  .reloj .ctl > div { justify-content: flex-end; gap: 4px; }
+  #reloj { font: 600 22px/1 var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .reloj .ctl > div span:last-child { font: 500 12px var(--mono); color: var(--tenue); }
+  .tecla { font: 600 9.5px var(--mono); color: var(--tenue); border: 1px solid var(--linea); border-bottom-width: 2px; border-radius: 3px; padding: 1px 5px; }
+
+  /* ================= tablero: visores + riel de telemetría ================= */
+  .tablero { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+  .tablero.vacio { grid-template-columns: minmax(0, 1fr); }
+  .tablero.vacio .riel { display: none; }
+  .riel { position: sticky; top: calc(var(--alto-barra) + 86px); display: grid; gap: 14px; }
+  .tarjeta { background: var(--superficie); border: 1px solid var(--linea); border-radius: 4px; min-width: 0; }
+  .tarjeta-cab {
+    display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 12px; border-bottom: 1px solid var(--linea);
+    font: 600 10.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--suave);
+  }
+  .tarjeta-cab .n { color: var(--acento); }
+  .tarjeta-cab .der { margin-left: auto; display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; }
+  .tarjeta-cuerpo { padding: 10px 12px; }
+  details.tarjeta > summary { cursor: pointer; list-style: none; }
+  details.tarjeta > summary::-webkit-details-marker { display: none; }
+  details.tarjeta > summary::after { content: '+'; margin-left: auto; font-size: 14px; color: var(--tenue); }
+  details.tarjeta[open] > summary::after { content: '−'; }
+  details.tarjeta:not([open]) > summary { border-bottom: 0; }
+
+  /* marcador */
+  #marcador { padding: 2px 12px 4px; }
+  .fila { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 5px 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--linea); }
+  .fila:last-child { border-bottom: 0; }
+  .fila .lugar { font: 600 12px var(--mono); color: var(--tenue); }
+  .fila .nombre { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .fila .nombre em { font: 600 10px var(--mono); font-style: normal; color: var(--tenue); margin-right: 6px; }
+  .fila .valor { font: 500 12px var(--mono); font-variant-numeric: tabular-nums; color: var(--suave); }
+  .fila .barra { grid-column: 2 / -1; height: 3px; background: var(--vacio); overflow: hidden; }
+  .fila .barra i { display: block; height: 100%; width: 0; background: var(--texto); }
+  .fila.termino .lugar, .fila.termino .valor { color: var(--texto); }
   .fila.termino .barra i { background: var(--almacenar); }
-  .paneles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); gap: 14px; }
-  .vacio-escena { background: var(--tarjeta); border: 1px dashed var(--borde); border-radius: 12px; padding: 40px 16px; text-align: center; color: var(--suave); }
-  .panel { background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 12px; padding: 12px; }
-  .panel.termino { border-color: var(--almacenar); }
-  .panel .cabecera { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-  .panel h3 { margin: 0; font-size: 16px; }
-  .leyenda-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; font-size: 12px; color: var(--suave); margin: -2px 0 8px; }
-  .leyenda-panel span { display: inline-flex; align-items: center; gap: 5px; }
-  .degradado { width: 90px; height: 10px; border-radius: 5px; border: 1px solid var(--borde); }
-  .insignia { font-weight: 700; font-size: 13px; padding: 2px 10px; border-radius: 999px; background: var(--vacio); color: var(--suave); }
-  .insignia.l1 { background: var(--oro); color: #fff; } .insignia.l2 { background: var(--plata); color: #fff; } .insignia.l3 { background: var(--bronce); color: #fff; }
-  canvas { width: 100%; height: auto; display: block; }
-  .estado { min-height: 62px; margin-bottom: 6px; }
-  .estado .linea { display: flex; align-items: center; gap: 10px; }
-  .estado .tipo { font-weight: 800; font-size: 20px; letter-spacing: .05em; color: var(--suave); }
-  .estado .tipo.almacenar { color: var(--almacenar); } .estado .tipo.recuperar { color: var(--recuperar); }
-  .estado .tipo.omitida { color: var(--omitida); }
-  .estado .chip { display: none; min-width: 30px; height: 30px; padding: 0 9px; border-radius: 7px; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; color: #10151c; white-space: nowrap; }
-  .estado .accion { display: block; color: var(--suave); font-size: 13px; min-height: 18px; margin-top: 2px; }
-  .tareas { display: grid; gap: 2px; margin: 10px 0 8px; }
-  .tareas i { height: 9px; border-radius: 2px; background: var(--pendiente); }
-  .tareas i.a { background: var(--almacenar); opacity: .35; } .tareas i.r { background: var(--recuperar); opacity: .35; }
-  .tareas i.hecha { opacity: 1; } .tareas i.actual { opacity: 1; outline: 2px solid var(--texto); outline-offset: 1px; }
+  .fila.termino:first-child .lugar { color: var(--acento); }
+
+  /* clave de lectura */
+  .clave { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 7px; font-size: 12.5px; color: var(--suave); }
+  .clave li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 8px; align-items: start; }
+  .punto { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-top: 3px; }
+  .punto.tray { height: 0; margin-top: 8px; border-top: 2px dashed var(--texto); border-radius: 0; width: 16px; }
+
+  /* visores */
+  .paneles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 400px), 1fr)); gap: 14px; min-width: 0; }
+  .panel { background: var(--superficie); border: 1px solid var(--linea); border-radius: 4px; overflow: hidden; min-width: 0; }
+  .vp-cab { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 12px; border-bottom: 1px solid var(--linea); }
+  .panel.termino .vp-cab { box-shadow: inset 0 2px 0 var(--almacenar); }
+  .vp-id { font: 700 10px var(--mono); letter-spacing: .04em; color: var(--superficie); background: var(--texto); padding: 2px 5px; border-radius: 2px; }
+  .panel h3 { margin: 0; font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .insignia { margin-left: auto; font: 700 11px var(--mono); padding: 2px 8px; border: 1px solid var(--linea-fuerte); border-radius: 2px; color: var(--suave); }
+  .insignia:empty { display: none; }
+  .insignia.l1 { background: var(--acento); border-color: var(--acento); color: var(--sobre-acento); }
+  .insignia.l2, .insignia.l3 { border-color: var(--texto); color: var(--texto); }
+  .estado { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 12px; background: var(--hundido); border-bottom: 1px solid var(--linea); }
+  .estado .tipo { font: 700 10.5px var(--mono); letter-spacing: .07em; padding: 3px 7px; border: 1px solid var(--linea-fuerte); border-radius: 2px; color: var(--suave); white-space: nowrap; }
+  .estado .tipo.almacenar { color: var(--almacenar); border-color: currentColor; }
+  .estado .tipo.recuperar { color: var(--recuperar); border-color: currentColor; }
+  .estado .tipo.omitida { color: var(--omitida); border-color: currentColor; }
+  .estado .tipo.fin { color: var(--texto); border-color: var(--texto); }
+  .estado .chip { display: none; height: 22px; padding: 0 7px; border-radius: 2px; align-items: center; font: 700 11px var(--mono); color: #10151c; white-space: nowrap; }
+  .estado .accion { flex: 1; min-width: 0; font-size: 12.5px; color: var(--suave); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .vp { position: relative; background: var(--vp-fondo); }
+  .vp canvas { display: block; width: 100%; height: auto; max-height: 70vh; object-fit: contain; }
+  .vp .esq { position: absolute; width: 10px; height: 10px; border: 0 solid var(--linea-fuerte); pointer-events: none; }
+  .vp .esq.a { top: 8px; left: 8px; border-width: 1px 0 0 1px; } .vp .esq.b { top: 8px; right: 8px; border-width: 1px 1px 0 0; }
+  .vp .esq.c { bottom: 8px; left: 8px; border-width: 0 0 1px 1px; } .vp .esq.d { bottom: 8px; right: 8px; border-width: 0 1px 1px 0; }
+  .vp .vp-etq { position: absolute; top: 7px; left: 24px; font: 600 9.5px var(--mono); letter-spacing: .09em; text-transform: uppercase; color: var(--tenue); pointer-events: none; }
+  .tareas { display: grid; gap: 2px; padding: 10px 12px 0; border-top: 1px solid var(--linea); }
+  .tareas i { height: 6px; border-radius: 1px; background: var(--pendiente); }
+  .tareas i.a { background: var(--almacenar); opacity: .28; } .tareas i.r { background: var(--recuperar); opacity: .28; }
+  .tareas i.hecha { opacity: 1; } .tareas i.actual { opacity: 1; outline: 1.5px solid var(--texto); outline-offset: 1px; }
   .tareas i.omitida { background: transparent; outline: 1px solid var(--omitida); outline-offset: -1px; opacity: 1; }
-  .pie { display: flex; justify-content: space-between; color: var(--suave); font-size: 13px; font-variant-numeric: tabular-nums; }
-  .nota-parcial { margin: 0 0 10px; padding: 8px 12px; border: 1px solid var(--oro); border-radius: 10px; color: var(--texto); }
-  .veredicto { background: var(--tarjeta); border: 1px solid var(--borde); border-left: 5px solid var(--almacenar); border-radius: 12px; padding: 16px 20px; margin-bottom: 14px; display: grid; gap: 6px; }
-  .veredicto h2 { margin: 0; font-size: 22px; line-height: 1.25; }
-  .veredicto p { margin: 0; color: var(--suave); }
-  .veredicto .cifras { display: flex; flex-wrap: wrap; gap: 8px 28px; margin-top: 6px; }
-  .veredicto .cifras div { display: grid; }
-  .veredicto .cifras b { font-size: 20px; font-variant-numeric: tabular-nums; }
-  .veredicto .cifras small { color: var(--suave); font-size: 12px; }
-  .veredicto.dudoso { border-left-color: var(--oro); }
-  .resultados, .estadistica { display: none; background: var(--tarjeta); border: 1px solid var(--borde); border-radius: 10px; padding: 12px 14px; margin-top: 14px; }
+  .vp-pie { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 14px; padding: 9px 12px 10px; }
+  .leyenda-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; font: 500 10.5px var(--mono); color: var(--tenue); }
+  .leyenda-panel span { display: inline-flex; align-items: center; gap: 5px; }
+  .leyenda-panel .punto { width: 9px; height: 9px; margin: 0; }
+  .degradado { width: 72px; height: 8px; border-radius: 1px; }
+  .pie { display: flex; gap: 14px; font: 500 11.5px var(--mono); font-variant-numeric: tabular-nums; color: var(--suave); }
+  .pie b { color: var(--texto); font-weight: 600; }
+  .vacio-escena {
+    grid-column: 1 / -1; display: grid; justify-items: center; gap: 14px; padding: 72px 24px; text-align: center; color: var(--suave);
+    border: 1px dashed var(--linea-fuerte); border-radius: 4px; background: var(--superficie);
+  }
+  .vacio-escena svg { width: 64px; height: 64px; stroke: var(--linea-fuerte); fill: none; stroke-width: 1; }
+  .vacio-escena svg .ac { stroke: var(--acento); stroke-width: 1.5; }
+  .vacio-escena p { margin: 0; max-width: 46ch; font-size: 13.5px; }
+
+  /* ================= informe: resultados y estadística ================= */
+  .resultados, .estadistica { display: none; margin-top: 14px; }
   .resultados.visible, .estadistica.visible { display: block; }
-  .resultados { margin-top: 0; overflow-x: auto; }
-  .estadistica .cabecera-est { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-  .estadistica .cabecera-est h2 { margin: 0; }
-  .estadistica .nota { margin: 8px 0 0; }
-  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--borde); }
-  th { color: var(--suave); font-weight: 600; font-size: 13px; }
-  td.num, th.num { text-align: right; }
-  tr.mejor td { font-weight: 700; }
-  td .ns { color: var(--oro); font-weight: 600; cursor: help; }
-  .celda-barra { position: relative; min-width: 110px; }
-  .celda-barra .b { position: absolute; left: 0; top: 50%; height: 14px; transform: translateY(-50%); background: var(--acento); opacity: .22; border-radius: 3px; }
-  .celda-barra .e { position: absolute; top: 50%; height: 2px; transform: translateY(-50%); background: var(--texto); opacity: .7; }
-  .celda-barra span { position: relative; }
   .tabla-ancha { overflow-x: auto; }
-  @media (max-width: 980px) { .app { grid-template-columns: minmax(0, 1fr); } .parametros { position: static; max-height: none; } }
-  @media (max-width: 640px) { .fila { grid-template-columns: 26px 110px 1fr 76px; gap: 6px; } .reloj { margin-left: 0; } }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { padding: 8px 12px; text-align: left; white-space: nowrap; background: var(--hundido); border-bottom: 1px solid var(--linea-fuerte); font: 600 9.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--tenue); }
+  td { padding: 8px 12px; border-bottom: 1px solid var(--linea); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.num, th.num { text-align: right; }
+  td.num { font: 500 12.5px var(--mono); font-variant-numeric: tabular-nums; }
+  td em { font: 600 10px var(--mono); font-style: normal; color: var(--tenue); margin-right: 6px; }
+  tr.mejor td { font-weight: 600; }
+  tr.mejor td:first-child { box-shadow: inset 2px 0 0 var(--acento); }
+  .celda-barra { position: relative; min-width: 160px; font: 500 12.5px var(--mono); }
+  .celda-barra .b { position: absolute; left: 12px; top: 50%; height: 16px; transform: translateY(-50%); background: var(--acento); opacity: .16; max-width: calc(100% - 24px); }
+  .celda-barra .e { position: absolute; top: 50%; height: 9px; transform: translate(12px, -50%); border: solid var(--texto); border-width: 0 1px; opacity: .7; max-width: calc(100% - 24px); }
+  .celda-barra .e::after { content: ''; position: absolute; left: 0; right: 0; top: 4px; height: 1px; background: var(--texto); }
+  .celda-barra span { position: relative; }
+  .estadistica .nota { padding: 10px 12px; border-top: 1px solid var(--linea); }
+  td .ns { font: 600 10px var(--mono); color: var(--clase1); cursor: help; margin-left: 4px; }
+  .nota-parcial { margin: 0 0 14px; padding: 8px 12px; border: 1px solid var(--linea); border-left: 3px solid var(--acento); border-radius: 3px; background: var(--superficie); font-size: 12.5px; color: var(--suave); }
+  .nota-parcial b { color: var(--texto); }
+  .vacio-res { margin-top: 14px; padding: 28px 16px; text-align: center; border: 1px dashed var(--linea-fuerte); border-radius: 4px; background: var(--superficie); font-size: 13px; }
+
+  /* ================= paso 3: primero la conclusión, después el detalle ================= */
+  .veredicto { display: grid; gap: 8px; padding: 16px 18px; background: var(--superficie); border: 1px solid var(--linea); border-left: 3px solid var(--almacenar); border-radius: 4px; }
+  .veredicto h2 { margin: 0; font-size: 20px; font-weight: 650; line-height: 1.25; }
+  .veredicto p { margin: 0; max-width: 92ch; color: var(--suave); }
+  .veredicto .cifras { display: flex; flex-wrap: wrap; gap: 10px 36px; margin-top: 4px; }
+  .veredicto .cifras div { display: grid; gap: 2px; }
+  .veredicto .cifras b { font: 600 20px var(--mono); font-variant-numeric: tabular-nums; }
+  .veredicto .cifras small { font: 600 9.5px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--tenue); }
+  .veredicto.dudoso { border-left-color: var(--clase1); }
+
+  .tarjeta-cab select { height: 24px; font-size: 11px; }
+
+  /* ================= adaptación ================= */
+  @media (max-width: 1200px) { .escenario { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .esc-der { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 1180px) { .tablero { grid-template-columns: minmax(0, 1fr); } .riel { position: static; order: -1; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-items: start; } }
+  /* con poco ancho los pasos pasan a una segunda línea de la barra */
+  @media (max-width: 1100px) {
+    header.barra { flex-wrap: wrap; }
+    .pasos { order: 3; flex: 1 0 100%; height: 46px; padding: 0; border-top: 1px solid var(--linea); }
+    .pasos button { flex: 1; }
+    .barra-der { min-height: 52px; }
+  }
+  @media (max-width: 980px) {
+    .controles { position: static; }
+    .marca small { display: none; }
+  }
+  @media (max-width: 720px) { .escenario { grid-template-columns: minmax(0, 1fr); } .esc-cabecera .resumen-param { flex-basis: 100%; } }
+  @media (max-width: 640px) {
+    main { padding: 12px 16px 40px; }
+    .paneles { grid-template-columns: minmax(0, 1fr); }
+    .marca { padding: 0 12px; border-right: 0; } .marca div { display: none; }
+    .pasos button { padding: 0 8px; gap: 6px; } .pasos small { display: none; }
+    #btnTema span, .cambios { display: none; }
+    #estadoSisTexto { display: none; } .estado-sis { padding: 0 9px; }
+    .barra-der { gap: 4px; padding: 0 6px; } .barra-accion .primario { min-width: 0; }
+    .controles > .grupo { border-right: 0; border-bottom: 1px solid var(--linea); width: 100%; }
+    .reloj { margin-left: 0; justify-content: flex-start; text-align: left; }
+    .estadistica .tarjeta-cab { flex-wrap: wrap; padding-bottom: 8px; }
+    .estadistica .tarjeta-cab .der { margin-left: 0; width: 100%; }
+    .estadistica .tarjeta-cab select { flex: 1; min-width: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 </style>
 </head>
 <body>
-<div class="contenedor">
-  <header class="barra-sup" id="barra">
-    <div class="marca">
-      <h1>Simulador ASRS</h1>
-      <p class="sub">Compara políticas de asignación de almacenamiento</p>
-    </div>
-    <nav class="pasos" id="pasos" aria-label="Pasos" style="display:none">
-      <button data-vista="escenario" class="activo"><b>1</b><span>Escenario<small id="subEscenario">Define el almacén y la demanda</small></span></button>
-      <button data-vista="carrera" disabled><b>2</b><span>Carrera<small id="subCarrera">Aún sin simular</small></span></button>
-      <button data-vista="resultados" disabled><b>3</b><span>Resultados<small id="subResultados">Aún sin simular</small></span></button>
-    </nav>
+<header class="barra" id="barra">
+  <div class="marca">
+    <svg viewBox="0 0 26 26" aria-hidden="true">
+      <rect x="0.5" y="0.5" width="25" height="25" rx="3" fill="var(--texto)"/>
+      <path d="M5 7.5h11M5 13h11M5 18.5h11M5 7.5v11M10.5 7.5v11M16 7.5v11" stroke="var(--superficie)" stroke-width="1.3" fill="none"/>
+      <rect x="19" y="5" width="2.6" height="16" fill="var(--acento)"/>
+    </svg>
+    <div><strong>Simulador ASRS</strong><small>Banco de pruebas · políticas de asignación</small></div>
+  </div>
+  <nav class="pasos" id="pasos" aria-label="Pasos" style="display:none">
+    <button data-vista="escenario" class="activa"><span>01</span><span class="paso-txt"><strong>Escenario</strong><small id="subEscenario">Define el almacén y la demanda</small></span></button>
+    <button data-vista="carrera" disabled><span>02</span><span class="paso-txt"><strong>Carrera</strong><small id="subCarrera">Aún sin simular</small></span></button>
+    <button data-vista="resultados" disabled><span>03</span><span class="paso-txt"><strong>Resultados</strong><small id="subResultados">Aún sin simular</small></span></button>
+  </nav>
+  <div class="barra-der">
+    <span class="cambios" id="estadoEscenario" hidden title="El escenario cambió después de la última simulación">● Cambios sin simular</span>
+    <span class="estado-sis" id="estadoSis"><i></i><span id="estadoSisTexto">En espera</span></span>
+    <button id="btnTema" class="fantasma" title="Tema: automático, claro u oscuro"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg><span>Auto</span></button>
     <div class="barra-accion" id="barraAccion" style="display:none">
-      <span class="cambios" id="estadoEscenario" hidden>● Cambios sin simular</span>
-      <button id="btnSimular" class="primario">Simular</button>
+      <button id="btnSimular" class="primario"><svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg>Simular</button>
       <details class="menu-mas" id="menuMas">
-        <summary aria-label="Más acciones">⋯</summary>
+        <summary role="button" aria-label="Más acciones" title="Más acciones"><svg class="ico" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="19" cy="12" r="1.2" fill="currentColor"/></svg></summary>
         <div class="menu-lista">
-          <button id="btnRestablecer" title="Vuelve a los valores iniciales">Restablecer valores</button>
-          <button id="btnGuardar" title="Descarga los parámetros en un archivo JSON">Guardar escenario…</button>
-          <button id="btnCargar" title="Carga parámetros desde un archivo JSON">Cargar escenario…</button>
+          <button id="btnRestablecer" title="Vuelve a los valores iniciales"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>Restablecer valores</button>
+          <button id="btnGuardar" title="Descarga los parámetros en un archivo JSON"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>Guardar escenario…</button>
+          <button id="btnCargar" title="Lee los parámetros de un archivo JSON"><svg viewBox="0 0 24 24"><path d="M12 15V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>Cargar escenario…</button>
         </div>
       </details>
       <input type="file" id="archivoConfig" accept="application/json,.json" hidden>
     </div>
-  </header>
+  </div>
+</header>
 
-  <div class="aviso" id="aviso"></div>
+<div class="aviso" id="aviso" role="status"></div>
 
-  <main>
-    <!-- 1. ESCENARIO: todo lo que se puede ajustar, a la vista y a todo el ancho -->
-    <section class="vista-app" id="vistaEscenario">
-      <div class="esc-cabecera">
-        <div class="resumen-param" id="resumenParam"></div>
-        <p class="nota">Ajusta lo que necesites y pulsa <b>Simular</b>. Los valores iniciales ya forman un escenario completo.</p>
+<main>
+  <!-- 1. ESCENARIO: todo lo que se puede ajustar, a la vista y a todo el ancho -->
+  <section id="vistaEscenario">
+    <div class="esc-cabecera">
+      <div class="resumen-param" id="resumenParam"></div>
+      <p class="nota">Ajusta lo que necesites y pulsa <b>Simular</b>. Los valores iniciales ya forman un escenario completo. Todas las políticas ejecutan la misma lista de tareas sobre un mismo reloj; gana la que termina primero.</p>
+    </div>
+    <div id="formulario" class="escenario"></div>
+  </section>
+
+  <!-- 2. CARRERA: las políticas ejecutan la misma lista de tareas sobre un mismo reloj -->
+  <section id="vistaCarrera" hidden>
+    <div class="controles" id="controles">
+      <div class="grupo">
+        <button id="jugar" class="primario"></button>
+        <button id="reiniciar" class="icono" title="Reiniciar la carrera" aria-label="Reiniciar"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+        <button id="final" class="icono" title="Ir al final" aria-label="Ir al final"><svg viewBox="0 0 24 24"><path d="M5 5l10 7-10 7z"/><path d="M19 5v14"/></svg></button>
       </div>
-      <div id="formulario" class="escenario"></div>
-    </section>
-
-    <!-- 2. CARRERA: las políticas ejecutan la misma lista de tareas sobre un mismo reloj -->
-    <section class="vista-app" id="vistaCarrera" hidden>
-      <div class="controles" id="controles">
-        <button id="jugar" class="primario">Iniciar</button>
-        <button id="reiniciar">Reiniciar</button>
-        <button id="final">Ir al final</button>
-        <label id="etqReplica">Réplica <select id="replica"></select></label>
-        <label>Velocidad <input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></label>
-        <div class="reloj"><small>Tiempo simulado</small> <span id="reloj">0</span> s</div>
-        <button id="btnVerResultados" class="primario" hidden>Ver resultados →</button>
-        <div class="vistas" id="vistas"><span>Vista</span><button data-vista="iso">Isométrica</button><button data-vista="frente">Frente</button><button data-vista="lateral">Lateral</button><button data-vista="superior">Superior</button><small>La cámara es la misma en todos los paneles</small></div>
+      <div class="grupo">
+        <label class="ctl"><small>Velocidad</small><div><input id="velocidad" type="range" min="0" max="100" value="55"><span id="velocidadTexto"></span></div></label>
       </div>
+      <div class="grupo">
+        <div class="ctl"><small>Vista · cámara común</small><div class="segmentado" id="vistas"><button data-vista="iso" class="activa" title="Isométrica">ISO</button><button data-vista="frente" title="Frente">FRT</button><button data-vista="lateral" title="Lateral">LAT</button><button data-vista="superior" title="Superior">SUP</button></div></div>
+        <div class="ctl"><small>Detalle · <span class="tecla">D</span></small><div class="segmentado"><button id="btnDetalle" class="activa" aria-pressed="true" title="Mostrar u ocultar el recuadro que sigue a la grúa (tecla D)">GRÚA</button></div></div>
+      </div>
+      <div class="grupo reloj">
+        <div class="ctl"><small>Tiempo simulado · <span class="tecla">Espacio</span></small><div><span id="reloj">0</span><span>s</span></div></div>
+      </div>
+      <div class="grupo" id="grupoVerResultados" hidden>
+        <button id="btnVerResultados" class="primario">Ver resultados →</button>
+      </div>
+    </div>
 
-      <p class="nota nota-parcial" id="notaParcial" hidden></p>
-      <details class="ayuda"><summary>Leyenda y ayuda</summary><div class="leyenda" id="leyenda"></div></details>
+    <p class="nota-parcial" id="notaParcial" hidden></p>
 
-      <section class="marcador"><h2>Marcador</h2><div id="marcador"></div></section>
+    <div class="tablero vacio" id="tablero">
       <section class="paneles" id="paneles"></section>
-    </section>
+      <aside class="riel">
+        <section class="tarjeta"><div class="tarjeta-cab"><span class="n">■</span>Marcador<span class="der micro" id="marcadorNota"></span></div><div id="marcador"></div></section>
+        <details class="tarjeta" id="ayuda"><summary class="tarjeta-cab"><span class="n">?</span>Lectura de la escena</summary><div class="tarjeta-cuerpo" id="leyenda"></div></details>
+      </aside>
+    </div>
+  </section>
 
-    <!-- 3. RESULTADOS: primero la conclusión, después el detalle -->
-    <section class="vista-app" id="vistaResultados" hidden>
-      <section class="veredicto" id="veredicto" hidden></section>
+  <!-- 3. RESULTADOS: primero la conclusión, después el detalle -->
+  <section id="vistaResultados" hidden>
+    <section class="veredicto" id="veredicto" hidden></section>
 
-      <section class="estadistica" id="estadistica">
-        <div class="cabecera-est">
-          <h2 id="tituloEstadistica">Estadística</h2>
-          <div class="botones-fila">
-            <label>Métrica <select id="metrica"></select></label>
-            <button id="btnCsv">Descargar CSV</button>
-          </div>
+    <section class="estadistica tarjeta" id="estadistica">
+      <div class="tarjeta-cab"><span class="n">Σ</span><span id="tituloEstadistica">Estadística</span>
+        <div class="der">
+          <select id="metrica" aria-label="Métrica"></select>
+          <button id="btnCsv"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M4 20h16"/></svg>CSV</button>
         </div>
-        <div class="tabla-ancha"><table><thead id="encEstadistica"></thead><tbody id="cuerpoEstadistica"></tbody></table></div>
-        <p class="nota" id="notaEstadistica"></p>
-      </section>
-
-      <section class="resultados" id="resultados">
-        <h2 id="tituloReplica">Resultado de la réplica que se está viendo</h2>
-        <table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table>
-      </section>
-      <p class="nota vacio-res" id="vacioRes" hidden>La tabla de la réplica aparece cuando termina la carrera. Puedes ir al final desde el paso 2.</p>
+      </div>
+      <div class="tabla-ancha"><table><thead id="encEstadistica"></thead><tbody id="cuerpoEstadistica"></tbody></table></div>
+      <p class="nota" id="notaEstadistica"></p>
     </section>
-  </main>
-</div>
+
+    <section class="resultados tarjeta" id="resultados">
+      <div class="tarjeta-cab"><span class="n">R</span><span id="tituloReplica">Resultado de la carrera</span></div>
+      <div class="tabla-ancha"><table><thead><tr><th>Lugar</th><th>Política</th><th class="num">Tiempo total (s)</th><th class="num">Diferencia con la mejor</th><th class="num">Reubicaciones</th></tr></thead><tbody id="tabla"></tbody></table></div>
+    </section>
+    <p class="nota vacio-res" id="vacioRes" hidden>La tabla de la carrera aparece cuando termina. Puedes ir al final desde el paso 2.</p>
+  </section>
+</main>
 
 <!--THREE-->
 <script>
@@ -305,11 +563,22 @@ const POLITICAS = [
   { clave: 'mas_cercana_grua', nombre: 'Más cercana a la grúa', ayuda: 'La celda libre más cercana a la grúa (al reubicar, a la celda del ítem que se retira).' }
 ];
 const NOMBRES = { Aleatoria: 'Aleatoria', BasadaEnClases: 'Basada en clases', FullTurnover: 'Full-turnover', MasCercanaAlES: 'Más cercana al E/S', MasCercanaALaGrua: 'Más cercana a la grúa' };
+const RECUPERACIONES = [
+  { clave: 'fcfs', nombre: 'FCFS estricto', ayuda: 'Sale el ítem más antiguo del SKU aunque tenga otros delante; esos se reubican.' },
+  { clave: 'fcfs_accesible', nombre: 'FCFS entre accesibles', ayuda: 'Sale el más antiguo entre los que no tienen nada delante; solo si todos están bloqueados, el más antiguo de todos.' }
+];
+const NOMBRES_RECUPERACION = { 'FCFS': 'FCFS estricto', 'FCFS-Accesible': 'FCFS accesible' };
+// Con una sola recuperación todas las políticas la comparten y no hace falta repetirla en cada nombre
+let VARIAS_RECUPERACIONES = true;
+const recuperacionesDe = lista => new Set(lista.map(x => x.recuperacion));
+// Nombre de un escenario: la política de asignación y, si se comparan varias, la de recuperación
+const nombreEscenario = x => (NOMBRES[x.nombre] || x.nombre) + (x.recuperacion && VARIAS_RECUPERACIONES ? ' · ' + (NOMBRES_RECUPERACION[x.recuperacion] || x.recuperacion) : '');
 
 const letra = c => c ? String.fromCharCode(64 + c) : '';
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const PALETA_EXTRA = ['', '', '', '#34d399', '#f87171', '#22d3ee', '#fb923c', '#a3e635'];
+const FUENTE_MONO = '"JetBrains Mono", "JetBrainsMono Nerd Font", "IBM Plex Mono", ui-monospace, monospace';
+const PALETA_EXTRA = ['', '', '', '#40c057', '#ff8787', '#748ffc', '#ff922b', '#a9e34b'];
 const colorGrupo = g => g <= 3 ? (css('--clase' + g) || '#888') : (PALETA_EXTRA[g - 1] || '#999');
 const nombreSku = n => { const e = DATOS && DATOS.etiquetas_sku && DATOS.etiquetas_sku[n - 1]; return 'SKU ' + (e ? e : n); };
 let CLASE_SKU = [];                                   // clase de cada SKU (solo para colorear), indexada por SKU - 1
@@ -325,17 +594,32 @@ const fmt = n => Math.round(n).toLocaleString('es');
 const fmt1 = n => (Math.round(n * 10) / 10).toLocaleString('es');
 const pct1 = n => n.toLocaleString('es', { minimumFractionDigits: 1, maximumFractionDigits: 1 });   // porcentaje con un decimal y coma decimal
 const el = id => document.getElementById(id);
+const ICONO_JUGAR = '<svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z" fill="currentColor"/></svg>';
+const ICONO_PAUSA = '<svg viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke-width="3"/></svg>';
+// El botón principal de la carrera lleva un icono además del texto
+function ponerJugar(texto) { el('jugar').innerHTML = (texto === 'Pausar' ? ICONO_PAUSA : ICONO_JUGAR) + texto; }
+
+// Indicador de la barra superior: en espera, trabajando, listo o error
+function estadoSistema(tipo, texto) { el('estadoSis').className = 'estado-sis ' + (tipo || ''); el('estadoSisTexto').textContent = texto; }
 
 // ================= escena 3D (se recalcula con cada simulación) =================
 // Ejes del mundo en metros: X a lo largo del pasillo (columnas), Y hacia arriba (filas), Z hacia el pasillo (el fondo de la estantería está en Z = 0)
 let DATOS = null, SECUENCIA = [], totalTareas = 0;
 let FILAS, COLUMNAS, CAPAS, VEL_FILA, VEL_COLUMNA, VEL_PROF, ACEL, DECEL, COTA_FILA, COTA_COLUMNA, COTA_PROF, Z_RIEL, POS, CEN, RIEL;
-let COL_M, FIL_M, PRO_M, LARGO, ALTURA, FONDO, PLATAFORMA, ES_X, LIM, ANCHO = 640, ALTO = 400, DEN_Z;
+let COL_M, FIL_M, PRO_M, LARGO, ALTURA, FONDO, ESTACION, ES_X, ES_H, SUELO, LIM, ANCHO = 640, ALTO = 400;
 
 // Cámara compartida por todos los paneles: se arrastra en uno y se mueven todos, así se comparan desde el mismo ángulo
 const CAMARA_INICIAL = { az: Math.PI / 4, el: 0.5, zoom: 1 };
 const CAM = { ...CAMARA_INICIAL };
 const VISTAS = { iso: { az: Math.PI / 4, el: 0.5 }, frente: { az: 0, el: 0.02 }, superior: { az: 0, el: 1.5 }, lateral: { az: Math.PI / 2, el: 0.02 } };
+const NOMBRES_VISTA = { iso: 'Isométrica', frente: 'Frente', lateral: 'Lateral', superior: 'Superior' };
+let vistaActual = 'iso';
+// Rótulo de los visores y botón activo: la vista elegida o "libre" si se giró a mano
+function marcarVista(v) {
+  vistaActual = v;
+  document.querySelectorAll('#vistas button').forEach(b => b.classList.toggle('activa', b.dataset.vista === v));
+  document.querySelectorAll('.vp-etq').forEach(e => { e.textContent = 'Orto · ' + (NOMBRES_VISTA[v] || 'Libre'); });
+}
 
 let RENDER = null;
 function crearRender() {
@@ -343,7 +627,6 @@ function crearRender() {
   RENDER = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   RENDER.setPixelRatio(DPR); RENDER.setSize(ANCHO, ALTO, false);
   RENDER.setClearColor(0x000000, 0);
-  RENDER.shadowMap.enabled = true; RENDER.shadowMap.type = THREE.PCFSoftShadowMap;
   return RENDER;
 }
 
@@ -357,12 +640,18 @@ function prepararEscena() {
   RIEL = Z_RIEL - POS[2];                                               // posición del pasillo medida desde el fondo de la estantería
   COL_M = COTA_COLUMNA; FIL_M = COTA_FILA; PRO_M = COTA_PROF;
   LARGO = COLUMNAS * COL_M; ALTURA = FILAS * FIL_M; FONDO = CAPAS * PRO_M;
-  // E/S: plataforma a nivel del suelo, en el pasillo, pasado el extremo izquierdo de la estantería
-  PLATAFORMA = { x0: -3.2, x1: -1.1, y0: RIEL - 0.8, y1: RIEL + 0.8, h: 0.5 };
-  ES_X = (PLATAFORMA.x0 + PLATAFORMA.x1) / 2;
-  LIM = { x0: -5.4, x1: LARGO + 0.5, y0: Math.min(0, RIEL - 1.2), y1: Math.max(FONDO, RIEL) + 1.8, h0: 0, h1: ALTURA + 1.6 };
-  // la horquilla llega al centro del hueco cuando está dentro del canal; esta distancia reparte la transición desde el pasillo
-  DEN_Z = Math.max(RIEL - ((CAPAS - 1) * PRO_M + CEN[2] * PRO_M), 1e-6);
+  // La escena se mide desde la esquina de la estantería y la grúa se dibuja exactamente en los puntos del modelo:
+  // el E/S es el origen de coordenadas, así que queda en -POS, y en cada celda va al punto que marca el centro de celda
+  // Así los recorridos dibujados miden lo mismo que los del modelo y cambiar el centro de celda no mueve el E/S ni la estantería
+  ES_H = -POS[0]; ES_X = -POS[1];
+  // el suelo está en la base de la estantería; solo baja si el E/S queda por debajo de ella
+  SUELO = Math.min(0, ES_H);
+  // Punto E/S al otro lado del pasillo, frente a la grúa, a la altura de la carga (z0..z1). Detrás, alejándose del pasillo,
+  // una zona de espera (z1..zC) para los ítems que aguardan su turno: el que llega mientras otro sale y los que se reubican temporalmente
+  ESTACION = { h: ES_H + 0.05, mesa: 0.55, z0: RIEL + 0.45, z1: RIEL + 1.45, z: RIEL + 0.95, paso: 1, lugares: 3 };
+  ESTACION.zC = ESTACION.z1 + 0.15 + ESTACION.lugares * ESTACION.paso;
+  // el margen derecho y el frontal dejan sitio a las cotas del largo y la altura
+  LIM = { x0: Math.min(-2, ES_X - 1.5), x1: Math.max(LARGO + 2.4, ES_X + 1.5), y0: Math.min(0, RIEL - 1.2), y1: Math.max(FONDO, ESTACION.zC) + 2.1, h0: SUELO, h1: Math.max(ALTURA, ESTACION.h) + 1.6 };
   // Proporción del panel: la de la escena vista en isométrico, para no dejar márgenes vacíos
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000), c0 = new THREE.Vector3((LIM.x0 + LIM.x1) / 2, (LIM.h0 + LIM.h1) / 2, (LIM.y0 + LIM.y1) / 2);
   cam.position.set(c0.x + Math.sin(CAMARA_INICIAL.az) * Math.cos(CAMARA_INICIAL.el) * 300, c0.y + Math.sin(CAMARA_INICIAL.el) * 300, c0.z + Math.cos(CAMARA_INICIAL.az) * Math.cos(CAMARA_INICIAL.el) * 300);
@@ -407,15 +696,15 @@ function tono(color, factor) {
   return res;
 }
 
-// Rótulos que miran siempre a la cámara (números de fila y columna, texto del E/S)
+// Rótulos que miran siempre a la cámara (números de fila y columna, cotas, texto del E/S)
 const texturasRotulo = new Map();
 function rotulo(texto, color, tam, borde) {
-  const clave = texto + '|' + color + '|' + tam;
+  const clave = texto + '|' + color + '|' + tam + '|' + !!borde;
   let tex = texturasRotulo.get(clave);
   if (!tex) {
     const cv = document.createElement('canvas'), n = 128; cv.width = n * 2; cv.height = n;
-    const g = cv.getContext('2d'); g.font = '800 ' + (tam || 84) + 'px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    if (borde) { g.lineWidth = 14; g.lineJoin = 'round'; g.strokeStyle = 'rgba(0,0,0,0.75)'; g.strokeText(texto, n, n / 2 + 4); }
+    const g = cv.getContext('2d'); g.font = '700 ' + (tam || 84) + 'px ' + FUENTE_MONO; g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (borde) { g.lineWidth = 10; g.lineJoin = 'round'; g.strokeStyle = 'rgba(0,0,0,0.75)'; g.strokeText(texto, n, n / 2 + 4); }
     g.fillStyle = color; g.fillText(texto, n, n / 2 + 4);
     tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4; texturasRotulo.set(clave, tex);
   }
@@ -424,8 +713,12 @@ function rotulo(texto, color, tam, borde) {
 
 const GEO_CAJA = new THREE.BoxGeometry(1, 1, 1), GEO_CILINDRO = new THREE.CylinderGeometry(1, 1, 1, 8), GEO_CONO = new THREE.ConeGeometry(1, 1, 16), GEO_ESFERA = new THREE.SphereGeometry(1, 16, 12);
 const MAX_DASHES = 700;
+// Colores del triedro de ejes (convención CAD: rojo, verde y azul)
+const EJES = [['col', '#e5484d', [1, 0, 0]], ['fila', '#30a46c', [0, 1, 0]], ['prof', '#3e63dd', [0, 0, 1]]];
 
 let replicaActual = 0, paneles = [], t = 0, jugando = false, ultimo = 0;
+// Reloj visual en milisegundos: avanza con el tiempo real solo mientras se reproduce, así las animaciones se detienen en pausa
+let relojVisual = 0;
 
 class Panel {
   constructor(datos, tarjeta) {
@@ -444,12 +737,13 @@ class Panel {
     this.elAccion = tarjeta.querySelector('.estado .accion');
     this.construirEscena();
     this.activarCamara();
+    this.planificarLlegadas();
     this.reiniciar();
   }
   reiniciar() {
     this.estante = Int16Array.from(this.d.inicial);
-    this.io = []; this.mano = 0; this.idx = 0; this.mov = null; this.salioDelES = false;
-    this.anims = []; this.destino = null; this.destinoES = null; this.sucioItems = true; this.cambios = []; this.trayClave = null;
+    this.cola = []; this.salidas = []; this.trans = null; this.iLlegada = 0; this.mano = 0; this.idx = 0; this.mov = null; this.salioDelES = false;
+    this.destino = null; this.destinoES = null; this.sucioItems = true; this.cambios = []; this.trayClave = null;
     this.tarea = -1; this.hechas = 0;
     this.tipoTarea = ''; this.claseTarea = 0; this.textoAccion = 'La grúa espera en el E/S';
     this.fin = null; this.lugar = 0;
@@ -470,7 +764,9 @@ class Panel {
   }
 
   aplicar(e) {
-    const tipo = e[1];
+    const tipo = e[1], ev = this.d.eventos;
+    // duración del evento en el modelo: hasta el siguiente evento (en las cargas y descargas es el tiempo de carga y descarga)
+    const dsim = this.idx + 1 < ev.length ? ev[this.idx + 1][0] - e[0] : 0;
     if (tipo === 'T') {
       if (this.tarea >= 0 && this.ticks[this.tarea].className.indexOf('omitida') < 0) {
         this.ticks[this.tarea].classList.remove('actual'); this.ticks[this.tarea].classList.add('hecha'); this.hechas++;
@@ -482,13 +778,14 @@ class Panel {
       this.claseTarea = e[3];
       this.textoAccion = e[4] === 1 ? '' : (e[2] === 0 ? 'No hay espacio libre para almacenar' : 'No hay ítems de ese SKU');
     } else if (tipo === 'A') {
-      this.io.push(e[2]); this.anims.push({ tipo: 'entra', clase: e[2], t0: performance.now() });
-      this.textoAccion = 'Llega el ' + nombreSku(e[2]) + ' a la ENTRADA del E/S';
+      // el ítem ya recorrió la cinta de entrada (ver planificarLlegadas) y espera en la cola hasta que la grúa lo toma
+      const ll = this.llegadas.find(x => x.i === this.idx);
+      this.cola.push(this.pieza(e[2], [this.ranura(this.cola.length)], e[0], 0, { dur: 400, entra: !ll || ll.t1 <= ll.t0 }));
+      this.textoAccion = 'Llega el ' + nombreSku(e[2]) + ' al E/S';
     } else if (tipo === 'M') {
       // las posiciones se pasan a coordenadas de la estantería (se resta su posición en el modelo)
       this.mov = { t0: e[0], dur: e[2], x0: e[3] - POS[0], y0: e[4] - POS[1], x1: e[5] - POS[0], y1: e[6] - POS[1], txy: e[7], z0: e[8] - POS[2], z1: e[9] - POS[2], ini: e[10], fin: e[11] };
-      // El paso entre el E/S y la estantería dura 0 s en el modelo: el recorrido que sale del E/S se dibuja desde la plataforma
-      // y el que regresa a la esquina para entregar se dibuja terminando en la plataforma
+      // Los recorridos que salen del E/S o llegan a él se dibujan desde o hasta la posición de la grúa frente a la plataforma
       this.mov.desdeES = this.salioDelES; this.salioDelES = false;
       if (e[10] === 1 && e[11] === 0) this.salioDelES = true;
       if (e[11] === 0) {
@@ -496,7 +793,7 @@ class Panel {
         for (let k = this.idx + 1; k < ev.length; k++) if (ev[k][1] === 'M') { this.mov.haciaES = ev[k][10] === 0 && ev[k][11] === 1; break; }
       }
       // Celda destino: si el desplazamiento termina dentro de un canal, se resalta ese hueco
-      // El color indica qué ocurrirá allí: dejar un ítem (turquesa) o retirarlo (rosa)
+      // El color indica qué ocurrirá allí: dejar un ítem (almacenar) o retirarlo (recuperar)
       if (e[11] === 0 && Math.abs(e[9] - Z_RIEL) > 0.05) {
         const f = Math.round(this.mov.x1 / COTA_FILA - CEN[0]), c = Math.round(this.mov.y1 / COTA_COLUMNA - CEN[1]), k = Math.round(this.mov.z1 / COTA_PROF - CEN[2]), ev = this.d.eventos;
         if (f >= 0 && f < FILAS && c >= 0 && c < COLUMNAS && k >= 0 && k < CAPAS) {
@@ -507,25 +804,56 @@ class Panel {
       }
       // Si el recorrido termina en el E/S y la grúa lleva un ítem, la plataforma es el destino (salida)
       if (this.mov.haciaES && this.mano) this.destinoES = { clase: this.mano, fin: 0 };
+      // Si la grúa vuelve al E/S a tomar un ítem de la cola, la cinta lo adelanta hasta la mesa mientras la grúa se acerca
+      if (e[11] === 1 && e[2] > 0) {
+        for (let k = this.idx + 1; k < ev.length; k++) {
+          const tk = ev[k][1];
+          if (tk === 'J') {
+            const pz = this.cola[ev[k][2] < 0 ? this.cola.length + ev[k][2] : ev[k][2]];
+            if (pz) pz.prepos = { t0: e[0], t1: e[0] + e[2], pts: [this.puntoPieza(pz, e[0]).pos, this.puntoMesa()] };
+          }
+          if (tk === 'J' || tk === 'I' || tk === 'S' || tk === 'T') break;
+        }
+      }
       if (e[7] > 0) this.textoAccion = 'Se desplaza (x e y a la vez)';
       else if (e[8] !== e[9]) this.textoAccion = e[9] > e[8] ? 'Sale del canal (eje z)' : 'Entra al canal (eje z)';
     } else if (tipo === 'P') {
+      this.terminarTransferencia();
       const i = (e[2] * COLUMNAS + e[3]) * CAPAS + e[4]; this.mano = this.estante[i]; this.estante[i] = 0; this.cambios.push([e[2], e[3], e[4]]);
-      if (this.destino) this.destino.fin = performance.now();
+      if (this.destino) this.destino.fin = relojVisual;
       this.textoAccion = 'Retira el ' + nombreSku(this.mano) + ' de ' + this.celda(e);
     } else if (tipo === 'D') {
+      this.terminarTransferencia();
       const i = (e[2] * COLUMNAS + e[3]) * CAPAS + e[4]; this.estante[i] = this.mano; this.cambios.push([e[2], e[3], e[4]]);
-      if (this.destino) this.destino.fin = performance.now();
+      if (this.destino) this.destino.fin = relojVisual;
       this.textoAccion = 'Deja el ' + nombreSku(this.mano) + ' en ' + this.celda(e); this.mano = 0;
     } else if (tipo === 'J') {
-      const clase = this.io.splice(e[2], 1)[0] || 0; this.mano = clase;
-      this.textoAccion = 'La grúa toma el ' + nombreSku(clase) + ' de la ENTRADA';
+      // la grúa toma el ítem de la cola (el índice es el del modelo, -1 es el último): avanza hasta la mesa y la horquilla lo sube al carro
+      this.terminarTransferencia();
+      const pz = this.cola.splice(e[2], 1)[0];
+      this.mano = pz ? pz.sku : 0;
+      if (pz) {
+        const ruta = this.rutaAMesa(pz, e[0]), largo = this.largo(ruta);
+        // si en ese momento otro ítem se está retirando del punto E/S, este espera a que quede libre
+        this.trans = this.pieza(pz.sku, ruta, e[0], dsim, { tipo: 'J', d1: largo > 0.01 ? 250 + 260 * largo : 0, tv0: Math.max(relojVisual, this.puntoLibre()) });
+      }
+      this.reacomodarCola(e[0]);
+      this.textoAccion = 'La grúa toma el ' + nombreSku(this.mano) + ' en el E/S';
     } else if (tipo === 'I') {
-      this.io.push(this.mano); this.textoAccion = 'Deja el ' + nombreSku(this.mano) + ' en la ENTRADA (reubicación temporal)'; this.mano = 0;
+      // reubicación temporal: la horquilla deja el ítem en el punto E/S y de ahí pasa a la zona de espera
+      this.terminarTransferencia();
+      const ruta = [this.puntoCargaES(), this.puntoMesa(), this.ranura(this.cola.length)];
+      this.trans = this.pieza(this.mano, ruta, e[0], dsim, { dur: this.duracion(ruta), tipo: 'I' });
+      this.cola.push(this.trans);
+      this.textoAccion = 'Deja el ' + nombreSku(this.mano) + ' en espera en el E/S (reubicación temporal)'; this.mano = 0;
     } else if (tipo === 'S') {
-      this.anims.push({ tipo: 'sale', clase: this.mano, t0: performance.now() });
-      if (this.destinoES) this.destinoES.fin = performance.now();
-      this.textoAccion = 'Entrega el ' + nombreSku(this.mano) + ' a la SALIDA del E/S'; this.mano = 0;
+      // la horquilla deja el ítem en el punto E/S y el ítem se retira del sistema; sigue aunque la grúa ya haga otra cosa
+      this.terminarTransferencia();
+      const mesa = this.puntoMesa(), ruta = [this.puntoCargaES(), mesa, this.arriba(mesa)];
+      this.trans = this.pieza(this.mano, ruta, e[0], dsim, { dur: 1100, tipo: 'S', sale: true });
+      this.salidas.push(this.trans);
+      if (this.destinoES) this.destinoES.fin = relojVisual;
+      this.textoAccion = 'Entrega el ' + nombreSku(this.mano) + ' en el E/S'; this.mano = 0;
     } else if (tipo === 'F') {
       if (this.tarea >= 0 && this.ticks[this.tarea].className.indexOf('omitida') < 0) {
         this.ticks[this.tarea].classList.remove('actual'); this.ticks[this.tarea].classList.add('hecha');
@@ -541,11 +869,129 @@ class Panel {
     while (this.idx < ev.length && ev[this.idx][0] <= tiempo) { this.aplicar(ev[this.idx]); this.idx++; }
   }
 
+  // ---- estación E/S: cola de la cinta de entrada, transferencias entre la mesa y la grúa y salidas ----
+  // En el modelo cargar o descargar dura el tiempo de carga y descarga, que por defecto es 0: la transferencia sería instantánea.
+  // Por eso cada pieza avanza con el reloj visual (dur, en ms reales) y, si ese tiempo es mayor que 0, tampoco termina antes que el modelo (dsim)
+  // Una pieza recorre una polilínea de puntos fijos; la toma de la cola (J) tiene su propio recorrido (puntoToma)
+  pieza(sku, pts, t0, dsim, opc) { return Object.assign({ sku, pts, tv0: relojVisual, dur: 650, t0, dsim, listo: false, tipo: 'cola' }, opc); }
+  progresoPieza(pz, tiempo) {
+    if (pz.listo) return 1;
+    const v = pz.dur > 0 ? (relojVisual - pz.tv0) / pz.dur : 1, s = pz.dsim > 0 ? (tiempo - pz.t0) / pz.dsim : 1;
+    return Math.max(0, Math.min(1, v, s));
+  }
+  // Posición de la pieza: el tiempo se reparte entre los tramos según su largo y cada tramo arranca y frena suave
+  puntoPieza(pz, tiempo, carga) {
+    // ítem de la cola que la cinta adelanta hasta la mesa, en tiempo de simulación
+    if (pz.prepos && tiempo >= pz.prepos.t0) {
+      const f = Math.min(1, (tiempo - pz.prepos.t0) / (pz.prepos.t1 - pz.prepos.t0));
+      return Object.assign(this.recorrer(pz.prepos.pts, f), { p: f });
+    }
+    if (pz.tipo === 'J') return this.puntoToma(pz, tiempo, carga);
+    const p = this.progresoPieza(pz, tiempo);
+    return Object.assign(this.recorrer(pz.pts, p), { p });
+  }
+  // Punto de una polilínea en la fracción f del recorrido: el tiempo se reparte según el largo de cada tramo y cada tramo arranca y frena suave
+  recorrer(pts, f) {
+    const largos = pts.slice(1).map((q, i) => Math.hypot(q[0] - pts[i][0], q[1] - pts[i][1], q[2] - pts[i][2])), total = largos.reduce((a, b) => a + b, 0);
+    if (total < 1e-6 || f >= 1) return { pos: pts[pts.length - 1], seg: Math.max(0, largos.length - 1), local: 1 };
+    let d = Math.max(0, f) * total, seg = 0;
+    while (seg < largos.length - 1 && d > largos[seg]) { d -= largos[seg]; seg++; }
+    const g = largos[seg] > 0 ? Math.min(1, d / largos[seg]) : 1, k = g < 0.5 ? 2 * g * g : 1 - Math.pow(-2 * g + 2, 2) / 2, a = pts[seg], b = pts[seg + 1];
+    return { pos: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k], seg, local: g };
+  }
+  largo(pts) { let L = 0; for (let i = 1; i < pts.length; i++) L += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1], pts[i][2] - pts[i - 1][2]); return L; }
+  // milisegundos reales que tarda una pieza en recorrer una polilínea
+  duracion(pts) { return 300 + 280 * this.largo(pts); }
+  // Lo que le falta a un ítem de la zona de espera para llegar al punto E/S
+  // Si la cinta ya lo estaba adelantando (prepos), sigue desde donde va
+  rutaAMesa(pz, tiempo) {
+    const mesa = this.puntoMesa();
+    if (pz.prepos) {
+      const f = Math.max(0, Math.min(1, (tiempo - pz.prepos.t0) / (pz.prepos.t1 - pz.prepos.t0))), q = this.recorrer(pz.prepos.pts, f);
+      return f >= 1 ? [mesa] : [q.pos].concat(pz.prepos.pts.slice(q.seg + 1));
+    }
+    return [this.puntoPieza(pz, tiempo).pos, mesa];
+  }
+  // Instante (reloj visual) en que el último ítem entregado ya se retiró y deja libre el punto E/S
+  puntoLibre() {
+    let libre = relojVisual;
+    this.salidas.forEach(sz => { libre = Math.max(libre, sz.tv0 + sz.dur * 0.7); });
+    return libre;
+  }
+  // Toma de la cola en dos fases: la cinta lleva el ítem hasta la mesa (d1 ms) y la horquilla lo sube al carro (d2 ms)
+  // La subida se dibuja relativa al carro: con carga y descarga instantáneas la grúa arranca en el mismo instante,
+  // así que el ítem termina de entrar sobre la horquilla mientras viaja. Si la grúa se aleja antes de que llegue a la mesa, se salta ese tramo
+  puntoToma(pz, tiempo, carga) {
+    const mesa = this.puntoMesa(), cES = this.puntoCargaES(), c = carga || cES, d1 = pz.d1, d2 = 380;
+    if (carga && relojVisual - pz.tv0 < d1 && Math.hypot(carga[0] - cES[0], carga[1] - cES[1]) > 0.5) pz.tv0 = relojVisual - d1;
+    let ms = relojVisual - pz.tv0;
+    if (pz.dsim > 0) ms = Math.min(ms, Math.max(0, (tiempo - pz.t0) / pz.dsim) * (d1 + d2));
+    if (pz.listo || ms >= d1 + d2) return { pos: c, seg: 1, local: 1, p: 1 };
+    const suave = f => { f = Math.max(0, Math.min(1, f)); return f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2; };
+    if (ms < d1) { const f = Math.max(0, ms / d1); return { pos: this.recorrer(pz.pts, f).pos, seg: 0, local: f, p: 0 }; }
+    const f = (ms - d1) / d2, k = 1 - suave(f);
+    return { pos: [c[0] + (mesa[0] - cES[0]) * k, c[1] + (mesa[1] - cES[1]) * k, c[2] + (mesa[2] - cES[2]) * k], seg: 1, local: f, p: (ms / (d1 + d2)) };
+  }
+  // Puntos de la estación (centro del ítem). La ranura 0 de la zona de espera es la más cercana al punto E/S; si no caben, se apilan en la última
+  ranura(i) {
+    const S = ESTACION, j = Math.min(i, S.lugares - 1);
+    return [ES_X, S.h + 0.35 + 0.72 * Math.max(0, i - S.lugares + 1), S.z1 + 0.15 + S.paso / 2 + j * S.paso];
+  }
+  // los ítems entran y salen del sistema por el punto E/S: aparecen bajando sobre él y se retiran subiendo
+  arriba(q) { return [q[0], q[1] + 1.1, q[2]]; }
+  puntoMesa() { return [ES_X, ESTACION.h + 0.35, ESTACION.z]; }
+  puntoCargaES() { return [ES_X, ES_H + 0.4, RIEL]; }
+  // Cuando sale un ítem de la cola, los que esperan detrás avanzan una ranura
+  reacomodarCola(tiempo) {
+    this.cola.forEach((pz, i) => {
+      const r = this.ranura(i), fin = pz.pts[pz.pts.length - 1];
+      if (pz.prepos || (fin && fin[0] === r[0] && fin[1] === r[1])) return;
+      const desde = this.puntoPieza(pz, tiempo).pos;
+      Object.assign(pz, { pts: [desde, r], tv0: relojVisual, dur: 450, t0: tiempo, dsim: 0, listo: false, entra: false });
+    });
+  }
+  // Una sola grúa hace una transferencia a la vez: si empieza otra (o carga o descarga en la estantería), la anterior se da por terminada
+  terminarTransferencia() {
+    if (this.trans && this.trans.tipo === 'J') this.trans.listo = true;
+    this.trans = null;
+  }
+  // Llegadas al E/S. En el modelo el ítem aparece en el E/S al empezar su tarea (evento A) y suele tomarse en el mismo instante,
+  // así que se dibuja bajando sobre la zona de espera durante el final de la tarea anterior y queda ahí justo en ese instante, en tiempo de simulación
+  // Espera junto al punto E/S y no sobre él: el punto queda libre para el ítem que entrega la tarea anterior en ese mismo instante
+  planificarLlegadas() {
+    const ev = this.d.eventos; this.llegadas = [];
+    let n = 0, tLibre = 0, tAnterior = 0, tActual = 0;
+    for (let i = 0; i < ev.length; i++) {
+      const e = ev[i];
+      if (e[1] === 'T') { tAnterior = tActual; tActual = e[0]; }
+      else if (e[1] === 'A') {
+        const t0 = Math.max(tLibre, tAnterior);
+        this.llegadas.push({ i, sku: e[2], t0: e[0] - 0.25 * (e[0] - t0), t1: e[0], ranura: n });
+        n++;
+      } else if (e[1] === 'I') { n++; tLibre = e[0]; }
+      else if (e[1] === 'J') { n = Math.max(0, n - 1); tLibre = e[0]; }
+    }
+  }
+  // Ítem que todavía está llegando en el instante dado (o null)
+  llegadaEnCurso(tiempo) {
+    const L = this.llegadas;
+    while (this.iLlegada < L.length && L[this.iLlegada].t1 <= tiempo) this.iLlegada++;
+    const ll = L[this.iLlegada];
+    if (!ll || tiempo < ll.t0 || ll.t1 <= ll.t0) return null;
+    const b = this.ranura(ll.ranura), a = this.arriba(b), f = (tiempo - ll.t0) / (ll.t1 - ll.t0);
+    const k = f < 0.5 ? 2 * f * f : 1 - Math.pow(-2 * f + 2, 2) / 2;
+    return { sku: ll.sku, pos: [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k], op: Math.min(1, f / 0.4) };
+  }
+  // Al saltar al final no hay nada que animar: todo queda en su sitio
+  asentar() {
+    this.cola.forEach(pz => { pz.listo = true; pz.prepos = null; }); this.salidas = []; this.trans = null; this.destinoES = null; this.destino = null;
+  }
+
   // Posición de la grúa en el mundo (metros). Un desplazamiento tiene dos fases:
   // x e y simultáneos, cada eje a su propia velocidad (el tiempo Chebyshev es el del eje más lento), y luego z en secuencia
   // H es la altura del carro, X la posición a lo largo del pasillo y Y hasta dónde llega la horquilla hacia el fondo
   estadoGrua(tiempo) {
-    const reposo = { H: 0.8, X: ES_X };
+    const reposo = { H: ES_H, X: ES_X };
     const m = this.mov;
     if (!m) return { H: reposo.H, X: reposo.X, Y: RIEL, z: RIEL, fase: 0, m: null, dt: 0, enES: true };
     const dt = Math.max(0, tiempo - m.t0);
@@ -559,15 +1005,15 @@ class Panel {
       z = m.z0 + (m.z1 - m.z0) * perfZ.fraccion(dt - txy);
       if (dt >= txy && dt < m.dur) fase = 1;
     }
-    // el punto de referencia de la celda puede estar desplazado dentro de ella (centro de celda): se dibuja en el centro del hueco
-    const centro = (xm, ym) => ({ H: xm - CEN[0] * FIL_M + FIL_M / 2, X: ym - CEN[1] * COL_M + COL_M / 2 });
-    const A = (m.ini || m.desdeES) ? reposo : centro(m.x0, m.y0), B = (m.fin || m.haciaES) ? reposo : centro(m.x1, m.y1);
-    // la punta de la horquilla queda en el centro del hueco cuando está dentro del canal
-    const Y = z + (PRO_M / 2 - CEN[2] * PRO_M) * Math.max(0, Math.min(1, (RIEL - z) / DEN_Z));
+    // la grúa va al punto de referencia de la celda, que el centro de celda ubica dentro de ella
+    const punto = (xm, ym) => ({ H: xm, X: ym });
+    const A = (m.ini || m.desdeES) ? reposo : punto(m.x0, m.y0), B = (m.fin || m.haciaES) ? reposo : punto(m.x1, m.y1);
+    // la punta de la horquilla llega hasta la profundidad de ese punto
+    const Y = z;
     return { H: A.H + (B.H - A.H) * fx, X: A.X + (B.X - A.X) * fy, Y, z, fase, m, dt, A, B, tx, ty, perfX, perfY, enES: dt >= m.dur ? !!m.fin : false };
   }
 
-  // ---- escena 3D ----
+  // ---- escena 3D: estilo de visor CAD, sin sombras, con rejilla en el suelo y cotas ----
   construirEscena() {
     const esc = this.escena = new THREE.Scene();
     const centro = this.objetivo = new THREE.Vector3((LIM.x0 + LIM.x1) / 2, (LIM.h0 + LIM.h1) / 2, (LIM.y0 + LIM.y1) / 2);
@@ -576,73 +1022,106 @@ class Panel {
     const diag = this.diag = Math.hypot(LIM.x1 - LIM.x0, LIM.h1 - LIM.h0, LIM.y1 - LIM.y0);
     this.camara = new THREE.OrthographicCamera(-1, 1, 1, -1, diag * 0.1, diag * 3);
 
-    // luces: cielo suave y un sol que proyecta sombras
-    esc.add(new THREE.HemisphereLight(0xffffff, 0x8b97a6, 0.85));
-    const sol = this.sol = new THREE.DirectionalLight(0xffffff, 0.7);
-    sol.position.copy(centro).add(new THREE.Vector3(0.35, 1, 0.8).normalize().multiplyScalar(diag));
-    sol.target.position.copy(centro); esc.add(sol, sol.target);
-    sol.castShadow = true; sol.shadow.mapSize.set(1024, 1024);
-    const r = diag * 0.55, sc = sol.shadow.camera; sc.left = -r; sc.right = r; sc.top = r; sc.bottom = -r; sc.near = 1; sc.far = diag * 3;
-    sol.shadow.bias = -0.0006; sol.shadow.normalBias = 0.03;
+    // luces: cielo uniforme, una luz principal y un relleno desde atrás para que cada cara tenga su tono
+    esc.add(new THREE.HemisphereLight(0xffffff, 0x9aa3ad, 0.95));
+    const sol = new THREE.DirectionalLight(0xffffff, 0.75); sol.position.copy(centro).add(new THREE.Vector3(0.35, 1, 0.8).normalize().multiplyScalar(diag)); sol.target.position.copy(centro);
+    const relleno = new THREE.DirectionalLight(0xffffff, 0.22); relleno.position.copy(centro).add(new THREE.Vector3(-0.7, 0.3, -0.5).normalize().multiplyScalar(diag)); relleno.target.position.copy(centro);
+    esc.add(sol, sol.target, relleno, relleno.target);
 
     const std = (rug, met) => new THREE.MeshStandardMaterial({ roughness: rug, metalness: met || 0 });
-    const M = this.mat = { suelo: std(1), pasillo: std(1), fondo: std(1), acero: std(0.45, 0.35), items: std(0.55, 0.05), plataforma: std(0.6, 0.2), rodillo: std(0.7),
-      grua: std(0.5, 0.2), carro: std(0.5, 0.2), horquilla: std(0.5, 0.3), carga: std(0.55, 0.05),
-      sombraTray: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.55 }), tray: new THREE.MeshBasicMaterial({ color: 0xffffff }),
-      destino: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.3, depthWrite: false }), bordeDestino: new THREE.LineBasicMaterial({ transparent: true }) };
-    const caja = (mat, sx, sy, sz, x, y, z, sombra) => {
-      const m = new THREE.Mesh(GEO_CAJA, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); m.castShadow = !!sombra; m.receiveShadow = true; esc.add(m); return m;
+    const M = this.mat = { suelo: std(1), pasillo: std(1), fondo: std(1), acero: std(0.5, 0.25), items: std(0.62, 0.02), plataforma: std(0.7, 0.1), rodillo: std(0.6),
+      grua: std(0.5, 0.15), carro: std(0.5, 0.15), horquilla: std(0.5, 0.2), carga: std(0.6, 0.02),
+      sombraTray: new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 }), tray: new THREE.MeshBasicMaterial({ color: 0xffffff }),
+      destino: new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.3, depthWrite: false }), bordeDestino: new THREE.LineBasicMaterial({ transparent: true }),
+      rejilla: new THREE.LineBasicMaterial(), rejillaFuerte: new THREE.LineBasicMaterial(), cota: new THREE.LineBasicMaterial(),
+      discontinua: new THREE.LineDashedMaterial({ dashSize: 0.18, gapSize: 0.12 }) };
+    const caja = (mat, sx, sy, sz, x, y, z) => {
+      const m = new THREE.Mesh(GEO_CAJA, mat); m.scale.set(sx, sy, sz); m.position.set(x, y, z); esc.add(m); return m;
+    };
+    this.propios = [];
+    // segmentos de línea sueltos (rejilla y cotas): una sola geometría por material
+    const lineas = (puntos, mat) => {
+      const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(puntos, 3));
+      const l = new THREE.LineSegments(geo, mat); esc.add(l); this.propios.push(geo); return l;
     };
 
-    // suelo y pasillo
+    // suelo con rejilla de 1 m (una línea más marcada cada 5 m) y franja del pasillo
     const anchoSuelo = LIM.x1 - LIM.x0, hondoSuelo = LIM.y1 - LIM.y0;
-    const suelo = caja(M.suelo, anchoSuelo, 0.04, hondoSuelo, centro.x, -0.02, centro.z);
-    const pasillo = caja(M.pasillo, anchoSuelo, 0.02, LIM.y1 - FONDO, centro.x, 0.01, (LIM.y1 + FONDO) / 2);
-    pasillo.castShadow = false; suelo.castShadow = false;
+    caja(M.suelo, anchoSuelo, 0.04, hondoSuelo, centro.x, SUELO - 0.025, centro.z);
+    caja(M.pasillo, anchoSuelo, 0.01, LIM.y1 - FONDO, centro.x, SUELO, (LIM.y1 + FONDO) / 2);
+    const fina = [], fuerte = [], yR = SUELO + 0.012;
+    for (let x = Math.ceil(LIM.x0); x <= LIM.x1; x++) (x % 5 === 0 ? fuerte : fina).push(x, yR, LIM.y0, x, yR, LIM.y1);
+    for (let z = Math.ceil(LIM.y0); z <= LIM.y1; z++) (z % 5 === 0 ? fuerte : fina).push(LIM.x0, yR, z, LIM.x1, yR, z);
+    lineas(fina, M.rejilla); lineas(fuerte, M.rejillaFuerte);
 
     // estantería: fondo, postes y vigas
-    const fondo = new THREE.Mesh(new THREE.PlaneGeometry(LARGO, ALTURA), M.fondo); fondo.position.set(LARGO / 2, ALTURA / 2, -0.01); fondo.receiveShadow = true; esc.add(fondo);
-    this.propios = [fondo.geometry];
+    const fondo = new THREE.Mesh(new THREE.PlaneGeometry(LARGO, ALTURA), M.fondo); fondo.position.set(LARGO / 2, ALTURA / 2, -0.01); esc.add(fondo);
+    this.propios.push(fondo.geometry);
     const nPostes = 2 * (COLUMNAS + 1), nVigas = 2 * (FILAS + 1);
     const postes = new THREE.InstancedMesh(GEO_CAJA, M.acero, nPostes), vigas = new THREE.InstancedMesh(GEO_CAJA, M.acero, nVigas);
     const tmp = new THREE.Matrix4(), pos = new THREE.Vector3(), esq = new THREE.Vector3(), q = new THREE.Quaternion();
     let i = 0;
-    for (let c = 0; c <= COLUMNAS; c++) for (const z of [0.04, FONDO - 0.04]) postes.setMatrixAt(i++, tmp.compose(pos.set(c * COL_M, ALTURA / 2, z), q, esq.set(0.07, ALTURA, 0.07)));
+    for (let c = 0; c <= COLUMNAS; c++) for (const z of [0.04, FONDO - 0.04]) postes.setMatrixAt(i++, tmp.compose(pos.set(c * COL_M, ALTURA / 2, z), q, esq.set(0.06, ALTURA, 0.06)));
     i = 0;
-    for (let f = 0; f <= FILAS; f++) for (const z of [0.04, FONDO - 0.04]) vigas.setMatrixAt(i++, tmp.compose(pos.set(LARGO / 2, f * FIL_M, z), q, esq.set(LARGO, 0.06, 0.06)));
-    [postes, vigas].forEach(m => { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; esc.add(m); });
+    for (let f = 0; f <= FILAS; f++) for (const z of [0.04, FONDO - 0.04]) vigas.setMatrixAt(i++, tmp.compose(pos.set(LARGO / 2, f * FIL_M, z), q, esq.set(LARGO, 0.05, 0.05)));
+    [postes, vigas].forEach(m => { m.frustumCulled = false; esc.add(m); });
 
     // ítems: una caja por hueco (las vacías se ocultan con escala cero)
     const n = FILAS * COLUMNAS * CAPAS;
     const items = this.items = new THREE.InstancedMesh(GEO_CAJA, M.items, n);
-    items.frustumCulled = false; items.castShadow = true; items.receiveShadow = true;
+    items.frustumCulled = false;
     items.setColorAt(0, new THREE.Color(0xffffff));
     esc.add(items);
     this.matriz = new THREE.Matrix4(); this.colorTmp = new THREE.Color();
 
-    // E/S: plataforma con rodillos
-    const P = PLATAFORMA, cxp = (P.x0 + P.x1) / 2, czp = (P.y0 + P.y1) / 2;
-    caja(M.plataforma, P.x1 - P.x0, P.h, P.y1 - P.y0, cxp, P.h / 2, czp, true);
-    for (let k = 1; k < 6; k++) caja(M.rodillo, 0.05, 0.02, P.y1 - P.y0 - 0.1, P.x0 + (P.x1 - P.x0) * k / 6, P.h + 0.01, czp);
-    this.borde = new THREE.LineSegments(new THREE.EdgesGeometry(GEO_CAJA), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true }));
-    this.borde.scale.set(P.x1 - P.x0 + 0.3, P.h + 0.3, P.y1 - P.y0 + 0.3); this.borde.position.set(cxp, P.h / 2, czp); this.borde.visible = false; esc.add(this.borde);
-    this.propios.push(this.borde.geometry);
+    // Punto E/S: una placa delgada (no un bloque) con contorno, cruz de centrado y una línea de referencia discontinua hasta el suelo
+    // Detrás, la zona de espera, marcada solo con un contorno discontinuo
+    const S = ESTACION, hondo = S.z1 - S.z0, ancho = 2 * S.mesa;
+    this.placaES = caja(M.plataforma, ancho, 0.03, hondo, ES_X, S.h - 0.015, S.z);
+    const marca = [], r = 0.22, xm = ES_X, ym = S.h + 0.004, zm = S.z;
+    marca.push(xm - r, ym, zm, xm + r, ym, zm, xm, ym, zm - r, xm, ym, zm + r);
+    lineas(marca, M.cota);
+    const discontinua = (puntos) => {
+      const geo = new THREE.BufferGeometry().setFromPoints(puntos.map(q => new THREE.Vector3(...q)));
+      const l = new THREE.Line(geo, M.discontinua); l.computeLineDistances(); esc.add(l); this.propios.push(geo); return l;
+    };
+    if (S.h - SUELO > 0.15) discontinua([[ES_X, SUELO + 0.01, S.z], [ES_X, S.h - 0.03, S.z]]);
+    const z0c = S.z1 + 0.15, x0c = ES_X - S.mesa, x1c = ES_X + S.mesa, yc = S.h + 0.004;
+    discontinua([[x0c, yc, z0c], [x1c, yc, z0c], [x1c, yc, S.zC], [x0c, yc, S.zC], [x0c, yc, z0c]]);
+    const contorno = (z, fondo) => {
+      const c = new THREE.LineSegments(new THREE.EdgesGeometry(GEO_CAJA), new THREE.LineBasicMaterial({ transparent: true }));
+      c.scale.set(ancho + 0.2, 0.04, fondo + 0.2); c.position.set(ES_X, S.h + 0.02, z); c.visible = false; esc.add(c); this.propios.push(c.geometry); return c;
+    };
+    this.bordeMesa = contorno(S.z, hondo);
+    this.bordeCola = contorno((z0c + S.zC) / 2, S.zC - z0c);
 
     // rieles del pasillo (suelo y techo) y sus postes
-    const xr0 = LIM.x0 + 1.6, xr1 = LARGO + 0.2, altoRiel = ALTURA + 0.7;
-    caja(M.acero, xr1 - xr0, 0.08, 0.08, (xr0 + xr1) / 2, 0.06, RIEL);
-    caja(M.acero, xr1 - xr0, 0.08, 0.08, (xr0 + xr1) / 2, altoRiel, RIEL, true);
-    [xr0, xr1].forEach(x => caja(M.acero, 0.1, altoRiel, 0.1, x, altoRiel / 2, RIEL, true));
+    // el riel cubre la estantería y el E/S
+    const xr0 = Math.min(0, ES_X) - 0.6, xr1 = Math.max(LARGO, ES_X) + 0.2, altoRiel = Math.max(ALTURA, ESTACION.h) + 0.7, largoPoste = altoRiel - SUELO;
+    caja(M.acero, xr1 - xr0, 0.08, 0.08, (xr0 + xr1) / 2, SUELO + 0.06, RIEL);
+    caja(M.acero, xr1 - xr0, 0.08, 0.08, (xr0 + xr1) / 2, altoRiel, RIEL);
+    [xr0, xr1].forEach(x => caja(M.acero, 0.1, largoPoste, 0.1, x, SUELO + largoPoste / 2, RIEL));
+
+    // cotas del largo (al frente, sobre el suelo) y de la altura (a la derecha, en el plano del fondo), con trazos oblicuos en los extremos
+    const zC = LIM.y1 - 0.55, xC = LARGO + 0.95, yC = 0.03, tk = 0.16, cot = [];
+    cot.push(0, yC, zC, LARGO, yC, zC, 0, yC, FONDO + 0.15, 0, yC, zC + 0.25, LARGO, yC, FONDO + 0.15, LARGO, yC, zC + 0.25);
+    [0, LARGO].forEach(x => cot.push(x - tk, yC, zC + tk, x + tk, yC, zC - tk));
+    cot.push(xC, 0, 0, xC, ALTURA, 0, LARGO + 0.1, 0, 0, xC + 0.25, 0, 0, LARGO + 0.1, ALTURA, 0, xC + 0.25, ALTURA, 0);
+    [0, ALTURA].forEach(y => cot.push(xC - tk, y - tk, 0, xC + tk, y + tk, 0));
+    this.cotas = { zC, xC };
+    lineas(cot, M.cota);
 
     // grúa: mástil, carro, horquilla y carga
     const g = this.gruaObj = {};
-    g.mastil = caja(M.grua, 0.14, altoRiel, 0.14, 0, altoRiel / 2, RIEL, true);
-    g.carro = caja(M.carro, 1.1, 0.4, 0.7, 0, 0, RIEL, true);
-    g.horquilla = caja(M.horquilla, 0.26, 0.2, 1, 0, 0, RIEL, true);
-    g.carga = caja(M.carga, 0.68, 0.7, 0.6, 0, 0, RIEL, true);
+    g.mastil = caja(M.grua, 0.14, largoPoste, 0.14, 0, SUELO + largoPoste / 2, RIEL);
+    g.carro = caja(M.carro, 1.1, 0.4, 0.7, 0, 0, RIEL);
+    g.horquilla = caja(M.horquilla, 0.26, 0.2, 1, 0, 0, RIEL);
+    g.carga = caja(M.carga, 0.68, 0.7, 0.6, 0, 0, RIEL);
+    this.bordeCarro = new THREE.LineSegments(new THREE.EdgesGeometry(GEO_CAJA), new THREE.LineBasicMaterial()); this.bordeCarro.scale.copy(g.carro.scale);
+    esc.add(this.bordeCarro); this.propios.push(this.bordeCarro.geometry);
 
-    // ítems que entran o salen por el E/S
-    this.pool = [0, 1, 2].map(() => { const m = new THREE.Mesh(GEO_CAJA, new THREE.MeshStandardMaterial({ roughness: 0.55, transparent: true })); m.scale.set(0.8, 0.8, 0.7); m.visible = false; m.castShadow = true; esc.add(m); this.propios.push(m.material); return m; });
+    // ítems de la estación E/S (en cola, en tránsito o saliendo), del mismo tamaño que la carga de la grúa
+    this.pool = Array.from({ length: 10 }, () => { const m = new THREE.Mesh(GEO_CAJA, new THREE.MeshStandardMaterial({ roughness: 0.6, transparent: true })); m.scale.copy(g.carga.scale); m.visible = false; esc.add(m); this.propios.push(m.material); return m; });
 
     // celda destino y trayectoria Chebyshev
     const d = this.destGrupo = new THREE.Group(); d.visible = false;
@@ -656,27 +1135,39 @@ class Panel {
     this.trayecto = new THREE.Group(); this.trayecto.visible = false;
     this.trayecto.add(this.sombraTray, this.dashes, this.flecha, this.codo); esc.add(this.trayecto);
 
-    this.rotulos = new THREE.Group(); esc.add(this.rotulos);
+    // rótulos de la estantería (números y cotas) y del punto E/S, aparte: el detalle de la grúa oculta los de la estantería
+    this.rotulos = new THREE.Group(); this.rotulosES = new THREE.Group(); esc.add(this.rotulos, this.rotulosES);
     this.aplicarTema();
   }
 
   // Colores que dependen del tema (claro u oscuro)
   aplicarTema() {
-    const M = this.mat, T = this.tema = { almacenar: css('--almacenar'), recuperar: css('--recuperar'), acento: css('--acento'), suave: css('--suave'), texto: css('--texto') };
-    M.suelo.color.set(css('--vacio')); M.pasillo.color.set(css('--pendiente')); M.fondo.color.set(css('--hueco'));
-    M.acero.color.set(tono(css('--suave'), 0.9)); M.plataforma.color.set(T.acento); M.rodillo.color.set('#1f2937');
-    M.grua.color.set(T.texto); M.carro.color.set('#f8fafc'); M.horquilla.color.set('#cbd5e1');
-    const rot = this.rotulos; while (rot.children.length) { const h = rot.children.pop(); h.material.dispose(); }
+    const M = this.mat, T = this.tema = { almacenar: css('--almacenar'), recuperar: css('--recuperar'), acento: css('--acento'), suave: css('--suave'), tenue: css('--tenue'), texto: css('--texto'),
+      tinta: css('--vp-tinta'), carro: css('--vp-carro'), acero: css('--vp-acero'), fondo: css('--vp-fondo') };
+    M.suelo.color.set(css('--vp-suelo')); M.pasillo.color.set(css('--vp-pasillo')); M.fondo.color.set(css('--hueco'));
+    M.rejilla.color.set(css('--vp-rejilla')); M.rejillaFuerte.color.set(css('--vp-rejilla-fuerte')); M.cota.color.set(T.tenue); M.discontinua.color.set(T.suave);
+    M.acero.color.set(T.acero); M.plataforma.color.set(T.tinta); M.rodillo.color.set(T.acero);
+    M.grua.color.set(T.texto); M.carro.color.set(T.carro); M.horquilla.color.set(T.acero);
+    this.bordeCarro.material.color.set(T.texto);
+    [this.rotulos, this.rotulosES].forEach(gr => { while (gr.children.length) { const h = gr.children.pop(); h.material.dispose(); } });
+    let rot = this.rotulos;
     const sprite = (tex, x, y, z, w, h) => {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true })); s.position.set(x, y, z); s.scale.set(w, h, 1); s.renderOrder = 10; rot.add(s); return s;
     };
     const paso = n => n <= 12 ? 1 : (n <= 30 ? 5 : 10);
-    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % paso(COLUMNAS) === 0 || c === COLUMNAS - 1) sprite(rotulo(String(c + 1), T.suave, 84), (c + 0.5) * COL_M, 0.05, LIM.y1 - 0.5, 1.0, 0.5);
-    for (let f = 0; f < FILAS; f++) if (f === 0 || (f + 1) % paso(FILAS) === 0 || f === FILAS - 1) sprite(rotulo(String(f + 1), T.suave, 84), -0.55, (f + 0.5) * FIL_M, FONDO, 1.0, 0.5);
-    const y = 2.1, ejeX = ES_X;
-    this.etES = sprite(rotulo('E/S', '#ffffff', 96, true), ejeX, y, RIEL, 2.6, 1.3);
-    this.etEntra = sprite(rotulo('ENTRA', T.almacenar, 96, true), ejeX, y, RIEL, 2.6, 1.3);
-    this.etSale = sprite(rotulo('SALE', T.recuperar, 96, true), ejeX, y, RIEL, 2.6, 1.3);
+    // en estanterías grandes los rótulos crecen con la escena para seguir siendo legibles
+    const k = Math.max(1, Math.min(2.4, Math.max(LARGO, ALTURA) / 12));
+    for (let c = 0; c < COLUMNAS; c++) if (c === 0 || (c + 1) % paso(COLUMNAS) === 0 || c === COLUMNAS - 1) sprite(rotulo(String(c + 1), T.suave, 72), (c + 0.5) * COL_M, 0.05, (FONDO + ESTACION.z0) / 2, 0.9 * k, 0.45 * k);
+    for (let f = 0; f < FILAS; f++) if (f === 0 || (f + 1) % paso(FILAS) === 0 || f === FILAS - 1) sprite(rotulo(String(f + 1), T.suave, 72), -0.45 - 0.2 * k, (f + 0.5) * FIL_M, FONDO, 0.9 * k, 0.45 * k);
+    // valor de las cotas, en metros
+    const { zC, xC } = this.cotas;
+    sprite(rotulo(fmt1(LARGO) + ' m', T.suave, 60), LARGO / 2, 0.05, zC + 0.3 + 0.15 * k, 1.5 * k, 0.75 * k);
+    sprite(rotulo(fmt1(ALTURA) + ' m', T.suave, 60), xC + 0.3 + 0.5 * k, ALTURA / 2, 0, 1.5 * k, 0.75 * k);
+    const S = ESTACION;
+    rot = this.rotulosES;
+    sprite(rotulo('E/S', '#ffffff', 96, true), ES_X, S.h + 1.35, S.z, 1.8, 0.9);
+    sprite(rotulo('ESPERA', T.suave, 52, true), ES_X, S.h + 0.12, S.zC + 0.45, 1.5, 0.75);
+    this.bordeMesa.material.color.set(T.acento); this.bordeCola.material.color.set(T.almacenar);
     this.sucioItems = true;
   }
   liberar() {
@@ -693,12 +1184,12 @@ class Panel {
     cv.addEventListener('pointermove', ev => {
       if (!previo) return;
       CAM.az -= (ev.clientX - previo[0]) * 0.008; CAM.el = Math.max(0.02, Math.min(1.5, CAM.el + (ev.clientY - previo[1]) * 0.006));
-      previo = [ev.clientX, ev.clientY]; redibujar();
+      previo = [ev.clientX, ev.clientY]; if (vistaActual) marcarVista(null); redibujar();
     });
     const soltar = () => { previo = null; cv.style.cursor = 'grab'; };
     cv.addEventListener('pointerup', soltar); cv.addEventListener('pointercancel', soltar);
     cv.addEventListener('wheel', ev => { ev.preventDefault(); CAM.zoom = Math.max(0.5, Math.min(6, CAM.zoom * Math.exp(-ev.deltaY * 0.0012))); redibujar(); }, { passive: false });
-    cv.addEventListener('dblclick', () => { Object.assign(CAM, CAMARA_INICIAL); redibujar(); });
+    cv.addEventListener('dblclick', () => { Object.assign(CAM, CAMARA_INICIAL); marcarVista('iso'); redibujar(); });
   }
   // Orienta la cámara ortográfica y ajusta el encuadre para que toda la escena quepa
   ajustarCamara() {
@@ -745,13 +1236,13 @@ class Panel {
       malla.setMatrixAt(i, M.compose(pos.set(a[0] + ux * (s0 + len / 2), a[1] + uy * (s0 + len / 2), z), q, esc.set(grosor, len, grosor)));
       return true;
     };
-    // línea oscura continua debajo y trazos blancos encima
+    // línea oscura continua debajo y trazos claros encima
     const segmentos = [[p0, pc], [pc, fin]];
-    let ns = 0; segmentos.forEach(([a, b]) => { if (pieza(this.sombraTray, ns, a, b, 0.13)) ns++; }); this.sombraTray.count = ns; this.sombraTray.instanceMatrix.needsUpdate = true;
+    let ns = 0; segmentos.forEach(([a, b]) => { if (pieza(this.sombraTray, ns, a, b, 0.12)) ns++; }); this.sombraTray.count = ns; this.sombraTray.instanceMatrix.needsUpdate = true;
     let nd = 0;
     segmentos.forEach(([a, b]) => {
       const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      for (let s = 0; s < L && nd < MAX_DASHES; s += 0.55) if (pieza(this.dashes, nd, a, b, 0.065, s, Math.min(L, s + 0.32))) nd++;
+      for (let s = 0; s < L && nd < MAX_DASHES; s += 0.5) if (pieza(this.dashes, nd, a, b, 0.06, s, Math.min(L, s + 0.28))) nd++;
     });
     this.dashes.count = nd; this.dashes.instanceMatrix.needsUpdate = true;
     // punta de flecha al final y punto en el codo
@@ -761,36 +1252,70 @@ class Panel {
     this.trayecto.visible = true;
   }
 
+  // Triedro de ejes en la esquina inferior izquierda: muestra hacia dónde crecen columnas, filas y profundidad
+  dibujarEjes() {
+    const g = this.ctx, inv = this.camara.matrixWorldInverse, v = new THREE.Vector3(), ox = 46, oy = ALTO - 34, L = 20;
+    g.save(); g.lineWidth = 1.5; g.font = '600 9px ' + FUENTE_MONO; g.textAlign = 'center'; g.textBaseline = 'middle';
+    EJES.map(([nombre, color, d]) => { v.set(d[0], d[1], d[2]).transformDirection(inv); return { nombre, color, x: v.x, y: -v.y, z: v.z }; })
+      .sort((a, b) => a.z - b.z)
+      .forEach(a => {
+        g.strokeStyle = a.color; g.fillStyle = a.color;
+        g.beginPath(); g.moveTo(ox, oy); g.lineTo(ox + a.x * L, oy + a.y * L); g.stroke();
+        if (Math.hypot(a.x, a.y) > 0.2) g.fillText(a.nombre, ox + a.x * (L + 11), oy + a.y * (L + 9));
+      });
+    g.fillStyle = this.tema.texto; g.beginPath(); g.arc(ox, oy, 2, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
   dibujar(tiempo) {
-    const g = this.ctx, e = this.estadoGrua(tiempo), ahora = performance.now(), T = this.tema, M = this.mat, G = this.gruaObj;
+    const g = this.ctx, e = this.estadoGrua(tiempo), ahora = relojVisual, T = this.tema, M = this.mat, G = this.gruaObj;
     if (this.sucioItems || this.cambios.length > 40) { this.refrescarItems(); this.sucioItems = false; this.cambios = []; }
     else if (this.cambios.length) {
       this.cambios.forEach(q => this.actualizarItem(q[0], q[1], q[2])); this.cambios = [];
       this.items.instanceMatrix.needsUpdate = true; if (this.items.instanceColor) this.items.instanceColor.needsUpdate = true;
     }
 
-    // plataforma del E/S: su color y su rótulo dicen si entra o sale un ítem
-    const entra = this.anims.find(a => a.tipo === 'entra'), sale = this.anims.find(a => a.tipo === 'sale');
-    const activo = entra ? T.almacenar : (sale || this.destinoES) ? T.recuperar : null;
-    const pulso = 0.6 + 0.4 * Math.sin(ahora / 170);
-    M.plataforma.color.set(activo ? tono(activo, 0.9) : T.acento);
-    this.borde.visible = !!activo; if (activo) { this.borde.material.color.set(activo); this.borde.material.opacity = pulso; }
-    this.etES.visible = !activo; this.etEntra.visible = !!entra; this.etSale.visible = !entra && !!activo;
-    if (this.destinoES && this.destinoES.fin && ahora - this.destinoES.fin > 500) this.destinoES = null;
-
-    // el ítem llega o se va por el extremo izquierdo del pasillo
-    this.anims = this.anims.filter(a => ahora - a.t0 < 1000);
-    const ease = s => s < 0.5 ? 2 * s * s : 1 - Math.pow(-2 * s + 2, 2) / 2;
+    // Estación E/S: ítems en cola en la cinta de entrada, transferencia entre la mesa y la grúa y salidas por la cinta de salida
+    const carga = [e.X, e.H + 0.4, RIEL], pulso = 0.55 + 0.45 * Math.sin(ahora / 170);
+    this.salidas = this.salidas.filter(pz => this.progresoPieza(pz, tiempo) < 1);
+    const tr = this.trans, qt = tr ? this.puntoPieza(tr, tiempo, carga) : null;
+    if (tr && qt.p >= 1) this.trans = null;
+    const enTransito = this.trans && this.trans.tipo === 'J';
+    const visibles = this.cola.concat(this.salidas, enTransito ? [this.trans] : []), llega = this.llegadaEnCurso(tiempo);
     this.pool.forEach((m, i) => {
-      const a = this.anims[i];
-      if (!a) { m.visible = false; return; }
-      const k = (ahora - a.t0) / 1000, dentro = ES_X, fuera = LIM.x0 + 0.5;
-      const X = a.tipo === 'entra' ? fuera + (dentro - fuera) * ease(Math.min(1, k / 0.45)) : dentro + (fuera - dentro) * ease(Math.max(0, Math.min(1, (k - 0.25) / 0.6)));
-      m.material.opacity = a.tipo === 'entra' ? (k < 0.7 ? 1 : 1 - (k - 0.7) / 0.3) : (k < 0.2 ? 1 : 1 - (k - 0.2) / 0.8);
-      m.material.color.set(this.colorSku(a.clase)); m.position.set(X, PLATAFORMA.h + 0.4, RIEL); m.visible = true;
+      const pz = visibles[i];
+      if (!pz && llega && i === visibles.length) {
+        m.material.opacity = llega.op; m.material.depthWrite = llega.op > 0.99;
+        m.material.color.set(this.colorSku(llega.sku)); m.position.set(...llega.pos); m.visible = true; return;
+      }
+      if (!pz) { m.visible = false; return; }
+      const q = pz === tr ? qt : this.puntoPieza(pz, tiempo, carga);
+      // aparece al entrar por la cinta y se desvanece al final de la cinta de salida
+      let op = 1;
+      if (pz.entra) op = Math.min(1, q.p / 0.3);
+      if (pz.sale && q.seg === pz.pts.length - 2) op = Math.min(1, (1 - q.local) / 0.35);
+      m.material.opacity = op; m.material.depthWrite = op > 0.99;
+      m.material.color.set(this.colorSku(pz.sku)); m.position.set(q.pos[0], q.pos[1], q.pos[2]); m.visible = true;
     });
+    // la zona de espera se marca mientras hay ítems esperando y el punto E/S durante una transferencia o cuando la grúa va a entregar
+    if (this.destinoES && this.destinoES.fin && ahora - this.destinoES.fin > 500) this.destinoES = null;
+    this.bordeCola.visible = this.cola.length > 0 || !!llega; this.bordeCola.material.opacity = pulso;
+    const marcaES = this.trans || this.salidas.length || this.destinoES;
+    this.bordeMesa.visible = !!marcaES; this.bordeMesa.material.opacity = pulso;
+    const tipoES = this.trans ? this.trans.tipo : 'S';
+    this.bordeMesa.material.color.set(tipoES === 'J' ? T.almacenar : tipoES === 'S' ? T.recuperar : T.acento);
+    // la horquilla sale hacia la mesa durante la transferencia, solo si la grúa sigue frente a ella
+    let alcance = 0;
+    const frenteES = Math.abs(e.X - ES_X) < 0.05 && Math.abs(e.H - ES_H) < 0.05 && e.Y >= RIEL - 0.02;
+    if (this.trans && (frenteES || (this.trans.tipo === 'J' && qt.seg === 1))) {
+      const tramo = this.trans.tipo === 'J' ? 1 : 0;           // tramo entre la mesa y la grúa
+      if (qt.seg === tramo) alcance = (qt.pos[2] - RIEL) / (ESTACION.z - RIEL);
+      else if (qt.seg < tramo) alcance = Math.min(1, qt.local * 3);   // sale mientras el ítem avanza hasta la mesa
+      else alcance = Math.max(0, 1 - qt.local * 4);                 // vuelve después de dejarlo
+      alcance = Math.max(0, Math.min(1, alcance));
+    }
 
-    // celda destino: el hueco se enmarca con un volumen pulsante, turquesa si se deja un ítem y rosa si se retira
+    // celda destino: el hueco se enmarca con un volumen pulsante del color de la operación (almacenar o recuperar)
     const d = this.destino;
     if (d) {
       const col = d.tipo === 'D' ? T.almacenar : T.recuperar;
@@ -812,46 +1337,77 @@ class Panel {
 
     // grúa: mástil sobre el riel, carro a la altura de la fila y horquilla que entra al canal
     const enMov = e.fase === 1;
-    G.mastil.position.x = e.X; G.carro.position.set(e.X, e.H - 0.3, RIEL);
-    M.carro.color.set(enMov ? T.acento : '#f8fafc'); M.horquilla.color.set(enMov ? T.acento : '#cbd5e1');
+    G.mastil.position.x = e.X; G.carro.position.set(e.X, e.H - 0.3, RIEL); this.bordeCarro.position.copy(G.carro.position);
+    M.carro.color.set(enMov ? T.acento : T.carro); M.horquilla.color.set(enMov ? T.acento : T.acero);
     const dentro = e.Y < RIEL - 0.02;
-    G.horquilla.visible = dentro;
+    const fuera = dentro ? 0 : alcance * (ESTACION.z - RIEL);
+    G.horquilla.visible = dentro || fuera > 0.02;
     if (dentro) { G.horquilla.scale.z = RIEL - e.Y; G.horquilla.position.set(e.X, e.H - 0.05, (e.Y + RIEL) / 2); }
-    G.carga.visible = !!this.mano;
+    else if (fuera > 0.02) { G.horquilla.scale.z = fuera; G.horquilla.position.set(e.X, e.H - 0.05, RIEL + fuera / 2); }
+    // mientras el ítem de la entrada va hacia el carro se dibuja como pieza en tránsito, no como carga
+    G.carga.visible = !!this.mano && !enTransito;
     if (this.mano) { M.carga.color.set(this.colorSku(this.mano)); G.carga.position.set(e.X, e.H + 0.4, dentro ? e.Y : RIEL); }
 
     this.ajustarCamara();
     RENDER.render(this.escena, this.camara);
     g.clearRect(0, 0, ANCHO, ALTO);
     g.drawImage(RENDER.domElement, 0, 0, ANCHO, ALTO);
+    this.dibujarEjes();
+    this.dibujarDetalle(e);
+  }
+
+  // Detalle de la grúa: en estanterías grandes el carro y la horquilla ocupan pocos píxeles, así que se repiten ampliados en una esquina,
+  // siguiendo al carro y con la misma orientación de la cámara; si con el zoom ya se ven grandes, el recuadro no aparece
+  dibujarDetalle(e) {
+    if (!mostrarDetalle) return;
+    const cam = this.camara, w = Math.round(Math.min(300, ANCHO * 0.4)), h = Math.round(w * 0.6), x = ANCHO - w - 10, y = ALTO - h - 10, semi = 3.4;
+    // píxeles por metro en la vista principal, medidos en la posición del carro
+    const a = new THREE.Vector3(e.X, e.H, RIEL).project(cam), b = new THREE.Vector3(e.X + 1, e.H, RIEL).project(cam);
+    if (Math.hypot(b.x - a.x, (b.y - a.y) * ALTO / ANCHO) / 2 * ANCHO > 0.8 * w / (2 * semi)) return;
+    const c = this.camDetalle || (this.camDetalle = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, this.diag * 3));
+    // centrado en el carro, entre la cara de la estantería y el riel, para que se vean la celda y la horquilla
+    const centro = new THREE.Vector3(e.X, e.H + 0.2, RIEL - 0.3);
+    c.position.copy(centro).add(new THREE.Vector3().subVectors(cam.position, this.objetivo)); c.lookAt(centro);
+    c.left = -semi; c.right = semi; c.top = semi * h / w; c.bottom = -semi * h / w; c.updateProjectionMatrix();
+    RENDER.setScissorTest(true); RENDER.setViewport(x, ALTO - y - h, w, h); RENDER.setScissor(x, ALTO - y - h, w, h);
+    this.rotulos.visible = false; RENDER.clear(); RENDER.render(this.escena, c); this.rotulos.visible = true;
+    RENDER.setScissorTest(false); RENDER.setViewport(0, 0, ANCHO, ALTO);
+    const g = this.ctx;
+    g.fillStyle = this.tema.fondo; g.fillRect(x, y, w, h);
+    g.drawImage(RENDER.domElement, x * DPR, y * DPR, w * DPR, h * DPR, x, y, w, h);
+    g.strokeStyle = this.tema.tenue; g.lineWidth = 1; g.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    g.font = '600 9px ' + FUENTE_MONO; g.textBaseline = 'top';
+    const titulo = 'DETALLE GRÚA', tw = g.measureText(titulo).width;
+    g.fillStyle = this.tema.fondo; g.fillRect(x + 1, y + 1, tw + 14, 18);
+    g.fillStyle = this.tema.suave; g.fillText(titulo, x + 8, y + 6);
   }
   actualizarPie(tiempo) {
     const t = this.fin !== null ? this.fin : tiempo;
     const hechas = this.fin !== null ? totalTareas : this.hechas;
-    // rótulo grande de la tarea en curso: acción y clase del ítem
+    // rótulo de la tarea en curso: operación y SKU del ítem
     this.elTipo.textContent = this.tipoTarea || 'EN ESPERA';
     this.elTipo.className = 'tipo ' + ({ ALMACENAR: 'almacenar', RECUPERAR: 'recuperar', OMITIDA: 'omitida', TERMINADO: 'fin' }[this.tipoTarea] || '');
     this.elChip.style.display = this.claseTarea ? 'inline-flex' : 'none';
     this.elChip.textContent = nombreSku(this.claseTarea); this.elChip.style.background = this.claseTarea ? this.colorSku(this.claseTarea) : '';
     this.elAccion.textContent = this.textoAccion;
-    this.pie.innerHTML = '<span>Tareas ' + hechas + '/' + totalTareas + '</span><span>' +
-      (this.fin !== null ? 'Terminó en ' + fmt(this.fin) + ' s' : fmt(t) + ' s') + '</span>';
+    this.pie.innerHTML = '<span>TAREAS <b>' + hechas + '</b>/' + totalTareas + '</span><span>' +
+      (this.fin !== null ? 'FIN <b>' + fmt(this.fin) + '</b> s' : 'T <b>' + fmt(t) + '</b> s') + '</span>';
   }
   progreso() { return this.fin !== null ? totalTareas : this.hechas; }
 }
 
 // ================= carrera =================
-// Leyenda propia de cada panel: qué significa el color de los ítems en esa política
+// Clave propia de cada visor: qué significa el color de los ítems en esa política
 function leyendaPanel(modo) {
   if (modo === 'clase') {
-    let h = '<span>Color = clase del SKU</span>';
+    let h = '<span>COLOR = CLASE</span>';
     for (let c = 1; c <= Math.max(1, ...CLASE_SKU); c++) {
       const skus = CLASE_SKU.reduce((a, g) => a + (g === c ? 1 : 0), 0), dem = (DATOS.demanda_sku || []).reduce((a, d, i) => a + (CLASE_SKU[i] === c ? d : 0), 0);
-      h += '<span><i class="punto" style="background:' + colorGrupo(c) + '"></i>' + letra(c) + ' · ' + skus + (skus === 1 ? ' SKU' : ' SKUs') + ' · ' + Math.round(100 * dem) + ' %</span>';
+      h += '<span title="' + skus + (skus === 1 ? ' SKU' : ' SKUs') + ', ' + Math.round(100 * dem) + ' % de la demanda"><i class="punto" style="background:' + colorGrupo(c) + '"></i>' + letra(c) + ' ' + skus + '·' + Math.round(100 * dem) + '%</span>';
     }
     return h;
   }
-  return '<span>Color = rotación del SKU</span><span class="degradado" style="background:linear-gradient(90deg,' + PALETA_ROTACION.join(',') + ')"></span><span>más → menos</span>';
+  return '<span>COLOR = ROTACIÓN</span><span>más<i class="degradado" style="background:linear-gradient(90deg,' + PALETA_ROTACION.join(',') + ')"></i>menos</span>';
 }
 
 function construir() {
@@ -860,29 +1416,33 @@ function construir() {
   const columnasTareas = totalTareas <= 72 ? 36 : (totalTareas <= 300 ? 60 : 100);
   paneles.forEach(p => p.liberar());
   const cont = el('paneles'); cont.innerHTML = '';
-  paneles = r.politicas.map(p => {
+  el('tablero').classList.remove('vacio');
+  paneles = r.politicas.map((p, i) => {
     const tarjeta = document.createElement('article'); tarjeta.className = 'panel';
-    tarjeta.innerHTML = '<div class="cabecera"><h3>' + (NOMBRES[p.nombre] || p.nombre) + '</h3><span class="insignia"></span></div>' +
-      '<div class="leyenda-panel">' + leyendaPanel(p.color_por || 'clase') + '</div>' +
-      '<div class="estado"><div class="linea"><span class="tipo"></span><span class="chip"></span></div><span class="accion"></span></div><canvas></canvas>' +
-      '<div class="tareas" style="grid-template-columns:repeat(' + columnasTareas + ',1fr)">' + SECUENCIA.map(() => '<i></i>').join('') + '</div><div class="pie"></div>';
+    tarjeta.innerHTML = '<header class="vp-cab"><span class="vp-id">P' + (i + 1) + '</span><h3>' + nombreEscenario(p) + '</h3><span class="insignia"></span></header>' +
+      '<div class="estado"><span class="tipo"></span><span class="chip"></span><span class="accion"></span></div>' +
+      '<div class="vp"><canvas></canvas><i class="esq a"></i><i class="esq b"></i><i class="esq c"></i><i class="esq d"></i><span class="vp-etq"></span></div>' +
+      '<div class="tareas" style="grid-template-columns:repeat(' + columnasTareas + ',1fr)">' + SECUENCIA.map(() => '<i></i>').join('') + '</div>' +
+      '<footer class="vp-pie"><div class="leyenda-panel">' + leyendaPanel(p.color_por || 'clase') + '</div><div class="pie"></div></footer>';
     cont.appendChild(tarjeta);
     return new Panel(p, tarjeta);
   });
   const marc = el('marcador'); marc.innerHTML = '';
   paneles.forEach((p, i) => {
     const f = document.createElement('div'); f.className = 'fila'; f.dataset.i = i;
-    f.innerHTML = '<span class="lugar">–</span><span>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</span><span class="barra"><i></i></span><span class="valor"></span>';
+    f.innerHTML = '<span class="lugar">–</span><span class="nombre"><em>P' + (i + 1) + '</em>' + nombreEscenario(p.d) + '</span><span class="valor"></span><span class="barra"><i></i></span>';
     marc.appendChild(f);
   });
+  el('marcadorNota').textContent = totalTareas + ' tareas';
   el('resultados').classList.remove('visible'); el('vacioRes').hidden = false;
+  marcarVista(vistaActual);
   reiniciar();
 }
 
 function reiniciar() {
-  el('btnVerResultados').hidden = true;
+  el('grupoVerResultados').hidden = true;
   t = 0; jugando = false;
-  el('jugar').textContent = 'Iniciar';
+  ponerJugar('Iniciar');
   paneles.forEach(p => p.reiniciar());
   paso(0);
 }
@@ -898,7 +1458,7 @@ function marcador() {
   const cont = el('marcador');
   orden.forEach((i, pos) => {
     const f = filas.find(x => +x.dataset.i === i), p = paneles[i];
-    f.querySelector('.lugar').textContent = p.fin !== null ? p.lugar + '.º' : (pos + 1);
+    f.querySelector('.lugar').textContent = p.fin !== null ? p.lugar + '.º' : String(pos + 1).padStart(2, '0');
     f.querySelector('.barra i').style.width = (100 * p.progreso() / totalTareas) + '%';
     f.querySelector('.valor').textContent = p.fin !== null ? fmt(p.fin) + ' s' : p.progreso() + '/' + totalTareas;
     f.classList.toggle('termino', p.fin !== null);
@@ -909,10 +1469,10 @@ function marcador() {
 function resultados() {
   const orden = paneles.slice().sort((a, b) => a.fin - b.fin), mejor = orden[0].fin;
   el('tabla').innerHTML = orden.map((p, i) =>
-    '<tr><td>' + (i + 1) + '.º</td><td>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</td><td class="num">' + fmt(p.fin) +
+    '<tr class="' + (i === 0 ? 'mejor' : '') + '"><td class="num" style="text-align:left">' + (i + 1) + '.º</td><td><em>P' + (paneles.indexOf(p) + 1) + '</em>' + nombreEscenario(p.d) + '</td><td class="num">' + fmt(p.fin) +
     '</td><td class="num">' + (i === 0 || mejor === 0 ? '–' : '+' + fmt(p.fin - mejor) + ' s (+' + (100 * (p.fin - mejor) / mejor).toFixed(0) + ' %)') +
     '</td><td class="num">' + p.d.reubicaciones + '</td></tr>').join('');
-  el('resultados').classList.add('visible'); el('vacioRes').hidden = true; mostrarVeredicto(); el('btnVerResultados').hidden = false;
+  el('resultados').classList.add('visible'); el('vacioRes').hidden = true; mostrarVeredicto(); el('grupoVerResultados').hidden = false;
 }
 
 // Vuelve a dibujar todos los paneles sin avanzar el reloj (al mover la cámara)
@@ -935,16 +1495,17 @@ function paso(dt) {
   if (ahora - ultimoMarcador > 150 || dt === 0) { marcador(); ultimoMarcador = ahora; }
   if (paneles.every(p => p.fin !== null)) {
     marcador(); resultados();
-    jugando = false; el('jugar').textContent = 'Repetir';
+    jugando = false; ponerJugar('Repetir');
   }
 }
 
 function velocidadReal() { return Math.round(Math.pow(10, 1 + el('velocidad').value / 100 * 2.6)); }
-function mostrarVelocidad() { el('velocidadTexto').textContent = fmt(velocidadReal()) + ' s/s'; }
+function mostrarVelocidad() { el('velocidadTexto').textContent = '×' + fmt(velocidadReal()); }
 
 function bucle(ms) {
   if (!jugando) return;
   const dt = Math.min((ms - ultimo) / 1000, 0.1) * velocidadReal();
+  relojVisual += Math.max(0, Math.min(ms - ultimo, 100));
   ultimo = ms; paso(dt);
   if (jugando) requestAnimationFrame(bucle);
 }
@@ -953,46 +1514,77 @@ el('jugar').onclick = () => {
   if (!paneles.length) return;
   if (paneles.every(p => p.fin !== null)) reiniciar();
   jugando = !jugando;
-  el('jugar').textContent = jugando ? 'Pausar' : 'Continuar';
+  ponerJugar(jugando ? 'Pausar' : 'Continuar');
   if (jugando) { ultimo = performance.now(); requestAnimationFrame(bucle); }
 };
 el('reiniciar').onclick = reiniciar;
 el('final').onclick = () => {
   if (!paneles.length) return;
-  jugando = false; el('jugar').textContent = 'Repetir';
+  jugando = false; ponerJugar('Repetir');
   paneles.forEach(p => p.reiniciar()); t = 0;
   // se avanza en pasos pequeños para que los lugares de llegada respeten el orden de tiempo
   const maximo = Math.max(...paneles.map(p => p.d.eventos[p.d.eventos.length - 1][0]));
   const salto = Math.max(1, maximo / 4000);
   while (!paneles.every(p => p.fin !== null)) { t += salto; paneles.forEach(p => p.avanzar(t)); }
+  paneles.forEach(p => p.asentar());
   paso(0);
 };
 el('velocidad').oninput = mostrarVelocidad;
-document.addEventListener('keydown', e => { if (e.code === 'Space' && !['SELECT', 'INPUT', 'TEXTAREA', 'BUTTON'].includes(e.target.tagName)) { e.preventDefault(); el('jugar').click(); } });
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { paneles.forEach(p => p.aplicarTema()); redibujar(); });
 
-document.querySelectorAll('#vistas button').forEach(b => { b.onclick = () => { Object.assign(CAM, VISTAS[b.dataset.vista], { zoom: 1 }); redibujar(); }; });
-el('replica').onchange = () => { replicaActual = +el('replica').value; construir(); };
+// Recuadro de detalle de la grúa: se puede ocultar si tapa parte de la escena; la elección se recuerda en este navegador
+let mostrarDetalle = true;
+try { mostrarDetalle = localStorage.getItem('asrs_detalle') !== 'no'; } catch (e) {}
+function ponerDetalle(v) {
+  mostrarDetalle = v;
+  const b = el('btnDetalle'); b.classList.toggle('activa', v); b.setAttribute('aria-pressed', String(v));
+  try { localStorage.setItem('asrs_detalle', v ? 'si' : 'no'); } catch (e) {}
+  redibujar();
+}
+el('btnDetalle').onclick = () => ponerDetalle(!mostrarDetalle);
+ponerDetalle(mostrarDetalle);
+document.addEventListener('keydown', e => {
+  if (['SELECT', 'INPUT', 'TEXTAREA', 'BUTTON'].includes(e.target.tagName) || el('vistaCarrera').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.code === 'Space') { e.preventDefault(); el('jugar').click(); }
+  else if (e.code === 'KeyD') { e.preventDefault(); ponerDetalle(!mostrarDetalle); }
+});
+
+// Tema: automático (sigue al sistema), claro u oscuro
+const TEMAS = ['auto', 'claro', 'oscuro'], NOMBRES_TEMA = { auto: 'Auto', claro: 'Claro', oscuro: 'Oscuro' };
+let temaActual = 'auto';
+try { temaActual = localStorage.getItem('asrs_tema') || 'auto'; } catch (e) {}
+function aplicarTemaPagina() {
+  const raiz = document.documentElement;
+  if (temaActual === 'claro') raiz.dataset.theme = 'light'; else if (temaActual === 'oscuro') raiz.dataset.theme = 'dark'; else delete raiz.dataset.theme;
+  el('btnTema').querySelector('span').textContent = NOMBRES_TEMA[temaActual] || 'Auto';
+  tonos.clear();
+  paneles.forEach(p => p.aplicarTema()); redibujar();
+}
+el('btnTema').onclick = () => {
+  temaActual = TEMAS[(TEMAS.indexOf(temaActual) + 1) % TEMAS.length];
+  try { localStorage.setItem('asrs_tema', temaActual); } catch (e) {}
+  aplicarTemaPagina();
+};
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (temaActual === 'auto') aplicarTemaPagina(); });
+
+document.querySelectorAll('#vistas button').forEach(b => { b.onclick = () => { Object.assign(CAM, VISTAS[b.dataset.vista], { zoom: 1 }); marcarVista(b.dataset.vista); redibujar(); }; });
 
 function construirLeyenda() {
-  const ley = el('leyenda'); ley.innerHTML = '';
-  ley.insertAdjacentHTML('beforeend', '<span>El color de cada ítem depende de la política (mira la leyenda de cada panel); el número del SKU aparece en el rótulo de la tarea</span>');
-  ley.insertAdjacentHTML('beforeend',
-    '<span>Vista 3D: arrastra para girar, rueda para acercar, doble clic para restablecer. Fila 1 y columna 1 abajo a la izquierda, cada celda tiene ' + CAPAS + (CAPAS === 1 ? ' lugar' : ' lugares') + ' en profundidad</span>' +
-    '<span><i class="punto" style="background:var(--acento)"></i>E/S: plataforma en el pasillo, por donde entran y salen los ítems</span>' +
-    '<span>Línea discontinua: trayectoria Chebyshev (x e y a la vez, cada eje a su velocidad; el punto marca donde llega el eje más rápido)</span>' +
-    '<span><i class="punto" style="background:var(--almacenar)"></i>Turquesa: hueco donde se deja un ítem, o entrada al E/S</span>' +
-    '<span><i class="punto" style="background:var(--recuperar)"></i>Rosa: hueco del que se retira un ítem, o salida hacia el E/S</span>' +
-    '<span><i class="punto" style="background:var(--almacenar)"></i>Tarea de almacenar</span>' +
-    '<span><i class="punto" style="background:var(--recuperar)"></i>Tarea de recuperar</span>');
+  const item = (muestra, texto) => '<li>' + muestra + '<span>' + texto + '</span></li>';
+  el('leyenda').innerHTML = '<ul class="clave">' +
+    item('<i class="punto" style="background:var(--almacenar)"></i>', '<b>Almacenar</b>: tarea, hueco donde se deja el ítem o ítem que entra por el E/S') +
+    item('<i class="punto" style="background:var(--recuperar)"></i>', '<b>Recuperar</b>: tarea, hueco del que se retira el ítem o ítem que sale por el E/S') +
+    item('<i class="punto tray"></i>', '<b>Trayectoria Chebyshev</b>: x e y a la vez, cada eje a su velocidad; el punto marca dónde llega el eje más rápido') +
+    item('<i class="punto" style="background:var(--acento)"></i>', '<b>Carro y horquilla</b> en naranja: la grúa entra o sale de un canal (eje z)') +
+    item('<i class="punto" style="background:var(--vp-tinta)"></i>', '<b>Punto E/S</b>: placa frente a la grúa por donde entran y salen los ítems. Los que llegan bajan sobre la zona de espera (contorno discontinuo) hasta que la grúa los toma; los entregados se retiran subiendo. El borde se ilumina en verde al tomar y en azul al entregar') +
+    '</ul><p class="nota">Arrastra para girar, rueda para acercar, doble clic para restablecer; la tecla D muestra u oculta el detalle de la grúa. Fila 1 y columna 1 abajo a la izquierda; cada celda tiene ' + CAPAS + (CAPAS === 1 ? ' lugar' : ' lugares') +
+    ' en profundidad. El color de los ítems depende de la política: mira la clave al pie de cada visor. Las cotas dan el largo y la altura de la estantería.</p>';
 }
 
 function cargarDatos(datos) {
+  // la carrera muestra la primera réplica; las demás siguen en los datos y cuentan en la estadística
   DATOS = datos; replicaActual = 0;
+  VARIAS_RECUPERACIONES = recuperacionesDe(DATOS.replicas[0].politicas).size > 1;
   prepararEscena();
-  const sel = el('replica'); sel.innerHTML = '';
-  DATOS.replicas.forEach((r, i) => { const o = document.createElement('option'); o.value = i; o.textContent = (i + 1) + ' (semilla ' + r.semilla + ')'; sel.appendChild(o); });
-  el('etqReplica').hidden = DATOS.replicas.length < 2;      // solo el archivo autónomo puede traer varias réplicas
   construirLeyenda();
   construir();
 }
@@ -1000,8 +1592,9 @@ function cargarDatos(datos) {
 function escenaVacia(texto) {
   paneles.forEach(p => p.liberar());
   paneles = []; DATOS = null;
-  el('paneles').innerHTML = '<div class="vacio-escena">' + texto + '</div>';
-  el('marcador').innerHTML = ''; el('leyenda').innerHTML = ''; el('replica').innerHTML = '';
+  el('paneles').innerHTML = '<div class="vacio-escena"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="14" width="40" height="36"/><path d="M8 26h40M8 38h40M21 14v36M34 14v36"/><path class="ac" d="M54 8v48M50 30h8"/></svg><p>' + texto + '</p></div>';
+  el('tablero').classList.add('vacio');
+  el('marcador').innerHTML = ''; el('leyenda').innerHTML = '';
   el('resultados').classList.remove('visible'); el('estadistica').classList.remove('visible'); el('veredicto').hidden = true;
 }
 
@@ -1017,30 +1610,30 @@ function mostrarVeredicto() {
   const caja = el('veredicto'), est = ESTADISTICA && ESTADISTICA.replicas ? ESTADISTICA : null;
   let filas = null, base = '';
   if (est) {
-    filas = est.politicas.map(f => ({ nombre: f.nombre, media: f.tiempo_total.media, ic: f.tiempo_total.ic95, victorias: f.victorias, dif: f.tiempo_total.vs_mejor })).sort((a, b) => a.media - b.media);
+    filas = est.politicas.map(f => ({ nombre: f.nombre, recuperacion: f.recuperacion, media: f.tiempo_total.media, ic: f.tiempo_total.ic95, victorias: f.victorias, dif: f.tiempo_total.vs_mejor })).sort((a, b) => a.media - b.media);
     base = 'promedio de ' + est.replicas + (est.replicas === 1 ? ' réplica' : ' réplicas');
   } else if (paneles.length && paneles.every(p => p.fin !== null)) {
-    filas = paneles.map(p => ({ nombre: p.d.nombre, media: p.fin, ic: 0, victorias: null })).sort((a, b) => a.media - b.media);
+    filas = paneles.map(p => ({ nombre: p.d.nombre, recuperacion: p.d.recuperacion, media: p.fin, ic: 0, victorias: null })).sort((a, b) => a.media - b.media);
     const r0 = DATOS.replicas[replicaActual];
-    base = r0.tareas_totales > r0.secuencia.length ? 'carrera, primeras ' + fmt(r0.secuencia.length) + ' tareas' : 'réplica ' + (replicaActual + 1);
+    base = r0.tareas_totales > r0.secuencia.length ? 'carrera, primeras ' + fmt(r0.secuencia.length) + ' tareas' : 'carrera';
   }
   if (!filas) { caja.hidden = true; return; }
-  const nom = f => NOMBRES[f.nombre] || f.nombre, [a, b] = filas;
-  if (!b) { caja.hidden = false; caja.className = 'veredicto'; caja.innerHTML = '<h2>' + nom(a) + '</h2><p>Solo hay una política en el escenario: ' + fmt(a.media) + ' s (' + base + ').</p>'; return; }
+  const [a, b] = filas;
+  if (!b) { caja.hidden = false; caja.className = 'veredicto'; caja.innerHTML = '<h2>' + nombreEscenario(a) + '</h2><p>Solo hay una política en el escenario: ' + fmt(a.media) + ' s (' + base + ').</p>'; return; }
   const menos = b.media > 0 ? 100 * (b.media - a.media) / b.media : 0;
   // Todas las políticas corren las mismas secuencias, así que se compara réplica a réplica: la diferencia con la segunda
   // es significativa si su intervalo de confianza del 95 % no incluye el cero. Con una réplica no hay con qué estimar la variación
   const pareado = est && est.replicas > 1 && b.dif ? b.dif : null;
   const dudoso = pareado ? pareado.media - pareado.ic95 <= 0 : false;
-  const txtDif = pareado ? 'La diferencia con ' + nom(b) + ' es de ' + fmt1(pareado.media) + ' ± ' + fmt1(pareado.ic95) + ' s por réplica (IC 95 %, comparación pareada)' : '';
+  const txtDif = pareado ? 'La diferencia con ' + nombreEscenario(b) + ' es de ' + fmt1(pareado.media) + ' ± ' + fmt1(pareado.ic95) + ' s por réplica (IC 95 %, comparación pareada)' : '';
   caja.hidden = false; caja.className = 'veredicto' + (dudoso ? ' dudoso' : '');
-  caja.innerHTML = '<h2>' + (dudoso ? nom(a) + ' y ' + nom(b) + ' quedan muy parejas' : nom(a) + ' es la más rápida') + '</h2>' +
+  caja.innerHTML = '<span class="micro">Veredicto</span><h2>' + (dudoso ? nombreEscenario(a) + ' y ' + nombreEscenario(b) + ' quedan muy parejas' : nombreEscenario(a) + ' es la más rápida') + '</h2>' +
     '<p>' + (!pareado ? 'Con una sola réplica no se sabe si la ventaja es real: aumenta las réplicas para tener estadística.' :
       dudoso ? txtDif + ' y ese intervalo incluye el cero, así que la diferencia no es concluyente. Prueba con más réplicas en el escenario.' :
       txtDif + ': el intervalo no incluye el cero, así que la ventaja es estadísticamente significativa.') + '</p>' +
-    '<div class="cifras"><div><b>' + fmt(a.media) + ' s</b><small>tiempo total (' + base + (est ? ', ± ' + fmt(a.ic) : '') + ')</small></div>' +
-    '<div><b>' + pct1(menos) + ' %</b><small>menos tiempo que la segunda (' + nom(b) + ')</small></div>' +
-    (a.victorias !== null ? '<div><b>' + a.victorias + ' de ' + est.replicas + '</b><small>réplicas en las que termina primera</small></div>' : '') + '</div>';
+    '<div class="cifras"><div><small>Tiempo total · ' + base + '</small><b>' + fmt(a.media) + ' s' + (est ? ' ± ' + fmt(a.ic) : '') + '</b></div>' +
+    '<div><small>Menos que la segunda</small><b>' + pct1(menos) + ' %</b></div>' +
+    (a.victorias !== null ? '<div><small>Réplicas en que termina primera</small><b>' + a.victorias + ' de ' + est.replicas + '</b></div>' : '') + '</div>';
 }
 
 function mostrarEstadistica(est) {
@@ -1056,32 +1649,32 @@ function mostrarEstadistica(est) {
   const mejor = filas[0][m].media, maxVal = Math.max(...filas.map(f => f[m].media + f[m].ic95)) || 1;
   const decimales = m === 'reubicaciones' || m === 'operaciones' ? 1 : 0;
   const nf = v => decimales ? fmt1(v) : fmt(v);
-  el('tituloEstadistica').textContent = 'Estadística de ' + est.replicas + (est.replicas === 1 ? ' réplica' : ' réplicas');
+  el('tituloEstadistica').textContent = 'Estadística · ' + est.replicas + (est.replicas === 1 ? ' réplica' : ' réplicas');
   el('encEstadistica').innerHTML = '<tr><th>Política</th><th>Promedio ± IC 95 %</th><th class="num">Desv. estándar</th><th class="num">Mínimo</th><th class="num">Máximo</th><th class="num">vs. la mejor</th><th class="num">Veces mejor</th></tr>';
   el('cuerpoEstadistica').innerHTML = filas.map((f, i) => {
     const s = f[m], ancho = 100 * s.media / maxVal, inicioErr = 100 * Math.max(0, s.media - s.ic95) / maxVal, anchoErr = 100 * (Math.min(maxVal, s.media + s.ic95) - Math.max(0, s.media - s.ic95)) / maxVal;
-    return '<tr class="' + (i === 0 ? 'mejor' : '') + '"><td>' + (NOMBRES[f.nombre] || f.nombre) + '</td>' +
-      '<td class="celda-barra"><i class="b" style="width:' + ancho + '%"></i><i class="e" style="left:' + inicioErr + '%;width:' + anchoErr + '%"></i><span>' + nf(s.media) + ' ± ' + nf(s.ic95) + '</span></td>' +
+    return '<tr class="' + (i === 0 ? 'mejor' : '') + '"><td>' + nombreEscenario(f) + '</td>' +
+      '<td class="celda-barra"><i class="b" style="width:calc((100% - 24px) * ' + (ancho / 100) + ')"></i><i class="e" style="left:calc((100% - 24px) * ' + (inicioErr / 100) + ');width:calc((100% - 24px) * ' + (anchoErr / 100) + ')"></i><span>' + nf(s.media) + ' ± ' + nf(s.ic95) + '</span></td>' +
       '<td class="num">' + nf(s.desviacion) + '</td><td class="num">' + nf(s.minimo) + '</td><td class="num">' + nf(s.maximo) + '</td>' +
       '<td class="num">' + (i === 0 || mejor === 0 ? '–' : '+' + pct1(100 * (s.media - mejor) / mejor) + ' %' +
-        (est.replicas > 1 && s.vs_mejor && s.vs_mejor.media - s.vs_mejor.ic95 <= 0 ? ' <small class="ns" title="El IC 95 % de la diferencia réplica a réplica incluye el cero">n. s.</small>' : '')) + '</td>' +
+        (est.replicas > 1 && s.vs_mejor && s.vs_mejor.media - s.vs_mejor.ic95 <= 0 ? '<small class="ns" title="El IC 95 % de la diferencia réplica a réplica incluye el cero">n. s.</small>' : '')) + '</td>' +
       '<td class="num">' + f.victorias + ' (' + (100 * f.victorias / est.replicas).toFixed(0) + ' %)</td></tr>';
   }).join('');
   const sem = ULTIMA_CONFIG ? ULTIMA_CONFIG.escalar_semilla : null;
   const conArchivo = ULTIMA_CONFIG && ULTIMA_CONFIG.texto_origen_tareas === 'datos';
   el('notaEstadistica').textContent = (conArchivo ? 'Todas las réplicas ejecutan la lista del archivo; cambia el llenado inicial' : 'Cada réplica usa una secuencia de llegadas distinta') +
     (sem !== null ? ' (semillas ' + sem + ' a ' + (sem + est.replicas - 1) + ')' : '') +
-    '. Las barras muestran el promedio y su intervalo de confianza del 95 % (t de Student). "vs. la mejor" compara cada réplica con la de la mejor política, porque todas corren las mismas secuencias; "n. s." indica que esa diferencia no es significativa (su intervalo incluye el cero). "Veces mejor" cuenta en cuántas réplicas esa política terminó primero o empató, siempre por tiempo total.';
+    '. La barra es el promedio y el trazo, su intervalo de confianza del 95 % (t de Student). "vs. la mejor" compara cada réplica con la de la mejor política, porque todas corren las mismas secuencias; "n. s." indica que esa diferencia no es significativa (su intervalo incluye el cero). "Veces mejor" cuenta en cuántas réplicas esa política terminó primero o empató, siempre por tiempo total.';
 }
 
 el('metrica').onchange = () => mostrarEstadistica(ESTADISTICA);
 el('btnCsv').onclick = () => {
   if (!ESTADISTICA) return;
-  const cab = ['Politica', 'Victorias'];
+  const cab = ['Politica', 'Recuperacion', 'Victorias'];
   METRICAS.forEach(([k]) => ['media', 'desviacion', 'minimo', 'maximo', 'ic95'].forEach(s => cab.push(k + '_' + s)));
   const lineas = [cab.join(';')];
   ESTADISTICA.politicas.forEach(p => {
-    const fila = [NOMBRES[p.nombre] || p.nombre, p.victorias];
+    const fila = [NOMBRES[p.nombre] || p.nombre, NOMBRES_RECUPERACION[p.recuperacion] || p.recuperacion || '', p.victorias];
     METRICAS.forEach(([k]) => ['media', 'desviacion', 'minimo', 'maximo', 'ic95'].forEach(s => fila.push(String(p[k][s]).replace('.', ','))));
     lineas.push(fila.join(';'));
   });
@@ -1104,7 +1697,7 @@ const campo = (clave, indice, etiqueta, opc = {}) => ({ clave, indice, etiqueta,
 const PESTANAS = [
   { id: 'almacen', nombre: 'Almacén', desc: 'Estantería, grúa y ocupación inicial', secciones: [
     { titulo: 'Estantería', items: [
-      { trio: 'Dimensiones', campos: [
+      { trio: 'Dimensiones', unidad: 'celdas', campos: [
         campo('vector_configuracion_estanteria', 0, 'Filas', { entero: true, min: 1, max: 200, ayuda: 'Niveles de altura' }),
         campo('vector_configuracion_estanteria', 1, 'Columnas', { entero: true, min: 1, max: 200 }),
         campo('vector_configuracion_estanteria', 2, 'Capas', { entero: true, min: 1, max: 12, ayuda: 'Ítems que caben uno detrás de otro en cada canal' })] },
@@ -1118,15 +1711,15 @@ const PESTANAS = [
       { trio: 'Velocidad', unidad: 'm/s', campos: [
         campo('vector_velocidad_grua', 0, 'Filas', { min: 0.01, paso: 0.1 }),
         campo('vector_velocidad_grua', 1, 'Columnas', { min: 0.01, paso: 0.1 }),
-        campo('vector_velocidad_grua', 2, 'Canales (z)', { min: 0.01, paso: 0.1 })] },
+        campo('vector_velocidad_grua', 2, 'Canales z', { min: 0.01, paso: 0.1 })] },
       { trio: 'Aceleración', unidad: 'm/s²', campos: [
         campo('vector_aceleracion_grua', 0, 'Filas', { min: 0, paso: 0.1, ayuda: 'Con 0 el eje alcanza la velocidad al instante' }),
         campo('vector_aceleracion_grua', 1, 'Columnas', { min: 0, paso: 0.1 }),
-        campo('vector_aceleracion_grua', 2, 'Canales (z)', { min: 0, paso: 0.1 })] },
+        campo('vector_aceleracion_grua', 2, 'Canales z', { min: 0, paso: 0.1 })] },
       { trio: 'Deceleración', unidad: 'm/s²', campos: [
         campo('vector_deceleracion_grua', 0, 'Filas', { min: 0, paso: 0.1, ayuda: 'Con 0 el eje frena al instante' }),
         campo('vector_deceleracion_grua', 1, 'Columnas', { min: 0, paso: 0.1 }),
-        campo('vector_deceleracion_grua', 2, 'Canales (z)', { min: 0, paso: 0.1 })] },
+        campo('vector_deceleracion_grua', 2, 'Canales z', { min: 0, paso: 0.1 })] },
       { nota: 'Cada eje acelera, avanza a la velocidad máxima y frena. En distancias cortas no llega a esa velocidad. Con 0 no hay límite y el eje va a velocidad constante.' },
       { fila: campo('escalar_tiempo_carga_descarga', null, 'Tiempo de carga o descarga', { unidad: 's', min: 0, paso: 0.5 }) },
       { fila: campo('escalar_separacion_riel_grua', null, 'Separación del riel', { unidad: 'm', min: 0, paso: 0.1, ayuda: 'Distancia entre la cara de la estantería y el riel de la grúa' }) }
@@ -1153,7 +1746,7 @@ const PESTANAS = [
     { titulo: 'Productos (SKU)', especial: 'skus', id: 'seccionProductos' },
     { titulo: 'Lista de tareas', especial: 'tareas', id: 'seccionTareas' }
   ] },
-  { id: 'politicas', nombre: 'Políticas', desc: 'Qué estrategias de asignación compiten', secciones: [
+  { id: 'politicas', nombre: 'Políticas', desc: 'Qué estrategias compiten', secciones: [
     { titulo: 'Políticas a comparar', especial: 'politicas' }
   ] },
   { id: 'ejecucion', nombre: 'Ejecución', desc: 'Réplicas y semilla', secciones: [
@@ -1172,10 +1765,14 @@ function crearInput(c) {
   entradas.push({ c, inp });
   return inp;
 }
+// Fila de un valor: etiqueta a la izquierda y la entrada con su unidad dentro, a la derecha
 function crearFila(c) {
   const fila = document.createElement('label'); fila.className = 'campo'; if (c.ayuda) fila.title = c.ayuda;
-  fila.innerHTML = '<span class="etq">' + c.etiqueta + (c.unidad ? '<small>' + c.unidad + '</small>' : '') + '</span>';
-  fila.appendChild(crearInput(c));
+  fila.innerHTML = '<span class="etq">' + c.etiqueta + '</span>';
+  const caja = document.createElement('span'); caja.className = 'entrada';
+  const inp = crearInput(c); caja.appendChild(inp);
+  if (c.unidad) { caja.insertAdjacentHTML('beforeend', '<span class="u">' + c.unidad + '</span>'); inp.style.paddingRight = (14 + c.unidad.length * 7) + 'px'; }
+  fila.appendChild(caja);
   return fila;
 }
 // Tres valores relacionados en una sola línea, cada uno con su etiqueta encima
@@ -1215,7 +1812,7 @@ function agruparPorDemanda(demanda, participacion) {
   let cum = 0;
   const claseOrdenada = orden.map(i => {
     const parte = demanda[i] / total, medio = cum + parte / 2; cum += parte;
-    let c = cortes.findIndex(x => x >= medio) + 1;                  // primera clase cuyo corte alcanza el punto medio del SKU
+    const c = cortes.findIndex(x => x >= medio) + 1;                  // primera clase cuyo corte alcanza el punto medio del SKU
     return c === 0 ? k : Math.min(c, k);
   });
   const hasta = []; let anterior = 0;
@@ -1245,11 +1842,6 @@ function explicarPerfil(demanda) {
   nota.textContent = eoq ? 'El SKU más demandado tiene el ' + pct1(100 * demanda[i]) + ' % de la demanda pero el ' + pct1(100 * inv[i]) + ' % del inventario: cada unidad suya se pide ' +
       fmt1((demanda[i] / inv[i]) / (demanda[j] / inv[j])) + ' veces más que una del menos demandado. Por eso conviene tenerlo cerca del E/S. Se supone el mismo costo de pedir y de mantener para todos los SKUs.' :
     'El SKU más demandado tiene el ' + pct1(100 * demanda[i]) + ' % de la demanda y también del inventario: cada unidad guardada se pide con la misma frecuencia, sea del SKU que sea, así que ordenar por rotación no da ventaja.';
-}
-function explicarRecuperacion() {
-  el('notaRecuperacion').textContent = el('reglaRecuperacion').value === 'fcfs' ?
-    'Sale siempre la unidad más antigua del SKU, aunque haya que reubicar lo que tiene delante. Corresponde a un almacén con control de lote o de vencimiento.' :
-    'Sale la unidad más antigua entre las que no tienen nada delante; solo si ninguna está libre se retira la más antigua y se reubica. Corresponde a un almacén donde las unidades de un SKU son intercambiables.';
 }
 // Clase de cada SKU según el criterio elegido en el formulario; null si los datos no son válidos
 function clasesDelFormulario(demanda) {
@@ -1286,7 +1878,7 @@ function dibujarClases() {
   el('bloqueNumClases').hidden = criterio !== 'iguales'; el('botonesClases').hidden = !manual;
   cont.className = 'tabla-clases' + (manual ? '' : ' auto');
   if (manual) {
-    cont.innerHTML = '<span></span><span class="enc">% de los SKUs</span><span class="enc">Resultado</span>' + clasesUI.map((p, i) =>
+    cont.innerHTML = '<span></span><span class="enc">% de SKUs</span><span class="enc">Resultado</span>' + clasesUI.map((p, i) =>
       '<span class="ficha" style="background:' + colorGrupo(i + 1) + '">' + letra(i + 1) + '</span>' +
       '<input type="number" min="0.1" step="any" data-clase="' + i + '" value="' + p + '" aria-label="Porcentaje de SKUs de la clase ' + letra(i + 1) + '">' +
       '<span class="pct" id="rc' + i + '"></span>').join('');
@@ -1296,26 +1888,26 @@ function dibujarClases() {
   actualizarVistaPrevia();
 }
 
-// Gráfico de la demanda por SKU, coloreado por la clase que le asigna la política basada en clases, y resumen de cada clase
+// Gráfico de la demanda por SKU y, en la política basada en clases, cuántos SKUs, demanda y espacio recibe cada clase
 function actualizarVistaPrevia() {
   const demanda = demandaDelFormulario(), graf = el('graficoDemanda'), resumen = el('resumenDemanda');
   explicarPerfil(demanda);
   if (!demanda) { graf.innerHTML = ''; resumen.textContent = 'Revisa la cantidad de SKUs, el sesgo o la demanda personalizada.'; clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = ''; }); if (el('criterioClases').value !== 'skus') el('tablaClases').innerHTML = ''; actualizarResumen(); return; }
   const clase = clasesDelFormulario(demanda);
   const maximo = Math.max(...demanda);
-  graf.innerHTML = demanda.map((d, i) => '<i title="SKU ' + (i + 1) + ': ' + pct1(100 * d) + ' % de la demanda" style="height:' + Math.max(3, 100 * d / maximo) + '%;background:var(--acento)"></i>').join('');
+  graf.innerHTML = demanda.map((d, i) => '<i title="SKU ' + (i + 1) + ': ' + pct1(100 * d) + ' % de la demanda" style="height:' + Math.max(3, 100 * d / maximo) + '%;background:var(--texto)"></i>').join('');
   const top = demanda.slice().sort((a, b) => b - a), n5 = Math.max(1, Math.round(demanda.length * 0.2));
   resumen.textContent = demanda.length + ' SKUs. El 20 % más demandado (' + n5 + ') concentra el ' + Math.round(100 * top.slice(0, n5).reduce((a, b) => a + b, 0)) + ' % de la demanda.';
   const inventario = perfilInventario(demanda);
   const resumenClase = k => {
     const skus = clase.reduce((a, c) => a + (c === k ? 1 : 0), 0), dem = clase.reduce((a, c, j) => a + (c === k ? demanda[j] : 0), 0);
     const esp = clase.reduce((a, c, j) => a + (c === k ? inventario[j] : 0), 0);
-    return skus + ' SKUs (' + Math.round(100 * skus / demanda.length) + ' % de los SKUs) · ' + Math.round(100 * dem) + ' % de la demanda · ' + Math.round(100 * esp) + ' % del espacio';
+    return skus + ' SKUs (' + Math.round(100 * skus / demanda.length) + ' %) · ' + Math.round(100 * dem) + ' % de la demanda · ' + Math.round(100 * esp) + ' % del espacio';
   };
   if (el('criterioClases').value === 'skus') {
-    clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = clase ? resumenClase(i + 1).replace(/ \(.*?\)/, '').replace('de la demanda', 'demanda') : ''; });
+    clasesUI.forEach((_, i) => { const r = el('rc' + i); if (r) r.textContent = clase ? resumenClase(i + 1).replace(/ \(.*?\)/, '').replace(' de la demanda', ' dem.') : ''; });
   } else {
-    // Con el reparto automático el resultado se muestra directamente: cuántos SKUs y cuánta demanda tiene cada clase
+    // Con el reparto automático el resultado se muestra directamente: cuántos SKUs, cuánta demanda y cuánto espacio tiene cada clase
     const K = clase ? Math.max(...clase) : 0;
     el('tablaClases').innerHTML = clase ? Array.from({ length: K }, (_, i) => '<span class="ficha" style="background:' + colorGrupo(i + 1) + '">' + letra(i + 1) + '</span><span class="pct">' + resumenClase(i + 1) + '</span>').join('') : '';
   }
@@ -1329,7 +1921,7 @@ function actualizarResumen() {
   const celdas = f * c * k, demanda = demandaDelFormulario(), datos = origenDatos();
   const skus = datos ? (RESUMEN_DATOS ? RESUMEN_DATOS.skus : null) : (demanda ? demanda.length : null);
   const tareas = datos ? (RESUMEN_DATOS ? RESUMEN_DATOS.tareas : NaN) : (el('tareasAuto').checked ? Math.round(celdas * 0.1) : Number(el('tareasN').value));
-  const politicas = document.querySelectorAll('[data-politica]:checked').length;
+  const politicas = document.querySelectorAll('[data-politica]:checked').length * document.querySelectorAll('[data-recuperacion]:checked').length;
   const fichas = [
     ['Estantería', isFinite(celdas) ? f + '×' + c + '×' + k : '—', isFinite(celdas) && celdas > 6000],
     ['SKUs', skus === null ? '—' : String(skus), skus !== null && isFinite(f * c) && skus > f * c],
@@ -1349,7 +1941,6 @@ function mostrarPrimerError() {
   const det = malo.closest('details'); if (det) det.open = true;
   malo.scrollIntoView({ block: 'center', behavior: 'smooth' }); malo.focus({ preventScroll: true });
 }
-
 // La sección de clases solo importa si se compara la política basada en clases
 // Con datos reales la demanda, los SKUs y las tareas salen del archivo, así que las secciones generadas no se usan
 let RESUMEN_DATOS = null, temporizadorTareas = null;
@@ -1388,23 +1979,24 @@ function actualizarClasesActivas() {
 }
 
 function construirFormulario() {
-  const cont = el('formulario'); cont.innerHTML = ''; entradas.length = 0;
+  const cont = el('formulario'); entradas.length = 0;
   // Columnas fijas: así el orden de lectura sigue la numeración en cualquier ancho
   cont.innerHTML = '<div class="esc-col" id="colAlmacen"></div><div class="esc-der"><div class="esc-col" id="colDemanda"></div><div class="esc-col" id="colResto"></div></div>';
   const columna = { almacen: 'colAlmacen', demanda: 'colDemanda' };
-  PESTANAS.forEach((p, n) => {
-    const panel = document.createElement('section'); panel.className = 'esc-tarjeta'; panel.dataset.pestana = p.id; el(columna[p.id] || 'colResto').appendChild(panel);
-    panel.innerHTML = '<header><b>' + (n + 1) + '</b><h2>' + p.nombre + '</h2><p>' + p.desc + '</p></header>';
+  PESTANAS.forEach((p, ip) => {
+    const tarjeta = document.createElement('section'); tarjeta.className = 'tarjeta esc-tarjeta'; tarjeta.dataset.pestana = p.id; el(columna[p.id] || 'colResto').appendChild(tarjeta);
+    tarjeta.innerHTML = '<div class="tarjeta-cab"><span class="n">' + String(ip + 1).padStart(2, '0') + '</span>' + p.nombre + '<span class="der">' + p.desc + '</span></div>';
+    const panel = document.createElement('div'); panel.className = 'esc-cuerpo'; tarjeta.appendChild(panel);
     if (p.id === 'almacen') { const esq = document.createElement('div'); esq.className = 'esquema-rack'; esq.id = 'esquemaRack'; panel.appendChild(esq); }
     p.secciones.forEach(s => {
       const sec = document.createElement(s.plegable ? 'details' : 'section'); sec.className = 'seccion'; if (s.id) sec.id = s.id;
-      const titulo = document.createElement(s.plegable ? 'summary' : 'h3'); titulo.textContent = s.titulo;
+      const titulo = document.createElement(s.plegable ? 'summary' : 'h3'); titulo.textContent = s.titulo; titulo.dataset.p = ip + 1;
       if (s.plegable || p.secciones.length > 1) sec.appendChild(titulo);
       const cuerpo = document.createElement('div'); cuerpo.className = 'cuerpo-seccion';
       if (s.especial === 'skus') {
         cuerpo.innerHTML = '<p class="nota">La lista de tareas pide SKUs. La demanda de cada SKU sigue la curva de Hausman o una lista propia.</p>' +
           '<div class="trio-campos dos"><label title="Productos distintos"><small>Cantidad de SKUs</small><input type="number" id="nSkus" min="1" max="200" step="1"></label>' +
-          '<label title="1 es demanda uniforme; cuanto menor es, más se concentra en pocos SKUs"><small>Sesgo σ de Hausman</small><input type="number" id="sigma" min="0.05" max="1" step="0.05"></label></div>' +
+          '<label title="1 es demanda uniforme; cuanto menor es, más se concentra en pocos SKUs"><small>Sesgo σ (Hausman)</small><input type="number" id="sigma" min="0.05" max="1" step="0.05"></label></div>' +
           '<label class="bloque"><small>Demanda personalizada <em>(opcional, reemplaza a los dos de arriba)</em></small>' +
           '<input type="text" id="demandaPersonalizada" placeholder="Pesos separados por comas, p. ej. 40, 25, 15, 10, 10"></label>' +
           '<div class="grafico-demanda" id="graficoDemanda"></div><p class="nota" id="resumenDemanda"></p>';
@@ -1414,7 +2006,7 @@ function construirFormulario() {
           '<p class="nota" id="notaOrigen"></p>';
       } else if (s.especial === 'datos') {
         cuerpo.innerHTML = '<p class="nota">Un archivo con una tarea por fila, en orden, con dos columnas: SKU y Task. La tarea es A (almacenar) o R (recuperar); también se aceptan almacenar y recuperar, entrada y salida, o 0 y 1. Admite coma, punto y coma o tabulación, con o sin encabezado.</p>' +
-          '<div class="botones-fila"><button type="button" id="btnArchivoTareas">Elegir archivo…</button><button type="button" id="btnEjemploTareas">Descargar ejemplo</button>' +
+          '<div class="botones-fila"><button type="button" id="btnArchivoTareas"><svg viewBox="0 0 24 24"><path d="M12 15V4"/><path d="M7 9l5-5 5 5"/><path d="M4 20h16"/></svg>Elegir archivo…</button><button type="button" id="btnEjemploTareas">Descargar ejemplo</button>' +
           '<input type="file" id="archivoTareas" accept=".csv,.txt,text/csv,text/plain" hidden></div>' +
           '<label class="bloque"><small>O pega las filas aquí</small><textarea id="textoTareas" rows="5" spellcheck="false" placeholder="SKU;Task&#10;PROD-001;A&#10;PROD-001;R"></textarea></label>' +
           '<label class="bloque" title="Las políticas planifican con el primer porcentaje de la lista: con él se hace el llenado inicial y se calculan las clases. Después se ejecuta la lista completa. Con 100 conocen toda la demanda."><small>Historial que conocen las políticas (%)</small><input type="number" id="pctHistorial" min="1" max="100" step="1"></label>' +
@@ -1432,13 +2024,12 @@ function construirFormulario() {
             '<option value="iguales">Misma demanda en cada clase</option><option value="pareto">ABC clásico: 80 / 15 / 5 % de la demanda (3 clases)</option><option value="skus">Yo defino el % de SKUs de cada clase</option></select></label>' +
             '<label class="bloque" id="bloqueNumClases"><small>Número de clases</small><input type="number" id="nClases" min="1" max="8" step="1"></label>' +
             '<div class="tabla-clases" id="tablaClases"></div>' +
-            '<div class="botones-fila" id="botonesClases"><button type="button" id="btnMasClase">Añadir clase</button><button type="button" id="btnMenosClase">Quitar última</button></div></div>'
+            '<div class="botones-fila" id="botonesClases"><button type="button" id="btnMasClase">+ Añadir clase</button><button type="button" id="btnMenosClase">− Quitar última</button></div></div>'
         };
         cuerpo.innerHTML = POLITICAS.map(q => '<div class="politica-grupo"><label class="politica" title="' + q.ayuda + '"><input type="checkbox" data-politica="' + q.clave + '"><span>' + q.nombre + '<small>' + q.ayuda + '</small></span></label>' + (parametrosPropios[q.clave] || '') + '</div>').join('') +
           '<p class="nota">La política elegida decide dónde se almacena y también dónde se reubica.</p>' +
-          '<label class="bloque"><small>Qué ítem se retira al recuperar (igual en todas las políticas)</small><select id="reglaRecuperacion">' +
-          '<option value="fcfs">FCFS estricto</option><option value="fcfs_accesible">FCFS accesible</option></select></label>' +
-          '<p class="nota" id="notaRecuperacion"></p>';
+          '<p class="nota"><b>Recuperación.</b> Cada política de asignación se ejecuta con cada recuperación elegida.</p>' +
+          RECUPERACIONES.map(q => '<label class="politica" title="' + q.ayuda + '"><input type="checkbox" data-recuperacion="' + q.clave + '"><span>' + q.nombre + '<small>' + q.ayuda + '</small></span></label>').join('');
       } else {
         s.items.forEach(it => {
           if (it.trio) cuerpo.appendChild(crearTrio(it));
@@ -1456,11 +2047,10 @@ function construirFormulario() {
   });
   el('origenTareas').onchange = actualizarOrigen;
   el('perfilInventario').onchange = actualizarVistaPrevia;
-  el('reglaRecuperacion').onchange = explicarRecuperacion;
   el('btnArchivoTareas').onclick = () => el('archivoTareas').click();
   el('archivoTareas').onchange = ev => {
     const f = ev.target.files[0]; if (!f) return;
-    const lector = new FileReader(); lector.onload = () => { el('textoTareas').value = String(lector.result).replace(/^\uFEFF/, ''); validarTareas(); }; lector.readAsText(f); ev.target.value = '';
+    const lector = new FileReader(); lector.onload = () => { el('textoTareas').value = String(lector.result).replace(/^﻿/, ''); validarTareas(); }; lector.readAsText(f); ev.target.value = '';
   };
   el('btnEjemploTareas').onclick = () => descargar('tareas_ejemplo.csv', 'SKU;Task\nPROD-001;A\nPROD-002;A\nPROD-001;R\nPROD-001;A\nPROD-002;R\nPROD-003;A\nPROD-001;R\nPROD-003;R\n', 'text/csv');
   el('textoTareas').addEventListener('input', () => { el('textoTareas').classList.remove('invalido'); validarTareas(); });
@@ -1473,10 +2063,11 @@ function construirFormulario() {
   ['nSkus', 'sigma', 'demandaPersonalizada'].forEach(id => el(id).addEventListener('input', () => { el(id).classList.remove('invalido'); actualizarVistaPrevia(); }));
   el('tareasN').addEventListener('input', actualizarResumen);
   document.querySelectorAll('[data-politica]').forEach(c => c.addEventListener('change', () => { actualizarClasesActivas(); actualizarResumen(); }));
+  document.querySelectorAll('[data-recuperacion]').forEach(c => c.addEventListener('change', actualizarResumen));
   entradas.forEach(({ c, inp }) => { if (c.clave === 'vector_configuracion_estanteria') inp.addEventListener('input', actualizarAuto); });
   // cualquier cambio en el escenario deja la simulación mostrada desactualizada
   cont.addEventListener('input', marcarCambios); cont.addEventListener('change', marcarCambios);
-  entradas.forEach(({ c, inp }) => { if (c.clave === 'vector_configuracion_estanteria' || c.clave === 'vector_cotas_estanteria') inp.addEventListener('input', dibujarEsquemaRack); });
+  entradas.forEach(({ c, inp }) => { if (['vector_configuracion_estanteria', 'vector_cotas_estanteria', 'vector_posicion_estanteria'].includes(c.clave)) inp.addEventListener('input', dibujarEsquemaRack); });
 }
 
 function actualizarAuto() {
@@ -1500,8 +2091,8 @@ function ponerFormulario(cfg) {
   const celdas = cfg.vector_configuracion_estanteria.reduce((a, b) => a * b, 1), auto = Math.round(celdas * 0.1) === cfg.escalar_largo_secuencia;
   el('tareasAuto').checked = auto; el('tareasN').value = cfg.escalar_largo_secuencia; el('tareasN').disabled = auto;
   document.querySelectorAll('[data-politica]').forEach(c => { c.checked = (cfg.vector_politicas_asignacion || []).includes(c.dataset.politica); });
+  document.querySelectorAll('[data-recuperacion]').forEach(c => { c.checked = (cfg.vector_politicas_recuperacion || ['fcfs']).includes(c.dataset.recuperacion); });
   el('perfilInventario').value = cfg.texto_perfil_inventario || 'eoq';
-  el('reglaRecuperacion').value = cfg.texto_regla_recuperacion || 'fcfs'; explicarRecuperacion();
   el('origenTareas').value = cfg.texto_origen_tareas || 'generada'; el('textoTareas').value = cfg.texto_tareas_csv || ''; el('pctHistorial').value = cfg.escalar_porcentaje_historial || 100;
   el('criterioClases').value = cfg.texto_criterio_clases || 'iguales'; el('nClases').value = cfg.escalar_numero_clases || 3;
   dibujarClases(); actualizarClasesActivas(); actualizarOrigen(); actualizarResumen(); dibujarEsquemaRack();
@@ -1515,7 +2106,9 @@ function leerFormulario() {
     if (!isFinite(v)) { inp.classList.add('invalido'); primerError = primerError || ((c.nombreError || c.etiqueta) + ': falta el valor.'); return; }
     if (c.indice === null) cfg[c.clave] = v; else cfg[c.clave][c.indice] = v;
   });
-  cfg.texto_perfil_inventario = el('perfilInventario').value; cfg.texto_regla_recuperacion = el('reglaRecuperacion').value;
+  // la carrera anima solo la primera réplica, así que no se graban más; la estadística usa todas las réplicas pedidas
+  cfg.escalar_replicas_animadas = 1;
+  cfg.texto_perfil_inventario = el('perfilInventario').value;
   cfg.texto_origen_tareas = el('origenTareas').value; cfg.texto_tareas_csv = el('textoTareas').value; cfg.escalar_porcentaje_historial = Number(el('pctHistorial').value);
   if (origenDatos()) {
     // Con datos reales los campos de la demanda generada no se usan y no deben bloquear la simulación
@@ -1544,31 +2137,41 @@ function leerFormulario() {
   cfg.vector_prob_acum_AR = [pct / 100, 1];
   if (el('tareasAuto').checked) delete cfg.escalar_largo_secuencia; else cfg.escalar_largo_secuencia = Number(el('tareasN').value);
   cfg.vector_politicas_asignacion = Array.from(document.querySelectorAll('[data-politica]:checked')).map(c => c.dataset.politica);
+  cfg.vector_politicas_recuperacion = Array.from(document.querySelectorAll('[data-recuperacion]:checked')).map(c => c.dataset.recuperacion);
+  if (!cfg.vector_politicas_recuperacion.length) primerError = primerError || 'Recuperación: elige al menos una.';
   if (primerError) { mostrarPrimerError(); throw new Error(primerError); }
   return cfg;
 }
 
 // ================= esquema del almacén =================
-// Dibujo a escala de la estantería vista de frente: da una idea inmediata del tamaño que se está definiendo
+// Dibujo a escala de la estantería vista de frente, con el E/S en el origen de coordenadas y la estantería en su posición
 function dibujarEsquemaRack() {
   const cont = el('esquemaRack'); if (!cont) return;
   const v = (clave, i) => { const x = entradas.find(e => e.c.clave === clave && e.c.indice === i); return x ? Number(x.inp.value) : NaN; };
   const F = v('vector_configuracion_estanteria', 0), C = v('vector_configuracion_estanteria', 1), K = v('vector_configuracion_estanteria', 2);
   const hF = v('vector_cotas_estanteria', 0), wC = v('vector_cotas_estanteria', 1), dK = v('vector_cotas_estanteria', 2);
-  if (![F, C, K, hF, wC, dK].every(x => x > 0)) { cont.innerHTML = '<p class="nota" style="margin:6px">Completa las dimensiones para ver el esquema.</p>'; return; }
-  const largo = C * wC, alto = F * hF, fondo = K * dK, W = 320, H = 170, mx = 44, my = 26;
-  const esc = Math.min((W - mx - 14) / largo, (H - my - 24) / alto), w = largo * esc, h = alto * esc, x0 = mx, y0 = my;
+  const pV = v('vector_posicion_estanteria', 0) || 0, pH = v('vector_posicion_estanteria', 1) || 0;
+  if (![F, C, K, hF, wC, dK].every(x => x > 0)) { cont.innerHTML = '<p class="nota">Completa las dimensiones para ver el esquema.</p>'; return; }
+  const largo = C * wC, alto = F * hF, fondo = K * dK;
+  // extensión en metros: la estantería y el E/S, que está en (0, 0)
+  const mx0 = Math.min(0, pH), mx1 = Math.max(largo + pH, 0), my0 = Math.min(0, pV), my1 = Math.max(alto + pV, 0);
+  const W = 320, H = 176, izq = 18, der = 26, arr = 24, aba = 30;
+  const esc = Math.min((W - izq - der) / Math.max(mx1 - mx0, 1e-6), (H - arr - aba) / Math.max(my1 - my0, 1e-6));
+  const X = m => izq + (m - mx0) * esc, Y = m => H - aba - (m - my0) * esc;
+  const x0 = X(pH), x1 = X(pH + largo), y0 = Y(pV + alto), y1 = Y(pV), w = x1 - x0, h = y1 - y0;
   let rej = '';
-  if (C <= 40) for (let c = 1; c < C; c++) rej += '<line x1="' + (x0 + w * c / C) + '" y1="' + y0 + '" x2="' + (x0 + w * c / C) + '" y2="' + (y0 + h) + '"/>';
-  if (F <= 30) for (let f = 1; f < F; f++) rej += '<line x1="' + x0 + '" y1="' + (y0 + h * f / F) + '" x2="' + (x0 + w) + '" y2="' + (y0 + h * f / F) + '"/>';
-  const n = x => (Math.round(x * 10) / 10).toLocaleString('es');
-  cont.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Esquema de la estantería vista de frente">' +
-    '<rect x="' + x0 + '" y="' + y0 + '" width="' + w + '" height="' + h + '" fill="var(--vacio)" stroke="var(--suave)" stroke-width="1.4"/>' +
-    '<g stroke="var(--borde)" stroke-width=".6">' + rej + '</g>' +
-    '<rect x="' + (x0 - 38) + '" y="' + (y0 + h - 14) + '" width="30" height="14" rx="3" fill="var(--acento)"/><text x="' + (x0 - 23) + '" y="' + (y0 + h - 4) + '" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">E/S</text>' +
-    '<text x="' + (x0 + w / 2) + '" y="' + (y0 - 9) + '" text-anchor="middle" font-size="10" fill="var(--suave)">' + C + ' columnas · ' + n(largo) + ' m</text>' +
-    '<text transform="translate(' + (x0 + w + 12) + ' ' + (y0 + h / 2) + ') rotate(90)" text-anchor="middle" font-size="10" fill="var(--suave)">' + F + ' filas · ' + n(alto) + ' m</text>' +
-    '<text x="' + (x0 + w / 2) + '" y="' + (y0 + h + 17) + '" text-anchor="middle" font-size="10" fill="var(--suave)">fondo ' + n(fondo) + ' m (' + K + (K === 1 ? ' capa' : ' capas') + ')</text></svg>';
+  if (C <= 40) for (let c = 1; c < C; c++) rej += '<line x1="' + (x0 + w * c / C) + '" y1="' + y0 + '" x2="' + (x0 + w * c / C) + '" y2="' + y1 + '"/>';
+  if (F <= 30) for (let f = 1; f < F; f++) rej += '<line x1="' + x0 + '" y1="' + (y0 + h * f / F) + '" x2="' + x1 + '" y2="' + (y0 + h * f / F) + '"/>';
+  const n = x => (Math.round(x * 10) / 10).toLocaleString('es'), ex = X(0), ey = Y(0);
+  cont.innerHTML = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Esquema de la estantería vista de frente, con el punto E/S">' +
+    '<rect x="' + x0 + '" y="' + y0 + '" width="' + w + '" height="' + h + '" fill="var(--elevado)" stroke="var(--suave)" stroke-width="1.2"/>' +
+    '<g stroke="var(--linea)" stroke-width=".6">' + rej + '</g>' +
+    '<g font-family="var(--mono)" font-size="9.5" fill="var(--tenue)">' +
+    '<text x="' + (x0 + w / 2) + '" y="' + (y0 - 8) + '" text-anchor="middle">' + C + ' COL · ' + n(largo) + ' m</text>' +
+    '<text transform="translate(' + (x1 + 13) + ' ' + (y0 + h / 2) + ') rotate(90)" text-anchor="middle">' + F + ' FILAS · ' + n(alto) + ' m</text>' +
+    '<text x="' + (W / 2) + '" y="' + (H - 6) + '" text-anchor="middle">FONDO ' + n(fondo) + ' m · ' + K + (K === 1 ? ' CAPA' : ' CAPAS') + '</text></g>' +
+    '<circle cx="' + ex + '" cy="' + ey + '" r="4.5" fill="var(--acento)" stroke="var(--elevado)" stroke-width="1.5"/>' +
+    '<text x="' + (ex + 8) + '" y="' + (ey + 13) + '" font-family="var(--mono)" font-size="9.5" font-weight="700" fill="var(--acento)">E/S (0, 0)</text></svg>';
 }
 
 // ================= pasos: escenario, carrera y resultados =================
@@ -1578,7 +2181,7 @@ function irA(vista) {
   VISTA = vista;
   if (!el('btnSimular').disabled) ocultarAviso();         // los avisos de la vista anterior ya no vienen al caso, salvo el progreso de una simulación en marcha
   el('vistaEscenario').hidden = vista !== 'escenario'; el('vistaCarrera').hidden = vista !== 'carrera'; el('vistaResultados').hidden = vista !== 'resultados';
-  document.querySelectorAll('#pasos button').forEach(b => b.classList.toggle('activo', b.dataset.vista === vista));
+  document.querySelectorAll('#pasos button').forEach(b => b.classList.toggle('activa', b.dataset.vista === vista));
   window.scrollTo(0, 0);
 }
 function marcarCambios() { if (HAY_SIMULACION) { CAMBIOS = true; el('estadoEscenario').hidden = false; } }
@@ -1586,7 +2189,7 @@ function habilitarPasos() {
   document.querySelectorAll('#pasos button').forEach(b => { b.disabled = b.dataset.vista !== 'escenario' && !HAY_SIMULACION; });
 }
 document.querySelectorAll('#pasos button').forEach(b => { b.onclick = () => irA(b.dataset.vista); });
-// Lo que queda fijo bajo la barra (controles de la carrera y avisos) se coloca según la altura real de la barra, que cambia con el ancho
+// Lo que queda fijo bajo la barra (controles de la carrera y marcador) se coloca según la altura real de la barra, que cambia con el ancho
 function medirBarra() { document.documentElement.style.setProperty('--alto-barra', el('barra').offsetHeight + 'px'); }
 if (window.ResizeObserver) new ResizeObserver(medirBarra).observe(el('barra')); else window.addEventListener('resize', medirBarra);
 medirBarra();
@@ -1595,21 +2198,20 @@ document.querySelectorAll('.menu-lista button').forEach(b => b.addEventListener(
 document.addEventListener('click', ev => { const m = el('menuMas'); if (m.open && !m.contains(ev.target)) m.open = false; });
 
 // ================= aviso, ejecución y progreso =================
-let trabajoActual = null, temporizador = null;
-let temporizadorAviso = null;
+let trabajoActual = null, temporizador = null, temporizadorAviso = null;
 function aviso(tipo, html) {
   const a = el('aviso'); a.className = 'aviso visible ' + (tipo || ''); clearTimeout(temporizadorAviso);
   const enCurso = html.indexOf('class="progreso"') >= 0;
-  a.innerHTML = html + (enCurso ? '' : '<button class="cerrar-aviso" aria-label="Cerrar aviso" onclick="ocultarAviso()">✕</button>');
+  a.innerHTML = html + (enCurso ? '' : '<button class="cerrar-aviso" aria-label="Cerrar aviso" title="Cerrar" onclick="ocultarAviso()">✕</button>');
   if (tipo === 'exito') temporizadorAviso = setTimeout(ocultarAviso, 7000);
 }
 function ocultarAviso() { el('aviso').className = 'aviso'; }
 
 async function simular() {
   let cfg;
-  try { cfg = leerFormulario(); } catch (e) { aviso('error', e.message); return; }
+  try { cfg = leerFormulario(); } catch (e) { aviso('error', e.message); estadoSistema('error', 'Revisar parámetros'); return; }
   el('btnSimular').disabled = true;
-  aviso('', '<div class="progreso"><span>Enviando…</span></div>');
+  aviso('', '<div class="progreso"><span>Enviando…</span></div>'); estadoSistema('trabajando', 'Enviando');
   try {
     const r = await fetch('/api/simular', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: cfg }) });
     const j = await r.json();
@@ -1618,7 +2220,7 @@ async function simular() {
     try { localStorage.setItem('asrs_config', JSON.stringify(cfg)); } catch (e) {}
     consultar();
   } catch (e) {
-    aviso('error', e.message); el('btnSimular').disabled = false;
+    aviso('error', e.message); estadoSistema('error', 'Error'); el('btnSimular').disabled = false;
   }
 }
 
@@ -1631,13 +2233,14 @@ async function consultar() {
       terminar(jj.resultado, j.segundos); return;
     }
     if (j.estado === 'error') throw new Error(j.error || 'La simulación falló.');
-    if (j.estado === 'cancelado') { aviso('', 'Simulación cancelada.'); el('btnSimular').disabled = false; return; }
+    if (j.estado === 'cancelado') { aviso('', 'Simulación cancelada.'); estadoSistema('', 'Cancelada'); el('btnSimular').disabled = false; return; }
     const pct = Math.round(100 * j.progreso / Math.max(1, j.total));
     aviso('', '<div class="progreso"><span>' + (j.mensaje || 'Simulando') + '… ' + j.progreso + '/' + j.total + '</span><div class="barra"><i style="width:' + pct + '%"></i></div><button id="btnCancelar">Cancelar</button></div>');
+    estadoSistema('trabajando', 'Simulando ' + pct + ' %');
     el('btnCancelar').onclick = () => fetch('/api/cancelar/' + trabajoActual, { method: 'POST' });
     temporizador = setTimeout(consultar, 400);
   } catch (e) {
-    aviso('error', e.message); el('btnSimular').disabled = false;
+    aviso('error', e.message); estadoSistema('error', 'Error'); el('btnSimular').disabled = false;
   }
 }
 
@@ -1645,27 +2248,38 @@ function terminar(resultado, segundos) {
   el('btnSimular').disabled = false;
   HAY_SIMULACION = true; CAMBIOS = false; el('estadoEscenario').hidden = true; habilitarPasos();
   if (resultado.configuracion) ULTIMA_CONFIG = resultado.configuracion;     // la que usó el servidor, también al reconectarse tras recargar
+  estadoSistema('listo', 'Listo · ' + fmt1(segundos) + ' s');
   cargarDatos(resultado.datos);
   mostrarEstadistica(resultado.estadistica);
   actualizarSubpasos();
   irA('carrera');
-  aviso('exito', 'Simulación lista en ' + fmt1(segundos) + ' s. Pulsa <b>Iniciar</b> para ver la carrera o ve directo a los resultados.');
+  aviso('exito', 'Simulación lista en ' + fmt1(segundos) + ' s. Pulsa <b>Iniciar</b> o la barra espaciadora para ver la carrera, o ve directo a los resultados.');
 }
-// Texto de apoyo de los pasos 2 y 3 en la barra superior
+// Texto de apoyo de los pasos 2 y 3 en la barra superior, y aviso de carrera parcial con listas largas
 function actualizarSubpasos() {
-  const reps = DATOS ? DATOS.replicas.length : 0, pols = DATOS && DATOS.replicas[0] ? DATOS.replicas[0].politicas.length : 0;
-  el('subCarrera').textContent = pols + ' políticas' + (reps > 1 ? ' · ' + reps + ' réplicas' : '');
-  // Con listas largas la carrera anima solo el principio; se avisa en la carrera y en la tabla de la réplica
+  const pols = DATOS && DATOS.replicas[0] ? DATOS.replicas[0].politicas : [], rec = pols.length ? pols[0].recuperacion : '';
+  el('subCarrera').textContent = pols.length + (pols.length === 1 ? ' política' : ' políticas') +
+    (VARIAS_RECUPERACIONES || !rec ? ' en la misma lista' : ' · recuperación ' + (NOMBRES_RECUPERACION[rec] || rec));
+  // Con listas largas la carrera anima solo el principio; se avisa en la carrera y en la tabla de la carrera
   const r0 = DATOS && DATOS.replicas[0], parcial = r0 && r0.tareas_totales > r0.secuencia.length;
   el('notaParcial').hidden = !parcial;
   if (parcial) el('notaParcial').innerHTML = 'La lista tiene <b>' + fmt(r0.tareas_totales) + '</b> tareas. La carrera anima las primeras ' + fmt(r0.secuencia.length) + '; la estadística de Resultados usa la lista completa.';
-  el('tituloReplica').textContent = parcial ? 'Resultado de la carrera (primeras ' + fmt(r0.secuencia.length) + ' tareas)' : 'Resultado de la réplica que se está viendo';
-  el('subResultados').textContent = ESTADISTICA && ESTADISTICA.replicas ? 'Estadística de ' + ESTADISTICA.replicas + ' réplicas' : 'Solo la réplica vista';
+  el('tituloReplica').textContent = parcial ? 'Resultado de la carrera · primeras ' + fmt(r0.secuencia.length) + ' tareas' : 'Resultado de la carrera';
+  el('subResultados').textContent = ESTADISTICA && ESTADISTICA.replicas ? 'Estadística de ' + ESTADISTICA.replicas + (ESTADISTICA.replicas === 1 ? ' réplica' : ' réplicas') : 'Solo la carrera';
+}
+// Configuración guardada (en el navegador o en un archivo) completada con los valores por defecto
+// Las guardadas antes de admitir varias recuperaciones traían una sola en texto_regla_recuperacion
+function conDefecto(guardada) {
+  const cfg = { ...CONFIG_DEFECTO, ...guardada };
+  if (!guardada.vector_politicas_recuperacion && typeof guardada.texto_regla_recuperacion === 'string') cfg.vector_politicas_recuperacion = [guardada.texto_regla_recuperacion];
+  delete cfg.texto_regla_recuperacion;
+  return cfg;
 }
 
 // ================= arranque =================
 async function iniciar() {
-  mostrarVelocidad();
+  mostrarVelocidad(); ponerJugar('Iniciar');
+  el('btnTema').querySelector('span').textContent = NOMBRES_TEMA[temaActual] || 'Auto';
   const hayServidor = location.protocol.startsWith('http');
   if (hayServidor) {
     try {
@@ -1676,6 +2290,7 @@ async function iniciar() {
       CONFIG_DEFECTO = null;
       el('vistaEscenario').hidden = true; el('vistaCarrera').hidden = false;
       escenaVacia('El servidor que responde en esta dirección es de una versión anterior. Ciérralo con Ctrl+C en su terminal y vuelve a ejecutar <code>python visualizar.py --servir</code>.');
+      estadoSistema('error', 'Servidor antiguo');
       return;
     }
   }
@@ -1684,27 +2299,28 @@ async function iniciar() {
     el('pasos').style.display = ''; el('barraAccion').style.display = '';
     construirFormulario();
     let inicial = CONFIG_DEFECTO;
-    try { const g = localStorage.getItem('asrs_config'); if (g) inicial = { ...CONFIG_DEFECTO, ...JSON.parse(g) }; } catch (e) {}
+    try { const g = localStorage.getItem('asrs_config'); if (g) inicial = conDefecto(JSON.parse(g)); } catch (e) {}
     ponerFormulario(inicial);
     el('btnSimular').onclick = simular;
-    el('btnRestablecer').onclick = () => { ponerFormulario(CONFIG_DEFECTO); ocultarAviso(); dibujarEsquemaRack(); marcarCambios(); };
+    el('btnRestablecer').onclick = () => { ponerFormulario(CONFIG_DEFECTO); ocultarAviso(); marcarCambios(); };
     el('btnGuardar').onclick = () => { try { descargar('configuracion_asrs.json', JSON.stringify(leerFormulario(), null, 2), 'application/json'); } catch (e) { aviso('error', e.message); } };
     el('btnCargar').onclick = () => el('archivoConfig').click();
     el('archivoConfig').onchange = async ev => {
       const archivo = ev.target.files[0]; if (!archivo) return;
-      try { ponerFormulario({ ...CONFIG_DEFECTO, ...JSON.parse(await archivo.text()) }); dibujarEsquemaRack(); marcarCambios(); aviso('exito', 'Escenario cargado desde ' + archivo.name + '.'); }
+      try { ponerFormulario(conDefecto(JSON.parse(await archivo.text()))); marcarCambios(); aviso('exito', 'Escenario cargado desde ' + archivo.name + '.'); }
       catch (e) { aviso('error', 'El archivo no es una configuración válida.'); }
       ev.target.value = '';
     };
     escenaVacia('Ajusta el escenario y pulsa <b>Simular</b>.');
-    dibujarEsquemaRack();
     // Si ya hay una simulación corriendo (por ejemplo, se recargó la página) se reconecta a ella; si no, se parte del escenario para ajustarlo
     let activo = null;
     try { activo = (await (await fetch('/api/activo')).json()).id; } catch (e) {}
     if (activo) { trabajoActual = activo; ULTIMA_CONFIG = CONFIG_DEFECTO; el('btnSimular').disabled = true; consultar(); }
   } else if (DATOS_INICIALES) {
     // archivo autónomo: solo reproduce los datos incrustados, sin escenario que editar
-    HAY_SIMULACION = true; el('vistaEscenario').hidden = true; cargarDatos(DATOS_INICIALES); irA('carrera');
+    estadoSistema('listo', 'Archivo autónomo');
+    HAY_SIMULACION = true; el('pasos').style.display = ''; el('pasos').querySelector('[data-vista="escenario"]').hidden = true; habilitarPasos();
+    cargarDatos(DATOS_INICIALES); actualizarSubpasos(); irA('carrera');
   } else {
     el('vistaEscenario').hidden = true; el('vistaCarrera').hidden = false;
     escenaVacia('Esta página necesita el servidor local. Ejecuta <code>python visualizar.py --servir</code>.');

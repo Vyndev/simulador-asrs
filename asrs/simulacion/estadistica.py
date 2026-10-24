@@ -2,13 +2,13 @@
 import math
 from statistics import NormalDist
 
-# Posición de cada métrica en una fila de resultados (la fila empieza con el nombre de la política)
+# Posición de cada métrica en una fila de resultados (la fila empieza con los nombres de la política de asignación y de recuperación)
 COLUMNAS_METRICAS = {
     "tiempo_total": -1,
-    "tiempo_almacenamiento": 2,
-    "tiempo_recuperacion": 5,
-    "tiempo_reubicacion": 8,
-    "reubicaciones": 7,
+    "tiempo_almacenamiento": 3,
+    "tiempo_recuperacion": 6,
+    "tiempo_reubicacion": 9,
+    "reubicaciones": 8,
     "operaciones": -2,
 }
 
@@ -46,13 +46,13 @@ def _estadisticos(vector_valores):
 
 
 def resumir(resultados_por_replica):
-    # resultados_por_replica: lista con una entrada por réplica; cada entrada es la lista de filas de esa réplica, una por política
+    # resultados_por_replica: lista con una entrada por réplica; cada entrada es la lista de filas de esa réplica, una por escenario (asignación y recuperación)
     # Devuelve un diccionario con las estadísticas por política y el conteo de victorias (comparación pareada por réplica)
     escalar_replicas = len(resultados_por_replica)
     if escalar_replicas == 0:
         return {"replicas": 0, "politicas": []}
 
-    vector_nombres = [fila[0] for fila in resultados_por_replica[0]]
+    vector_nombres = [(fila[0], fila[1]) for fila in resultados_por_replica[0]]
     vector_victorias = [0] * len(vector_nombres)
     for vector_filas in resultados_por_replica:
         vector_tiempos = [float(fila[-1]) for fila in vector_filas]
@@ -61,14 +61,15 @@ def resumir(resultados_por_replica):
             if escalar_tiempo <= escalar_mejor + 1e-9:
                 vector_victorias[escalar_indice] += 1
 
-    vector_politicas = [{"nombre": txt_nombre, "victorias": vector_victorias[escalar_indice]} for escalar_indice, txt_nombre in enumerate(vector_nombres)]
+    vector_politicas = [{"nombre": txt_nombre, "recuperacion": txt_recuperacion, "victorias": vector_victorias[escalar_indice]}
+                        for escalar_indice, (txt_nombre, txt_recuperacion) in enumerate(vector_nombres)]
     for txt_metrica, escalar_columna in COLUMNAS_METRICAS.items():
         matriz_valores = [[float(vector_filas[escalar_indice][escalar_columna]) for vector_filas in resultados_por_replica] for escalar_indice in range(len(vector_nombres))]
         vector_medias = [sum(vector_valores) / escalar_replicas for vector_valores in matriz_valores]
         escalar_mejor = min(range(len(vector_nombres)), key=vector_medias.__getitem__)
         for escalar_indice, diccionario in enumerate(vector_politicas):
             diccionario[txt_metrica] = _estadisticos(matriz_valores[escalar_indice])
-            # Comparación pareada con la política de menor promedio: todas las políticas corren las mismas secuencias en cada réplica,
+            # Comparación pareada con el escenario de menor promedio: todos corren las mismas secuencias en cada réplica,
             # así que se resume la diferencia réplica a réplica. Si su intervalo incluye el cero, la diferencia no es significativa
             diccionario[txt_metrica]["vs_mejor"] = None if escalar_indice == escalar_mejor else _estadisticos(
                 [escalar_valor - escalar_base for escalar_valor, escalar_base in zip(matriz_valores[escalar_indice], matriz_valores[escalar_mejor])])

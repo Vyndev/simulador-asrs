@@ -1,16 +1,16 @@
-"""Políticas de recuperación: qué ítem del SKU solicitado se retira."""
+"""Políticas de recuperación: primero en entrar, primero en salir (FCFS), estricto o entre los ítems accesibles."""
 import numpy as np
 
 from asrs.politicas.restriccion import MatricesRestriccion
 
 
 class PoliticaRecuperacionFCFS:
-    # FCFS estricto: siempre el ítem más antiguo del SKU, aunque haya que reubicar lo que tiene delante
-    # Corresponde a un almacén con control de lote o de vencimiento, donde el orden de salida es obligatorio
+    # FCFS estricto: siempre sale el ítem más antiguo del SKU, aunque haya que reubicar los que tiene delante
+    # Corresponde a los casos en que el orden de salida es obligatorio, por ejemplo perecederos o trazabilidad por lote
     nombre = 'FCFS'
 
     def _masAntiguo(self, instancia_estanteria, escalar_sku, matriz_candidatas):
-        # Índice del ítem más antiguo del SKU entre las celdas candidatas, o una tupla vacía si no hay ninguno
+        # Devuelve el índice del ítem más antiguo del SKU entre las celdas candidatas, o una tupla vacía si no hay ninguno
         vector_indice_elegido = ()
         escalar_generacion_minima = None
 
@@ -31,24 +31,14 @@ class PoliticaRecuperacionFCFS:
 
 
 class PoliticaRecuperacionFCFSAccesible(PoliticaRecuperacionFCFS):
-    # El ítem más antiguo del SKU entre los que no tienen nada delante; solo si ninguno está accesible se retira el más antiguo
-    # y se reubica lo que lo bloquea. Corresponde a un almacén sin control de lote, donde todas las unidades de un SKU son intercambiables
-    nombre = 'FCFSAccesible'
+    # FCFS entre accesibles: sale el ítem más antiguo del SKU entre los que no tienen nada delante, así no hay que reubicar
+    # Solo si todos los ítems del SKU están bloqueados se recurre al más antiguo de todos, como en FCFS estricto
+    nombre = 'FCFS-Accesible'
 
     def seleccionar(self, instancia_estanteria, escalar_sku):
         matriz_ocupacion = MatricesRestriccion().ocupacion(instancia_estanteria)
-        vector_indice = self._masAntiguo(instancia_estanteria, escalar_sku, matriz_ocupacion & MatricesRestriccion().accesibilidad(matriz_ocupacion))
-        return vector_indice if vector_indice else self._masAntiguo(instancia_estanteria, escalar_sku, matriz_ocupacion)
-
-
-# Claves de configuración de las reglas de recuperación
-REGLAS_RECUPERACION = {
-    'fcfs': PoliticaRecuperacionFCFS,
-    'fcfs_accesible': PoliticaRecuperacionFCFSAccesible,
-}
-
-
-def crear_politica_recuperacion(txt_clave):
-    if txt_clave not in REGLAS_RECUPERACION:
-        raise ValueError(f"Regla de recuperación desconocida: '{txt_clave}'. Disponibles: {', '.join(REGLAS_RECUPERACION)}.")
-    return REGLAS_RECUPERACION[txt_clave]()
+        matriz_accesibles = matriz_ocupacion & MatricesRestriccion().accesibilidad(matriz_ocupacion)
+        vector_indice_elegido = self._masAntiguo(instancia_estanteria, escalar_sku, matriz_accesibles)
+        if len(vector_indice_elegido):
+            return vector_indice_elegido
+        return self._masAntiguo(instancia_estanteria, escalar_sku, matriz_ocupacion)

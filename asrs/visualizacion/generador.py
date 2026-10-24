@@ -17,9 +17,9 @@ def _rango_por_demanda(vector_demanda):
     return vector_rango
 
 
-def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S):
+def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S, txt_clave_recuperacion = 'fcfs'):
     # Ejecuta una política registrando todos los eventos de la grúa durante la secuencia de operación
-    E, G, P, instancia_politica, instancia_politica_recuperacion = instancia_simulacion.prepararEscenario(txt_clave_politica, SA)
+    E, G, P, instancia_politica, instancia_politica_recuperacion = instancia_simulacion.prepararEscenario(txt_clave_politica, SA, txt_clave_recuperacion)
 
     # Estado inicial de la estantería, un SKU por celda (0 = vacía) en orden fila, columna, capa
     vector_estado_inicial = [int(instancia_item.escalar_sku) if instancia_item != 0 else 0
@@ -35,6 +35,7 @@ def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S):
     vector_metricas = C.instancia_metricas.recuperarInformcion()
     return {
         "nombre": instancia_politica.nombre,
+        "recuperacion": instancia_politica_recuperacion.nombre,
         # Cómo se colorean los ítems: la política basada en clases usa la clase de cada SKU y las demás la rotación del SKU
         "color_por": "clase" if txt_clave_politica == 'basada_en_clases' else "sku",
         "inicial": vector_estado_inicial,
@@ -61,9 +62,9 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         SA, S = instancia_simulacion.generarSecuencias()
 
         vector_politicas = []
-        for escalar_indice_politica, txt_clave_politica in enumerate(config["vector_politicas_asignacion"]):
+        for escalar_indice_politica, txt_clave_politica, txt_clave_recuperacion in Simulacion.escenarios(config):
             rnd.seed(escalar_semilla * 1000 + escalar_indice_politica)
-            vector_politicas.append(grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S[:TAREAS_ANIMACION]))
+            vector_politicas.append(grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S[:TAREAS_ANIMACION], txt_clave_recuperacion))
 
         vector_replicas.append({
             "semilla": int(escalar_semilla),
