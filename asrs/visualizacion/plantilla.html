@@ -557,7 +557,7 @@ function estadoSistema(tipo, texto) { el('estadoSis').className = 'estado-sis ' 
 // Ejes del mundo en metros: X a lo largo del pasillo (columnas), Y hacia arriba (filas), Z hacia el pasillo (el fondo de la estantería está en Z = 0)
 let DATOS = null, SECUENCIA = [], totalTareas = 0;
 let FILAS, COLUMNAS, CAPAS, VEL_FILA, VEL_COLUMNA, VEL_PROF, ACEL, DECEL, COTA_FILA, COTA_COLUMNA, COTA_PROF, Z_RIEL, POS, CEN, RIEL;
-let COL_M, FIL_M, PRO_M, LARGO, ALTURA, FONDO, ESTACION, ES_X, ES_H, SUELO, LIM, ANCHO = 640, ALTO = 400, DEN_Z;
+let COL_M, FIL_M, PRO_M, LARGO, ALTURA, FONDO, ESTACION, ES_X, ES_H, SUELO, LIM, ANCHO = 640, ALTO = 400;
 
 // Cámara compartida por todos los paneles: se arrastra en uno y se mueven todos, así se comparan desde el mismo ángulo
 const CAMARA_INICIAL = { az: Math.PI / 4, el: 0.5, zoom: 1 };
@@ -591,20 +591,18 @@ function prepararEscena() {
   RIEL = Z_RIEL - POS[2];                                               // posición del pasillo medida desde el fondo de la estantería
   COL_M = COTA_COLUMNA; FIL_M = COTA_FILA; PRO_M = COTA_PROF;
   LARGO = COLUMNAS * COL_M; ALTURA = FILAS * FIL_M; FONDO = CAPAS * PRO_M;
-  // E/S: en el modelo es el origen de coordenadas, así que en la escena (medida desde la estantería) queda en -POS
-  // La grúa lo atiende como a una celda: el carro se dibuja a la altura y en la posición del pasillo que corresponden a ese punto,
-  // con la misma conversión que las celdas, así los recorridos dibujados miden lo mismo que los del modelo
-  ES_H = -POS[0] - CEN[0] * FIL_M + FIL_M / 2; ES_X = -POS[1] - CEN[1] * COL_M + COL_M / 2;
-  // el suelo baja si el E/S queda por debajo de la base de la estantería
-  SUELO = Math.min(0, ES_H - FIL_M / 2);
+  // La escena se mide desde la esquina de la estantería y la grúa se dibuja exactamente en los puntos del modelo:
+  // el E/S es el origen de coordenadas, así que queda en -POS, y en cada celda va al punto que marca el centro de celda
+  // Así los recorridos dibujados miden lo mismo que los del modelo y cambiar el centro de celda no mueve el E/S ni la estantería
+  ES_H = -POS[0]; ES_X = -POS[1];
+  // el suelo está en la base de la estantería; solo baja si el E/S queda por debajo de ella
+  SUELO = Math.min(0, ES_H);
   // Punto E/S al otro lado del pasillo, frente a la grúa, a la altura de la carga (z0..z1). Detrás, alejándose del pasillo,
   // una zona de espera (z1..zC) para los ítems que aguardan su turno: el que llega mientras otro sale y los que se reubican temporalmente
   ESTACION = { h: ES_H + 0.05, mesa: 0.55, z0: RIEL + 0.45, z1: RIEL + 1.45, z: RIEL + 0.95, paso: 1, lugares: 3 };
   ESTACION.zC = ESTACION.z1 + 0.15 + ESTACION.lugares * ESTACION.paso;
   // el margen derecho y el frontal dejan sitio a las cotas del largo y la altura
   LIM = { x0: Math.min(-2, ES_X - 1.5), x1: Math.max(LARGO + 2.4, ES_X + 1.5), y0: Math.min(0, RIEL - 1.2), y1: Math.max(FONDO, ESTACION.zC) + 2.1, h0: SUELO, h1: Math.max(ALTURA, ESTACION.h) + 1.6 };
-  // la horquilla llega al centro del hueco cuando está dentro del canal; esta distancia reparte la transición desde el pasillo
-  DEN_Z = Math.max(RIEL - ((CAPAS - 1) * PRO_M + CEN[2] * PRO_M), 1e-6);
   // Proporción del panel: la de la escena vista en isométrico, para no dejar márgenes vacíos
   const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000), c0 = new THREE.Vector3((LIM.x0 + LIM.x1) / 2, (LIM.h0 + LIM.h1) / 2, (LIM.y0 + LIM.y1) / 2);
   cam.position.set(c0.x + Math.sin(CAMARA_INICIAL.az) * Math.cos(CAMARA_INICIAL.el) * 300, c0.y + Math.sin(CAMARA_INICIAL.el) * 300, c0.z + Math.cos(CAMARA_INICIAL.az) * Math.cos(CAMARA_INICIAL.el) * 300);
@@ -954,11 +952,11 @@ class Panel {
       z = m.z0 + (m.z1 - m.z0) * perfZ.fraccion(dt - txy);
       if (dt >= txy && dt < m.dur) fase = 1;
     }
-    // el punto de referencia de la celda puede estar desplazado dentro de ella (centro de celda): se dibuja en el centro del hueco
-    const centro = (xm, ym) => ({ H: xm - CEN[0] * FIL_M + FIL_M / 2, X: ym - CEN[1] * COL_M + COL_M / 2 });
-    const A = (m.ini || m.desdeES) ? reposo : centro(m.x0, m.y0), B = (m.fin || m.haciaES) ? reposo : centro(m.x1, m.y1);
-    // la punta de la horquilla queda en el centro del hueco cuando está dentro del canal
-    const Y = z + (PRO_M / 2 - CEN[2] * PRO_M) * Math.max(0, Math.min(1, (RIEL - z) / DEN_Z));
+    // la grúa va al punto de referencia de la celda, que el centro de celda ubica dentro de ella
+    const punto = (xm, ym) => ({ H: xm, X: ym });
+    const A = (m.ini || m.desdeES) ? reposo : punto(m.x0, m.y0), B = (m.fin || m.haciaES) ? reposo : punto(m.x1, m.y1);
+    // la punta de la horquilla llega hasta la profundidad de ese punto
+    const Y = z;
     return { H: A.H + (B.H - A.H) * fx, X: A.X + (B.X - A.X) * fy, Y, z, fase, m, dt, A, B, tx, ty, perfX, perfY, enES: dt >= m.dur ? !!m.fin : false };
   }
 
