@@ -517,6 +517,13 @@ const POLITICAS = [
   { clave: 'mas_cercana_grua', nombre: 'Más cercana a la grúa', ayuda: 'La celda libre más cercana a la grúa (al reubicar, a la celda del ítem que se retira).' }
 ];
 const NOMBRES = { Aleatoria: 'Aleatoria', BasadaEnClases: 'Basada en clases', FullTurnover: 'Full-turnover', MasCercanaAlES: 'Más cercana al E/S', MasCercanaALaGrua: 'Más cercana a la grúa' };
+const RECUPERACIONES = [
+  { clave: 'fcfs', nombre: 'FCFS estricto', ayuda: 'Sale el ítem más antiguo del SKU aunque tenga otros delante; esos se reubican.' },
+  { clave: 'fcfs_accesible', nombre: 'FCFS entre accesibles', ayuda: 'Sale el más antiguo entre los que no tienen nada delante; solo si todos están bloqueados, el más antiguo de todos.' }
+];
+const NOMBRES_RECUPERACION = { 'FCFS': 'FCFS estricto', 'FCFS-Accesible': 'FCFS accesible' };
+// Nombre de un escenario: la política de asignación y, si se indica, la de recuperación
+const nombreEscenario = x => (NOMBRES[x.nombre] || x.nombre) + (x.recuperacion ? ' · ' + (NOMBRES_RECUPERACION[x.recuperacion] || x.recuperacion) : '');
 
 const letra = c => c ? String.fromCharCode(64 + c) : '';
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -1131,7 +1138,7 @@ function construir() {
   el('tablero').classList.remove('vacio');
   paneles = r.politicas.map((p, i) => {
     const tarjeta = document.createElement('article'); tarjeta.className = 'panel';
-    tarjeta.innerHTML = '<header class="vp-cab"><span class="vp-id">P' + (i + 1) + '</span><h3>' + (NOMBRES[p.nombre] || p.nombre) + '</h3><span class="insignia"></span></header>' +
+    tarjeta.innerHTML = '<header class="vp-cab"><span class="vp-id">P' + (i + 1) + '</span><h3>' + nombreEscenario(p) + '</h3><span class="insignia"></span></header>' +
       '<div class="estado"><span class="tipo"></span><span class="chip"></span><span class="accion"></span></div>' +
       '<div class="vp"><canvas></canvas><i class="esq a"></i><i class="esq b"></i><i class="esq c"></i><i class="esq d"></i><span class="vp-etq"></span></div>' +
       '<div class="tareas" style="grid-template-columns:repeat(' + columnasTareas + ',1fr)">' + SECUENCIA.map(() => '<i></i>').join('') + '</div>' +
@@ -1142,7 +1149,7 @@ function construir() {
   const marc = el('marcador'); marc.innerHTML = '';
   paneles.forEach((p, i) => {
     const f = document.createElement('div'); f.className = 'fila'; f.dataset.i = i;
-    f.innerHTML = '<span class="lugar">–</span><span class="nombre"><em>P' + (i + 1) + '</em>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</span><span class="valor"></span><span class="barra"><i></i></span>';
+    f.innerHTML = '<span class="lugar">–</span><span class="nombre"><em>P' + (i + 1) + '</em>' + nombreEscenario(p.d) + '</span><span class="valor"></span><span class="barra"><i></i></span>';
     marc.appendChild(f);
   });
   el('marcadorNota').textContent = totalTareas + ' tareas';
@@ -1180,7 +1187,7 @@ function marcador() {
 function resultados() {
   const orden = paneles.slice().sort((a, b) => a.fin - b.fin), mejor = orden[0].fin;
   el('tabla').innerHTML = orden.map((p, i) =>
-    '<tr class="' + (i === 0 ? 'mejor' : '') + '"><td class="num" style="text-align:left">' + (i + 1) + '.º</td><td><em>P' + (paneles.indexOf(p) + 1) + '</em>' + (NOMBRES[p.d.nombre] || p.d.nombre) + '</td><td class="num">' + fmt(p.fin) +
+    '<tr class="' + (i === 0 ? 'mejor' : '') + '"><td class="num" style="text-align:left">' + (i + 1) + '.º</td><td><em>P' + (paneles.indexOf(p) + 1) + '</em>' + nombreEscenario(p.d) + '</td><td class="num">' + fmt(p.fin) +
     '</td><td class="num">' + (i === 0 || mejor === 0 ? '–' : '+' + fmt(p.fin - mejor) + ' s (+' + (100 * (p.fin - mejor) / mejor).toFixed(0) + ' %)') +
     '</td><td class="num">' + p.d.reubicaciones + '</td></tr>').join('');
   el('resultados').classList.add('visible');
@@ -1309,7 +1316,7 @@ function mostrarEstadistica(est) {
   el('encEstadistica').innerHTML = '<tr><th>Política</th><th>Promedio ± IC 95 %</th><th class="num">Desv. estándar</th><th class="num">Mínimo</th><th class="num">Máximo</th><th class="num">vs. la mejor</th><th class="num">Veces mejor</th></tr>';
   el('cuerpoEstadistica').innerHTML = filas.map((f, i) => {
     const s = f[m], ancho = 100 * s.media / maxVal, inicioErr = 100 * Math.max(0, s.media - s.ic95) / maxVal, anchoErr = 100 * (Math.min(maxVal, s.media + s.ic95) - Math.max(0, s.media - s.ic95)) / maxVal;
-    return '<tr class="' + (i === 0 ? 'mejor' : '') + '"><td>' + (NOMBRES[f.nombre] || f.nombre) + '</td>' +
+    return '<tr class="' + (i === 0 ? 'mejor' : '') + '"><td>' + nombreEscenario(f) + '</td>' +
       '<td class="celda-barra"><i class="b" style="width:calc((100% - 24px) * ' + (ancho / 100) + ')"></i><i class="e" style="left:calc((100% - 24px) * ' + (inicioErr / 100) + ');width:calc((100% - 24px) * ' + (anchoErr / 100) + ')"></i><span>' + nf(s.media) + ' ± ' + nf(s.ic95) + '</span></td>' +
       '<td class="num">' + nf(s.desviacion) + '</td><td class="num">' + nf(s.minimo) + '</td><td class="num">' + nf(s.maximo) + '</td>' +
       '<td class="num">' + (i === 0 || mejor === 0 ? '–' : '+' + (100 * (s.media - mejor) / mejor).toFixed(1) + ' %') + '</td>' +
@@ -1323,11 +1330,11 @@ function mostrarEstadistica(est) {
 el('metrica').onchange = () => mostrarEstadistica(ESTADISTICA);
 el('btnCsv').onclick = () => {
   if (!ESTADISTICA) return;
-  const cab = ['Politica', 'Victorias'];
+  const cab = ['Politica', 'Recuperacion', 'Victorias'];
   METRICAS.forEach(([k]) => ['media', 'desviacion', 'minimo', 'maximo', 'ic95'].forEach(s => cab.push(k + '_' + s)));
   const lineas = [cab.join(';')];
   ESTADISTICA.politicas.forEach(p => {
-    const fila = [NOMBRES[p.nombre] || p.nombre, p.victorias];
+    const fila = [NOMBRES[p.nombre] || p.nombre, NOMBRES_RECUPERACION[p.recuperacion] || p.recuperacion || '', p.victorias];
     METRICAS.forEach(([k]) => ['media', 'desviacion', 'minimo', 'maximo', 'ic95'].forEach(s => fila.push(String(p[k][s]).replace('.', ','))));
     lineas.push(fila.join(';'));
   });
@@ -1504,7 +1511,7 @@ function actualizarResumen() {
   const celdas = f * c * k, demanda = demandaDelFormulario(), datos = origenDatos();
   const skus = datos ? (RESUMEN_DATOS ? RESUMEN_DATOS.skus : null) : (demanda ? demanda.length : null);
   const tareas = datos ? (RESUMEN_DATOS ? RESUMEN_DATOS.tareas : NaN) : (el('tareasAuto').checked ? Math.round(celdas * 0.1) : Number(el('tareasN').value));
-  const politicas = document.querySelectorAll('[data-politica]:checked').length;
+  const politicas = document.querySelectorAll('[data-politica]:checked').length * document.querySelectorAll('[data-recuperacion]:checked').length;
   const fichas = [
     ['Estantería', isFinite(celdas) ? f + '×' + c + '×' + k : '—', isFinite(celdas) && celdas > 6000],
     ['SKUs', skus === null ? '—' : String(skus), skus !== null && isFinite(f * c) && skus > f * c],
@@ -1606,7 +1613,9 @@ function construirFormulario() {
           '<label title="El resto son recuperaciones"><small>% almacenar</small><input type="number" id="pctAlmacenar" min="0" max="100" step="1"></label></div>';
       } else if (s.especial === 'politicas') {
         cuerpo.innerHTML = POLITICAS.map(q => '<label class="politica" title="' + q.ayuda + '"><input type="checkbox" data-politica="' + q.clave + '"><span>' + q.nombre + '<small>' + q.ayuda + '</small></span></label>').join('') +
-          '<p class="nota">La política elegida decide dónde se almacena y también dónde se reubica. La recuperación es siempre FCFS.</p>';
+          '<p class="nota">La política elegida decide dónde se almacena y también dónde se reubica.</p>' +
+          '<p class="nota"><b>Recuperación.</b> Cada política de asignación se ejecuta con cada recuperación elegida.</p>' +
+          RECUPERACIONES.map(q => '<label class="politica" title="' + q.ayuda + '"><input type="checkbox" data-recuperacion="' + q.clave + '"><span>' + q.nombre + '<small>' + q.ayuda + '</small></span></label>').join('');
       } else {
         s.items.forEach(it => {
           if (it.trio) cuerpo.appendChild(crearTrio(it));
@@ -1632,6 +1641,7 @@ function construirFormulario() {
   ['nSkus', 'sigma', 'demandaPersonalizada'].forEach(id => el(id).addEventListener('input', () => { el(id).classList.remove('invalido'); actualizarVistaPrevia(); }));
   el('tareasN').addEventListener('input', actualizarResumen);
   document.querySelectorAll('[data-politica]').forEach(c => c.addEventListener('change', () => { actualizarClasesActivas(); actualizarResumen(); }));
+  document.querySelectorAll('[data-recuperacion]').forEach(c => c.addEventListener('change', actualizarResumen));
   entradas.forEach(({ c, inp }) => { if (c.clave === 'vector_configuracion_estanteria') inp.addEventListener('input', actualizarAuto); });
   let inicial = 'almacen'; try { inicial = localStorage.getItem('asrs_pestana') || 'almacen'; } catch (e) {}
   activarPestana(PESTANAS.some(p => p.id === inicial) ? inicial : 'almacen');
@@ -1656,6 +1666,7 @@ function ponerFormulario(cfg) {
   const celdas = cfg.vector_configuracion_estanteria.reduce((a, b) => a * b, 1), auto = Math.round(celdas * 0.1) === cfg.escalar_largo_secuencia;
   el('tareasAuto').checked = auto; el('tareasN').value = cfg.escalar_largo_secuencia; el('tareasN').disabled = auto;
   document.querySelectorAll('[data-politica]').forEach(c => { c.checked = (cfg.vector_politicas_asignacion || []).includes(c.dataset.politica); });
+  document.querySelectorAll('[data-recuperacion]').forEach(c => { c.checked = (cfg.vector_politicas_recuperacion || ['fcfs']).includes(c.dataset.recuperacion); });
   el('origenTareas').value = cfg.texto_origen_tareas || 'generada'; el('textoTareas').value = cfg.texto_tareas_csv || ''; el('pctHistorial').value = cfg.escalar_porcentaje_historial || 100;
   dibujarClases(); actualizarClasesActivas(); actualizarOrigen(); actualizarResumen();
 }
@@ -1695,6 +1706,8 @@ function leerFormulario() {
   cfg.vector_prob_acum_AR = [pct / 100, 1];
   if (el('tareasAuto').checked) delete cfg.escalar_largo_secuencia; else cfg.escalar_largo_secuencia = Number(el('tareasN').value);
   cfg.vector_politicas_asignacion = Array.from(document.querySelectorAll('[data-politica]:checked')).map(c => c.dataset.politica);
+  cfg.vector_politicas_recuperacion = Array.from(document.querySelectorAll('[data-recuperacion]:checked')).map(c => c.dataset.recuperacion);
+  if (!cfg.vector_politicas_recuperacion.length) primerError = primerError || 'Recuperación: elige al menos una.';
   if (primerError) { mostrarPrimerError(); throw new Error(primerError); }
   return cfg;
 }

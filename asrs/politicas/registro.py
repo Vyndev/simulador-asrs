@@ -4,6 +4,7 @@ from asrs.politicas.basada_en_clases import PoliticaBasadaEnClases
 from asrs.politicas.full_turnover import PoliticaFullTurnover
 from asrs.politicas.mas_cercana_es import PoliticaMasCercanaAlES
 from asrs.politicas.mas_cercana_grua import PoliticaMasCercanaALaGrua
+from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS, PoliticaRecuperacionFCFSAccesible
 
 POLITICAS_ASIGNACION = {
     'aleatoria': PoliticaAleatoria,
@@ -19,3 +20,16 @@ def crear_politica(txt_clave, instancia_estanteria, instancia_grua, instancia_pu
     if txt_clave not in POLITICAS_ASIGNACION:
         raise ValueError(f"Política desconocida '{txt_clave}'. Disponibles: {', '.join(POLITICAS_ASIGNACION)}")
     return POLITICAS_ASIGNACION[txt_clave](instancia_estanteria, instancia_grua, instancia_puntoES, config)
+
+
+POLITICAS_RECUPERACION = {
+    'fcfs': PoliticaRecuperacionFCFS,
+    'fcfs_accesible': PoliticaRecuperacionFCFSAccesible,
+}
+
+
+def crear_politica_recuperacion(txt_clave):
+    # Construye la política de recuperación a partir de su clave de configuración
+    if txt_clave not in POLITICAS_RECUPERACION:
+        raise ValueError(f"Política de recuperación desconocida '{txt_clave}'. Disponibles: {', '.join(POLITICAS_RECUPERACION)}")
+    return POLITICAS_RECUPERACION[txt_clave]()

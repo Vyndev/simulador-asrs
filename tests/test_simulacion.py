@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from asrs.config import cargar_configuracion
 from asrs.dominio.grua import Grua
 from asrs.dominio.item import Item
-from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS
+from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS, PoliticaRecuperacionFCFSAccesible
 from asrs.politicas.registro import POLITICAS_ASIGNACION, crear_politica
 from asrs.politicas.restriccion import MatricesRestriccion
 from asrs.politicas.zonificacion import agrupar_skus_en_clases, construir_zonificacion
@@ -212,7 +212,7 @@ class PruebasDatosReales(unittest.TestCase):
         _, tareas = Simulacion(cfg).generarSecuencias()
         self.assertEqual(tareas, [tuple(t) for t in cfg["secuencia_real"]])
         resultado = Simulacion.cargarReplica((cfg, 1))
-        self.assertEqual(len(resultado), len(cfg["vector_politicas_asignacion"]))
+        self.assertEqual(len(resultado), len(cfg["vector_politicas_asignacion"]) * len(cfg["vector_politicas_recuperacion"]))
 
     def test_datos_invalidos_se_rechazan_en_la_configuracion(self):
         from asrs.config import config_a_json, config_desde_json
@@ -410,6 +410,41 @@ class PruebasRecuperacion(unittest.TestCase):
         self.assertEqual(indice, (2, 2, 0))
         self.assertEqual(PoliticaRecuperacionFCFS().seleccionar(E, 3), ())
 
+    def test_fcfs_accesible_prefiere_el_item_sin_bloqueo(self):
+        simulacion = Simulacion()
+        E, _, _ = simulacion.crearInstancias()
+        E.matriz_contenedor_items[2, 2, 0] = Item(1)  # el más antiguo, bloqueado
+        E.matriz_contenedor_items[2, 2, 1] = Item(2)
+        E.matriz_contenedor_items[1, 1, 0] = Item(1)  # más reciente, accesible
+        self.assertEqual(PoliticaRecuperacionFCFS().seleccionar(E, 1), (2, 2, 0))
+        self.assertEqual(PoliticaRecuperacionFCFSAccesible().seleccionar(E, 1), (1, 1, 0))
+        # Si todos los ítems del SKU están bloqueados se elige el más antiguo, como en FCFS estricto
+        E.matriz_contenedor_items[1, 1, 1] = Item(2)
+        self.assertEqual(PoliticaRecuperacionFCFSAccesible().seleccionar(E, 1), (2, 2, 0))
+
+    def test_tras_reubicar_la_grua_va_directo_al_objetivo(self):
+        from asrs.control.controlador_grua import ControladorGrua
+        simulacion = Simulacion()
+        E, G, P = simulacion.crearInstancias()
+        politica = crear_politica('mas_cercana_es', E, G, P, simulacion.config)
+        # El canal de la esquina está lleno, así el bloqueador se reubica lejos de ella
+        E.matriz_contenedor_items[0, 0, 0] = Item(3)
+        E.matriz_contenedor_items[0, 0, 1] = Item(3)
+        E.matriz_contenedor_items[5, 8, 0] = Item(1)  # objetivo
+        E.matriz_contenedor_items[5, 8, 1] = Item(2)  # bloqueador
+        C = ControladorGrua(E, G, P, [], politica)
+        G.vector_eventos = []
+        C.recuperar((5, 8, 0))
+        eventos = G.vector_eventos
+        i_soltar = next(i for i, e in enumerate(eventos) if e[1] == 'D')
+        i_recoger = max(i for i, e in enumerate(eventos) if e[1] == 'P')
+        traslados = [e for e in eventos[i_soltar:i_recoger] if e[1] == 'M' and (e[3], e[4]) != (e[5], e[6])]
+        self.assertEqual(len(traslados), 1)
+        destino = E.posicionesCeldas()[5, 8, 0]
+        self.assertAlmostEqual(traslados[0][5], destino[0])
+        self.assertAlmostEqual(traslados[0][6], destino[1])
+        self.assertNotEqual((traslados[0][3], traslados[0][4]), (0.0, 0.0))
+
 
 class PruebasEscenarios(unittest.TestCase):
     @classmethod
@@ -447,10 +482,19 @@ class PruebasEscenarios(unittest.TestCase):
         r1 = Simulacion.cargarReplica((config, 7))
         r2 = Simulacion.cargarReplica((config, 7))
         self.assertEqual(r1, r2)
-        self.assertEqual(len(r1), len(config["vector_politicas_asignacion"]))
-        self.assertEqual(len(r1[0]), 30)
-        self.assertEqual([fila[0] for fila in r1],
+        self.assertEqual(len(r1), len(config["vector_politicas_asignacion"]) * len(config["vector_politicas_recuperacion"]))
+        self.assertEqual(len(r1[0]), 31)
+        self.assertEqual([fila[0] for fila in r1[::2]],
                          ['Aleatoria', 'BasadaEnClases', 'FullTurnover', 'MasCercanaAlES', 'MasCercanaALaGrua'])
+        self.assertEqual({(fila[1]) for fila in r1}, {'FCFS', 'FCFS-Accesible'})
+
+    def test_fcfs_entre_accesibles_reubica_menos(self):
+        # Con la misma asignación y el mismo azar, elegir entre los accesibles nunca debería reubicar más que FCFS estricto
+        config = cargar_configuracion()
+        filas = Simulacion.cargarReplica((config, 7))
+        for estricto, accesible in zip(filas[::2], filas[1::2]):
+            self.assertEqual(estricto[0], accesible[0])
+            self.assertLessEqual(accesible[8], estricto[8], estricto[0])
 
 
 class PruebasVisualizacion(unittest.TestCase):
@@ -458,7 +502,7 @@ class PruebasVisualizacion(unittest.TestCase):
         from asrs.visualizacion.generador import generar_datos
         datos = generar_datos(cargar_configuracion(), [2024])
         replica = datos["replicas"][0]
-        self.assertEqual(len(replica["politicas"]), 5)
+        self.assertEqual(len(replica["politicas"]), 10)
         for politica in replica["politicas"]:
             self.assertAlmostEqual(politica["reloj_final"], politica["tiempo_total"], places=2, msg=politica["nombre"])
             self.assertEqual(politica["eventos"][-1][1], 'F')
@@ -530,10 +574,11 @@ class PruebasEstadistica(unittest.TestCase):
         from asrs.simulacion.estadistica import resumir
 
         def fila(nombre, total):
-            return [nombre] + [0] * 27 + [10, total]
+            return [nombre, 'FCFS'] + [0] * 27 + [10, total]
 
         resultado = resumir([[fila("A", 100), fila("B", 200)], [fila("A", 300), fila("B", 200)]])
         a, b = resultado["politicas"]
+        self.assertEqual(a["recuperacion"], 'FCFS')
         self.assertEqual(resultado["replicas"], 2)
         self.assertEqual((a["victorias"], b["victorias"]), (1, 1))
         self.assertEqual(a["tiempo_total"]["media"], 200)
@@ -599,7 +644,7 @@ class PruebasServidor(unittest.TestCase):
             self.assertEqual(len(resultado["datos"]["replicas"]), 1)
             self.assertEqual(resultado["datos"]["configuracion"], [4, 5, 2])
             self.assertEqual(resultado["estadistica"]["replicas"], 2)
-            self.assertEqual(len(resultado["estadistica"]["politicas"]), 2)
+            self.assertEqual(len(resultado["estadistica"]["politicas"]), 4)
         finally:
             servidor.shutdown()
             servidor.server_close()

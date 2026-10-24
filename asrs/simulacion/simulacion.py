@@ -11,8 +11,7 @@ from asrs.dominio.grua import Grua
 from asrs.dominio.item import Item
 from asrs.dominio.punto_es import PuntoES
 from asrs.generacion.secuencia import GeneradorSecuencia
-from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS
-from asrs.politicas.registro import crear_politica
+from asrs.politicas.registro import crear_politica, crear_politica_recuperacion
 from asrs.simulacion.resultados import guardar_resultados_csv
 
 
@@ -62,7 +61,16 @@ class Simulacion:
 
         return SA, S
 
-    def prepararEscenario(self, txt_clave_politica, SA):
+    @staticmethod
+    def escenarios(config):
+        # Combinaciones de política de asignación y de recuperación que se comparan en cada réplica
+        # Devuelve (índice de la política de asignación, clave de asignación, clave de recuperación)
+        # El índice fija la semilla: las dos recuperaciones de una misma asignación comparten el azar y la comparación entre ellas es pareada
+        return [(escalar_indice_politica, txt_clave_politica, txt_clave_recuperacion)
+                for escalar_indice_politica, txt_clave_politica in enumerate(config["vector_politicas_asignacion"])
+                for txt_clave_recuperacion in config.get("vector_politicas_recuperacion", ('fcfs',))]
+
+    def prepararEscenario(self, txt_clave_politica, SA, txt_clave_recuperacion = 'fcfs'):
         # Crea las instancias de una política y las llena con la secuencia de llenado, las métricas del llenado se descartan
 
         # Cada escenario cuenta las etiquetas de generación desde cero
@@ -70,24 +78,24 @@ class Simulacion:
 
         E, G, P = self.crearInstancias()
         instancia_politica = crear_politica(txt_clave_politica, E, G, P, self.config)
-        instancia_politica_recuperacion = PoliticaRecuperacionFCFS()
+        instancia_politica_recuperacion = crear_politica_recuperacion(txt_clave_recuperacion)
 
         # Se ejecuta la secuencia de llenado al nivel de ocupación fijado
         ControladorGrua(E, G, P, SA, instancia_politica, instancia_politica_recuperacion).ejecutarSecuencia()
 
         return E, G, P, instancia_politica, instancia_politica_recuperacion
 
-    def ejecutarEscenario(self, txt_clave_politica, SA, S):
+    def ejecutarEscenario(self, txt_clave_politica, SA, S, txt_clave_recuperacion = 'fcfs'):
         # Ejecuta una política: llena la estantería con ella y luego procesa la secuencia de operación
-        E, G, P, instancia_politica, instancia_politica_recuperacion = self.prepararEscenario(txt_clave_politica, SA)
+        E, G, P, instancia_politica, instancia_politica_recuperacion = self.prepararEscenario(txt_clave_politica, SA, txt_clave_recuperacion)
 
         # Se ejecuta la secuencia de operación sobre el estado alcanzado
         C = ControladorGrua(E, G, P, S, instancia_politica, instancia_politica_recuperacion)
         C.ejecutarSecuencia()
 
-        # Se recuperan las métricas resultado de la simulación y, con fin de llevar trazabilidad, se incluye la política utilizada
+        # Se recuperan las métricas resultado de la simulación y, con fin de llevar trazabilidad, se incluyen las políticas utilizadas
         vector_resultados_escenario = C.instancia_metricas.recuperarInformcion()
-        vector_resultados_escenario.insert(0, instancia_politica.nombre)
+        vector_resultados_escenario[0:0] = [instancia_politica.nombre, instancia_politica_recuperacion.nombre]
         return vector_resultados_escenario
 
     @staticmethod
@@ -100,10 +108,10 @@ class Simulacion:
         SA, S = instancia_simulacion.generarSecuencias()
 
         vector_resultados_replica = []
-        for escalar_indice_politica, txt_clave_politica in enumerate(config["vector_politicas_asignacion"]):
+        for escalar_indice_politica, txt_clave_politica, txt_clave_recuperacion in Simulacion.escenarios(config):
             # Cada política tiene su propia semilla derivada, así el resultado no depende del orden de ejecución
             rnd.seed(escalar_semilla * 1000 + escalar_indice_politica)
-            vector_resultados_replica.append(instancia_simulacion.ejecutarEscenario(txt_clave_politica, SA, S))
+            vector_resultados_replica.append(instancia_simulacion.ejecutarEscenario(txt_clave_politica, SA, S, txt_clave_recuperacion))
 
         return vector_resultados_replica
 

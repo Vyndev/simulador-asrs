@@ -9,7 +9,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica y política. Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
+Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica, política de asignación y política de recuperación. Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
 
 ## Herramienta visual
 
@@ -27,7 +27,7 @@ Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`,
 - Productos (SKU): cantidad (hasta 200), sesgo de la demanda según la curva de Hausman o una lista de demanda propia, con una vista previa de la demanda por SKU.
 - Clases de la política basada en clases: de 1 a 8, con la proporción de SKUs de cada una.
 - Lista de tareas: cantidad (automática o fija) y porcentaje de almacenamientos.
-- Políticas a comparar: cualquier subconjunto de las cinco.
+- Políticas a comparar: cualquier subconjunto de las cinco de asignación, combinadas con FCFS estricto, FCFS entre accesibles o las dos.
 - Semilla, réplicas animadas (hasta 10) y réplicas para la estadística (hasta 2000).
 
 Los parámetros se validan antes de ejecutar y los errores se muestran junto al formulario. Se pueden guardar y cargar como archivo JSON, y el navegador recuerda los últimos usados.
@@ -52,7 +52,12 @@ python -m unittest discover -s tests
 
 ## Modelo de políticas
 
-Toda combinación de decisiones es una **política de asignación de almacenamiento**. La misma política decide dónde almacenar y dónde reubicar: reubicar es almacenar un ítem que ya está en la estantería, tomando como referencia la celda de ese ítem. La recuperación es siempre FCFS (se retira el ítem más antiguo de la clase solicitada).
+Toda combinación de decisiones es una **política de asignación de almacenamiento**. La misma política decide dónde almacenar y dónde reubicar: reubicar es almacenar un ítem que ya está en la estantería, tomando como referencia la celda de ese ítem. La recuperación tiene dos variantes y cada política de asignación se ejecuta con las que se elijan (por defecto, las dos):
+
+- **FCFS estricto** (`fcfs`): sale el ítem más antiguo del SKU aunque tenga ítems delante, que se reubican. Representa un orden de salida obligatorio (perecederos, trazabilidad por lote).
+- **FCFS entre accesibles** (`fcfs_accesible`): sale el más antiguo entre los ítems del SKU que no tienen nada delante; solo si todos están bloqueados se recurre al más antiguo de todos.
+
+Las dos variantes de una misma política de asignación usan la misma semilla, así la diferencia entre ellas es pareada. Después de reubicar, la grúa va directo desde la celda donde dejó el último ítem hasta la celda objetivo; ese tramo cuenta en el tiempo de recuperación.
 
 | Clave de configuración | Nombre en resultados | Criterio |
 |---|---|---|
@@ -64,7 +69,7 @@ Toda combinación de decisiones es una **política de asignación de almacenamie
 
 La cercanía es el tiempo de viaje Chebyshev en el plano xy, `max(x/vx, y/vy)`.
 
-Las zonas se reparten por **canales completos** y el espacio de cada clase o SKU es proporcional a su demanda (el inventario sigue a la demanda), con al menos un canal por zona. Con FCFS, `full_turnover` suele reubicar más que `basada_en_clases`: el ítem más antiguo de un SKU queda al fondo del canal, con ítems del mismo SKU delante.
+Las zonas se reparten por **canales completos** y el espacio de cada clase o SKU es proporcional a su demanda (el inventario sigue a la demanda), con al menos un canal por zona. Con FCFS estricto, `full_turnover` suele reubicar más que `basada_en_clases`: el ítem más antiguo de un SKU queda al fondo del canal, con ítems del mismo SKU delante.
 
 ## Lista de tareas
 
@@ -93,7 +98,7 @@ asrs/
     aleatoria.py  basada_en_clases.py  full_turnover.py
     mas_cercana_es.py  mas_cercana_grua.py
     zonificacion.py               Zonas por canales completos y agrupación de SKUs en clases
-    recuperacion.py               PoliticaRecuperacionFCFS
+    recuperacion.py               PoliticaRecuperacionFCFS (estricto) y PoliticaRecuperacionFCFSAccesible
     restriccion.py                Ocupación y accesibilidad
     registro.py                   Registro y fábrica de políticas
   generacion/
@@ -140,7 +145,7 @@ Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de
   - *Tarea actual:* el SKU `i_t` y el tipo de operación `θ_t` (almacenamiento o recuperación). Cuando la decisión es reubicar un ítem que obstruye, la tarea en curso es una recuperación y se informa además el SKU del ítem que hay que ubicar.
   - *Perfil de la demanda:* el balance `p_t` entre almacenamientos y recuperaciones y los perfiles de SKUs que entran `P_t^S` y que salen `P_t^R`, calculados con las últimas 30 tareas y suavizados con la demanda de planificación mientras hay poco historial.
 - **Acción:** una de las posiciones disponibles de almacenamiento, es decir celdas libres y accesibles (sin ítems delante). No se impone la regla de la celda más profunda: el agente elige la celda exacta.
-- **Cuándo decide:** al almacenar cada ítem y al reubicar cada ítem que obstruye una recuperación. Las recuperaciones son FCFS. Si no queda ninguna posición disponible no hay decisión: la tarea se omite o el ítem espera en el E/S, igual que en el simulador.
+- **Cuándo decide:** al almacenar cada ítem y al reubicar cada ítem que obstruye una recuperación. Las recuperaciones son FCFS estricto. Si no queda ninguna posición disponible no hay decisión: la tarea se omite o el ítem espera en el E/S, igual que en el simulador.
 - **Recompensa:** el tiempo de ciclo con signo negativo, es decir lo que tarda la grúa desde una decisión hasta la siguiente. El retorno del episodio es el tiempo total de la lista, la misma métrica con la que se compara a las políticas clásicas.
 - **Protocolo de comparación:** todos (agente y políticas clásicas) parten de la misma estantería, llenada con la política aleatoria, y ejecutan la misma lista de tareas. El agente se evalúa en estados de prueba que no vio al entrenar. Esto es distinto de la carrera del visualizador, donde cada política llena su propia estantería.
 - **Algoritmos:** DQN toma el mejor valor Q entre las posiciones disponibles; PPO usa su máscara de acciones (`MaskablePPO` de sb3-contrib).

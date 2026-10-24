@@ -57,6 +57,11 @@ def cargar_configuracion():
         # Políticas de asignación de almacenamiento a comparar, también gobiernan la reubicación
         # Disponibles: 'aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'
         "vector_politicas_asignacion": ('aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'),
+
+        # Políticas de recuperación: cada política de asignación se ejecuta con cada una
+        # 'fcfs': sale el ítem más antiguo del SKU aunque esté bloqueado (FCFS estricto)
+        # 'fcfs_accesible': sale el más antiguo entre los que no tienen nada delante, y solo si todos están bloqueados el más antiguo de todos
+        "vector_politicas_recuperacion": ('fcfs', 'fcfs_accesible'),
     }
     # Se calcula el largo de secuencia y la demanda de cada SKU
     config["escalar_largo_secuencia"] = round(np.prod(config["vector_configuracion_estanteria"]) * 0.1)
@@ -110,7 +115,7 @@ def _vector(valor, cantidad, txt_nombre, **restricciones):
 def config_desde_json(diccionario):
     # Construye una configuración válida a partir de un diccionario, completando con los valores por defecto lo que falte
     # Lanza ValueError con un mensaje en español si algún parámetro no es válido
-    from asrs.politicas.registro import POLITICAS_ASIGNACION
+    from asrs.politicas.registro import POLITICAS_ASIGNACION, POLITICAS_RECUPERACION
 
     if not isinstance(diccionario, dict):
         raise ValueError("La configuración debe ser un objeto.")
@@ -211,5 +216,15 @@ def config_desde_json(diccionario):
     if len(set(politicas)) != len(politicas):
         raise ValueError("Políticas: hay políticas repetidas.")
     config["vector_politicas_asignacion"] = tuple(politicas)
+
+    recuperaciones = datos["vector_politicas_recuperacion"]
+    if not isinstance(recuperaciones, (list, tuple)) or not recuperaciones:
+        raise ValueError("Recuperación: elige al menos una.")
+    for txt_recuperacion in recuperaciones:
+        if txt_recuperacion not in POLITICAS_RECUPERACION:
+            raise ValueError(f"Recuperación: '{txt_recuperacion}' no existe. Disponibles: {', '.join(POLITICAS_RECUPERACION)}.")
+    if len(set(recuperaciones)) != len(recuperaciones):
+        raise ValueError("Recuperación: hay políticas repetidas.")
+    config["vector_politicas_recuperacion"] = tuple(recuperaciones)
 
     return config

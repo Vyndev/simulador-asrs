@@ -92,6 +92,13 @@ class Grua:
                                          self._tiempo(vector_posicion_inicial, vector_posicion_final),
                                          booleano_en_es_inicial, False)
 
+    def entrarEnEstanteria(self, instancia_estanteria):
+        # Si la grúa ya está en el recorrido de la estantería (por ejemplo, después de reubicar) sigue desde donde está
+        # Volver a la esquina sería un desvío que una grúa real no hace
+        if self.instancia_estanteria_actual is instancia_estanteria:
+            return 0
+        return self.irAEsquinaEstanteria(instancia_estanteria)
+
     def moverEnEstanteria(self, vector_indice_destino):
         # La grúa se mueve dentro de la estantería a una posición dada
         # La posición actual de la grúa se actualiza a la nueva posición

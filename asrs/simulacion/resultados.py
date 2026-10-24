@@ -10,7 +10,7 @@ def guardar_resultados_csv(resultados, ruta = 'resultados_simulacion.csv'):
         # Dependiendo de la configuración regional del lector de hojas de cálculo en ciertas ocaciones el .csv no se visualiza correctamente
         # Entonces, se recomienda modificar el delimitador/delimiter según sea necesario
         writer = csv.writer(archivo, delimiter=';')
-        writer.writerow(["Politica_Asignacion",
+        writer.writerow(["Politica_Asignacion", "Politica_Recuperacion",
                               "Cant_Almacenamientos", "TiempoTotal_Almacenamiento", "DesvEst_Tiempo_Almacenamiento", #A
                               "Cant_Recuperaciones", "TiempoTotal_Recuperacion", "DesvEst_Tiempo_Recuperacion", #B
                               "Cant_Reubicaciones", "TiempoTotal_Reubicacion", "DesvEst_Tiempo_Reubicacion", #C
