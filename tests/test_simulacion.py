@@ -79,7 +79,7 @@ class PruebasGrua(unittest.TestCase):
 
     def test_volver_a_plano_cuenta_tiempo(self):
         grua = Grua(np.array([0, 0, 2.7]), np.array([1, 1.5, 0.7]), 0)
-        grua.irAEsquinaEstanteria(self.E)
+        grua.entrarAlPasillo(self.E)
         grua.moverEnEstanteria((3, 3, 0))
         self.assertGreater(grua.volverAplano(), 0)
 
@@ -92,8 +92,25 @@ class PruebasGrua(unittest.TestCase):
 
     def test_posicion_riel_no_se_trunca(self):
         grua = Grua(np.array([0, 0, 2.7]), np.array([1, 1.5, 0.7]), 0)
-        grua.irAEsquinaEstanteria(self.E)
+        grua.entrarAlPasillo(self.E)
         self.assertAlmostEqual(grua.vector_posicion_actual[2], 2.7)
+
+    def test_estanteria_desplazada_riel_delante_y_sin_pasar_por_la_esquina(self):
+        from asrs.control.controlador_grua import ControladorGrua
+        config = cargar_configuracion()
+        config["vector_posicion_estanteria"] = np.array([0.0, 5.0, 3.0])
+        simulacion = Simulacion(config)
+        E, G, P = simulacion.crearInstancias()
+        # El riel queda delante de la cara frontal de la estantería, también cuando esta se desplaza en profundidad
+        self.assertAlmostEqual(G.vector_posicion_resposo[2], 3.0 + 2 * 1.1 + 0.5)
+        self.assertTrue((E.posicionesCeldas()[:, :, :, 2] < G.vector_posicion_resposo[2]).all())
+        # Al almacenar, la grúa va del E/S a la celda sin detenerse en la esquina de la estantería (0, 5)
+        politica = crear_politica('mas_cercana_es', E, G, P, config)
+        G.vector_eventos = []
+        P.matriz_contenedor_temporal_items.append(Item(1))
+        ControladorGrua(E, G, P, [], politica).almacenar((4, 6, 0))
+        paradas = {(e[5], e[6]) for e in G.vector_eventos if e[1] == 'M'}
+        self.assertNotIn((0.0, 5.0), paradas)
 
 
 class PruebasRestriccion(unittest.TestCase):
@@ -421,6 +438,21 @@ class PruebasRecuperacion(unittest.TestCase):
         # Si todos los ítems del SKU están bloqueados se elige el más antiguo, como en FCFS estricto
         E.matriz_contenedor_items[1, 1, 1] = Item(2)
         self.assertEqual(PoliticaRecuperacionFCFSAccesible().seleccionar(E, 1), (2, 2, 0))
+
+    def test_se_cuentan_los_items_reubicados_no_las_tareas(self):
+        from asrs.control.controlador_grua import ControladorGrua
+        config = cargar_configuracion()
+        config["vector_configuracion_estanteria"] = np.array([6, 6, 3])
+        simulacion = Simulacion(config)
+        E, G, P = simulacion.crearInstancias()
+        politica = crear_politica('mas_cercana_es', E, G, P, config)
+        E.matriz_contenedor_items[3, 3, 0] = Item(1)  # objetivo
+        E.matriz_contenedor_items[3, 3, 1] = Item(2)  # dos bloqueadores
+        E.matriz_contenedor_items[3, 3, 2] = Item(2)
+        C = ControladorGrua(E, G, P, [], politica)
+        C.recuperar((3, 3, 0))
+        self.assertEqual(C.instancia_metricas.cantidad_reubicaciones, 2)
+        self.assertEqual(C.instancia_metricas.cantidad_reubicaciones_recuperacion, 1)
 
     def test_tras_reubicar_la_grua_va_directo_al_objetivo(self):
         from asrs.control.controlador_grua import ControladorGrua

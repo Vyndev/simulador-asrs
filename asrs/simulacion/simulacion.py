@@ -25,7 +25,9 @@ class Simulacion:
         cfg = self.config
 
         # De forma intuitiva se establece una separación entre el riel y la cara frontal de la estantería
-        vector_coordenada_z_riel_grua = cfg["escalar_separacion_riel_grua"] + (cfg["vector_configuracion_estanteria"][2] * cfg["vector_cotas_estanteria"][2])
+        # La cara frontal está en la posición de profundidad de la estantería más su profundidad total, así el riel queda siempre delante
+        vector_coordenada_z_riel_grua = (cfg["vector_posicion_estanteria"][2] + cfg["vector_configuracion_estanteria"][2] * cfg["vector_cotas_estanteria"][2]
+                                         + cfg["escalar_separacion_riel_grua"])
 
         # A fin de simplificar el modelo se establece que el punto de referencia central o centro del espacio es el punto ES
         vector_posicion_puntoES = np.array([0, 0, vector_coordenada_z_riel_grua], dtype=float)

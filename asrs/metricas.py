@@ -111,9 +111,11 @@ self.vector_tiempo_reubicaciones_regulares_almacenamiento) > 1 else 0
         self.tiempo_total_recuperacion += tiempo
         self.vector_tiempo_recuperaciones.append(tiempo)
 
-    def registrarReubicacion(self, tiempo):
+    def registrarReubicacion(self, tiempo, cantidad_items = 1):
         # Agregar el tiempo de reubicación al DataFrame
-        self.cantidad_reubicaciones += 1
+        # La cantidad cuenta los ítems movidos, no las tareas: con canales de 3 capas o más una tarea puede mover varios
+        # Las tareas con reubicación son la suma de las reubicaciones durante el almacenamiento y durante la recuperación
+        self.cantidad_reubicaciones += cantidad_items
         self.tiempo_total_reubicacion += tiempo
         self.vector_tiempo_reubicaciones.append(tiempo)
 

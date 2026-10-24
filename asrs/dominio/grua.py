@@ -75,29 +75,21 @@ class Grua:
 
     # Métodos para interactuar con la estantería
 
-    def irAEsquinaEstanteria(self, instancia_estanteria):
-        # La grúa se mueve a una estantería dada
-        # La posición actual de la grúa se actualiza al primer
+    def entrarAlPasillo(self, instancia_estanteria):
+        # La grúa pasa a operar en la estantería dada, a la altura del riel y desde donde está
+        # No pasa por la esquina de la estantería: desde el punto E/S o desde la última celda atendida va directo a la siguiente
+        # Si ya estaba en el pasillo (por ejemplo, después de reubicar) el movimiento es nulo
         vector_posicion_inicial = np.copy(self.vector_posicion_actual)
         booleano_en_es_inicial = self._enES()
 
         self.instancia_puntoES_actual = 0
         self.instancia_estanteria_actual = instancia_estanteria
-        self.vector_posicion_actual = np.array(
-            self.instancia_estanteria_actual.vector_posicion, dtype=float)
         self._aplanar()
         vector_posicion_final = np.copy(self.vector_posicion_actual)
 
         return self._registrarMovimiento(vector_posicion_inicial, vector_posicion_final,
                                          self._tiempo(vector_posicion_inicial, vector_posicion_final),
                                          booleano_en_es_inicial, False)
-
-    def entrarEnEstanteria(self, instancia_estanteria):
-        # Si la grúa ya está en el recorrido de la estantería (por ejemplo, después de reubicar) sigue desde donde está
-        # Volver a la esquina sería un desvío que una grúa real no hace
-        if self.instancia_estanteria_actual is instancia_estanteria:
-            return 0
-        return self.irAEsquinaEstanteria(instancia_estanteria)
 
     def moverEnEstanteria(self, vector_indice_destino):
         # La grúa se mueve dentro de la estantería a una posición dada
