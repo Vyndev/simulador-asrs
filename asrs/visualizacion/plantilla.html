@@ -19,7 +19,7 @@
     --acento: #ff5a1f; --sobre-acento: #ffffff;
     --almacenar: #0ca678; --recuperar: #3b5bdb; --omitida: #e03131; --exito: #0ca678; --error-fondo: #fdecec;
     --clase1: #f59f00; --clase2: #15aabf; --clase3: #ae3ec9;
-    --tarjeta: #f6f7f8; --borde: #d6dade; --vacio: #dfe3e7; --hueco: #e9ecef; --pendiente: #cfd5db;
+    --tarjeta: #f6f7f8; --borde: #d6dade; --vacio: #dfe3e7; --celda-libre: #e9ecef; --pendiente: #cfd5db;
     --cuadricula: rgba(18, 21, 25, .055);
     /* escena 3D */
     --vp-fondo: #fbfbfc; --vp-suelo: #f1f3f5; --vp-pasillo: #e6e9ed; --vp-rejilla: #dde1e6; --vp-rejilla-fuerte: #c3cad2;
@@ -36,7 +36,7 @@
       --acento: #ff6b35;
       --almacenar: #20c997; --recuperar: #6d8bff; --omitida: #ff6b6b; --exito: #20c997; --error-fondo: #2a1416;
       --clase1: #fcc419; --clase2: #3bc9db; --clase3: #da77f2;
-      --tarjeta: #131518; --borde: #262a30; --vacio: #20242a; --hueco: #171a1e; --pendiente: #2c3138;
+      --tarjeta: #131518; --borde: #262a30; --vacio: #20242a; --celda-libre: #171a1e; --pendiente: #2c3138;
       --cuadricula: rgba(232, 235, 238, .04);
       --vp-fondo: #0f1114; --vp-suelo: #14171b; --vp-pasillo: #1b1f24; --vp-rejilla: #1f2328; --vp-rejilla-fuerte: #2d333a;
       --vp-acero: #7d8691; --vp-tinta: #3d444d; --vp-carro: #2b3138;
@@ -49,7 +49,7 @@
     --acento: #ff6b35;
     --almacenar: #20c997; --recuperar: #6d8bff; --omitida: #ff6b6b; --exito: #20c997; --error-fondo: #2a1416;
     --clase1: #fcc419; --clase2: #3bc9db; --clase3: #da77f2;
-    --tarjeta: #131518; --borde: #262a30; --vacio: #20242a; --hueco: #171a1e; --pendiente: #2c3138;
+    --tarjeta: #131518; --borde: #262a30; --vacio: #20242a; --celda-libre: #171a1e; --pendiente: #2c3138;
     --cuadricula: rgba(232, 235, 238, .04);
     --vp-fondo: #0f1114; --vp-suelo: #14171b; --vp-pasillo: #1b1f24; --vp-rejilla: #1f2328; --vp-rejilla-fuerte: #2d333a;
     --vp-acero: #7d8691; --vp-tinta: #3d444d; --vp-carro: #2b3138;
@@ -792,7 +792,7 @@ class Panel {
         const ev = this.d.eventos;
         for (let k = this.idx + 1; k < ev.length; k++) if (ev[k][1] === 'M') { this.mov.haciaES = ev[k][10] === 0 && ev[k][11] === 1; break; }
       }
-      // Celda destino: si el desplazamiento termina dentro de un canal, se resalta ese hueco
+      // Celda destino: si el desplazamiento termina dentro de un canal, se resalta esa celda
       // El color indica qué ocurrirá allí: dejar un ítem (almacenar) o retirarlo (recuperar)
       if (e[11] === 0 && Math.abs(e[9] - Z_RIEL) > 0.05) {
         const f = Math.round(this.mov.x1 / COTA_FILA - CEN[0]), c = Math.round(this.mov.y1 / COTA_COLUMNA - CEN[1]), k = Math.round(this.mov.z1 / COTA_PROF - CEN[2]), ev = this.d.eventos;
@@ -1066,7 +1066,7 @@ class Panel {
     for (let f = 0; f <= FILAS; f++) for (const z of [0.04, FONDO - 0.04]) vigas.setMatrixAt(i++, tmp.compose(pos.set(LARGO / 2, f * FIL_M, z), q, esq.set(LARGO, 0.05, 0.05)));
     [postes, vigas].forEach(m => { m.frustumCulled = false; esc.add(m); });
 
-    // ítems: una caja por hueco (las vacías se ocultan con escala cero)
+    // ítems: una caja por celda (las vacías se ocultan con escala cero)
     const n = FILAS * COLUMNAS * CAPAS;
     const items = this.items = new THREE.InstancedMesh(GEO_CAJA, M.items, n);
     items.frustumCulled = false;
@@ -1144,7 +1144,7 @@ class Panel {
   aplicarTema() {
     const M = this.mat, T = this.tema = { almacenar: css('--almacenar'), recuperar: css('--recuperar'), acento: css('--acento'), suave: css('--suave'), tenue: css('--tenue'), texto: css('--texto'),
       tinta: css('--vp-tinta'), carro: css('--vp-carro'), acero: css('--vp-acero'), fondo: css('--vp-fondo') };
-    M.suelo.color.set(css('--vp-suelo')); M.pasillo.color.set(css('--vp-pasillo')); M.fondo.color.set(css('--hueco'));
+    M.suelo.color.set(css('--vp-suelo')); M.pasillo.color.set(css('--vp-pasillo')); M.fondo.color.set(css('--celda-libre'));
     M.rejilla.color.set(css('--vp-rejilla')); M.rejillaFuerte.color.set(css('--vp-rejilla-fuerte')); M.cota.color.set(T.tenue); M.discontinua.color.set(T.suave);
     M.acero.color.set(T.acero); M.plataforma.color.set(T.tinta); M.rodillo.color.set(T.acero);
     M.grua.color.set(T.texto); M.carro.color.set(T.carro); M.horquilla.color.set(T.acero);
@@ -1204,7 +1204,7 @@ class Panel {
     cam.left = cx - w / 2; cam.right = cx + w / 2; cam.top = cy + h / 2; cam.bottom = cy - h / 2; cam.updateProjectionMatrix();
   }
 
-  // Caja del ítem que ocupa un hueco: se actualiza su matriz y su color
+  // Caja de la unidad que ocupa una celda: se actualiza su matriz y su color
   actualizarItem(f, c, k) {
     const i = (f * COLUMNAS + c) * CAPAS + k, v = this.estante[i], M = this.matriz;
     if (!v) M.makeScale(0, 0, 0);
@@ -1315,7 +1315,7 @@ class Panel {
       alcance = Math.max(0, Math.min(1, alcance));
     }
 
-    // celda destino: el hueco se enmarca con un volumen pulsante del color de la operación (almacenar o recuperar)
+    // celda destino: la celda se enmarca con un volumen pulsante del color de la operación (almacenar o recuperar)
     const d = this.destino;
     if (d) {
       const col = d.tipo === 'D' ? T.almacenar : T.recuperar;
@@ -1571,8 +1571,8 @@ document.querySelectorAll('#vistas button').forEach(b => { b.onclick = () => { O
 function construirLeyenda() {
   const item = (muestra, texto) => '<li>' + muestra + '<span>' + texto + '</span></li>';
   el('leyenda').innerHTML = '<ul class="clave">' +
-    item('<i class="punto" style="background:var(--almacenar)"></i>', '<b>Almacenar</b>: tarea, hueco donde se deja el ítem o ítem que entra por el E/S') +
-    item('<i class="punto" style="background:var(--recuperar)"></i>', '<b>Recuperar</b>: tarea, hueco del que se retira el ítem o ítem que sale por el E/S') +
+    item('<i class="punto" style="background:var(--almacenar)"></i>', '<b>Almacenar</b>: tarea; celda donde se deja la unidad, o la unidad que entra por el E/S') +
+    item('<i class="punto" style="background:var(--recuperar)"></i>', '<b>Recuperar</b>: tarea; celda de la que se retira la unidad, o la unidad que sale por el E/S') +
     item('<i class="punto tray"></i>', '<b>Trayectoria Chebyshev</b>: x e y a la vez, cada eje a su velocidad; el punto marca dónde llega el eje más rápido') +
     item('<i class="punto" style="background:var(--acento)"></i>', '<b>Carro y horquilla</b> en naranja: la grúa entra o sale de un canal (eje z)') +
     item('<i class="punto" style="background:var(--vp-tinta)"></i>', '<b>Punto E/S</b>: placa frente a la grúa por donde entran y salen los ítems. Los que llegan bajan sobre la zona de espera (contorno discontinuo) hasta que la grúa los toma; los entregados se retiran subiendo. El borde se ilumina en verde al tomar y en azul al entregar') +
