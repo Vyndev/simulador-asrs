@@ -1721,7 +1721,9 @@ const PESTANAS = [
         campo('vector_deceleracion_grua', 1, 'Columnas', { min: 0, paso: 0.1 }),
         campo('vector_deceleracion_grua', 2, 'Canales z', { min: 0, paso: 0.1 })] },
       { nota: 'Cada eje acelera, avanza a la velocidad máxima y frena. En distancias cortas no llega a esa velocidad. Con 0 no hay límite y el eje va a velocidad constante.' },
-      { fila: campo('escalar_tiempo_carga_descarga', null, 'Tiempo de carga o descarga', { unidad: 's', min: 0, paso: 0.5 }) },
+      { fila: campo('escalar_tiempo_toma_deposito_es', null, 'Toma o depósito en el E/S', { unidad: 's', min: 0, paso: 0.01 }) },
+      { fila: campo('escalar_tiempo_toma_deposito_capa_delantera', null, 'Toma o depósito en la capa delantera', { unidad: 's', min: 0, paso: 0.01 }) },
+      { fila: campo('escalar_tiempo_toma_deposito_capa_trasera', null, 'Toma o depósito en las capas traseras', { unidad: 's', min: 0, paso: 0.01 }) },
       { fila: campo('escalar_separacion_riel_grua', null, 'Separación del riel', { unidad: 'm', min: 0, paso: 0.1, ayuda: 'Distancia entre la cara de la estantería y el riel de la grúa' }) }
     ] },
     { titulo: 'Ocupación inicial', items: [

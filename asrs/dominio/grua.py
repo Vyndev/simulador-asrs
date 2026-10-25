@@ -6,7 +6,8 @@ from asrs.metricas import Metricas
 
 
 class Grua:
-    def __init__(self, vector_posicion_reposo, vector_velocidad, tiempo_cargadescarga, vector_aceleracion=None, vector_deceleracion=None):
+    def __init__(self, vector_posicion_reposo, vector_velocidad, tiempo_cargadescarga, vector_aceleracion=None, vector_deceleracion=None,
+                 tiempo_capa_delantera=None, tiempo_capa_trasera=None):
         # Inicializa la grúa con una posición de reposo y una velocidad
         # La posición actual de la grúa se establece en la posición de reposo
         # La grúa inicialmente no tiene ninguna carga ni está en ninguna estantería o punto E/S
@@ -20,7 +21,11 @@ class Grua:
         self.vector_carga = []
         self.instancia_estanteria_actual = 0
         self.instancia_puntoES_actual = 0
+        # Tiempo de tomar o depositar en el E/S y en la estantería: la capa más cercana al pasillo y las más profundas pueden tardar distinto
+        # Si no se indican los de la estantería, valen lo mismo que en el E/S
         self.tiempo_cargadescarga = tiempo_cargadescarga
+        self.tiempo_capa_delantera = tiempo_cargadescarga if tiempo_capa_delantera is None else tiempo_capa_delantera
+        self.tiempo_capa_trasera = tiempo_cargadescarga if tiempo_capa_trasera is None else tiempo_capa_trasera
         self.intancia_metricas = Metricas()
 
         # Reloj de la grúa y registro opcional de eventos, sirven para visualizar la simulación
@@ -58,11 +63,17 @@ class Grua:
         self.escalar_reloj += escalar_tiempo
         return escalar_tiempo
 
-    def _registrarCarga(self, txt_tipo, *vector_datos):
+    def _tiempoCapa(self, vector_coordenada):
+        # Tiempo de tomar o depositar en una celda: la capa de mayor índice es la más cercana al pasillo
+        if vector_coordenada[2] == self.instancia_estanteria_actual.vector_configuracion[2] - 1:
+            return self.tiempo_capa_delantera
+        return self.tiempo_capa_trasera
+
+    def _registrarCarga(self, txt_tipo, escalar_tiempo, *vector_datos):
         # Registra una operación de carga o descarga y avanza el reloj
         self.registrarEvento(txt_tipo, *vector_datos)
-        self.escalar_reloj += self.tiempo_cargadescarga
-        return self.tiempo_cargadescarga
+        self.escalar_reloj += escalar_tiempo
+        return escalar_tiempo
 
     def _aplanar(self):
         # La grúa se mueve a la altura del riel (posición z de reposo), devuelve el tiempo sin registrarlo
@@ -114,7 +125,7 @@ class Grua:
         self.vector_carga.append(instancia_item)
         self.instancia_estanteria_actual.matriz_contenedor_items[vector_coordenada_recuperacion] = 0
 
-        return self._registrarCarga('P', *[int(escalar_indice) for escalar_indice in vector_coordenada_recuperacion])
+        return self._registrarCarga('P', self._tiempoCapa(vector_coordenada_recuperacion), *[int(escalar_indice) for escalar_indice in vector_coordenada_recuperacion])
 
     def soltarItemEnEstanteria(self, vector_coordenada_almacenamiento):
         # La grúa suelta un ítem en una posición dada en la estantería
@@ -123,7 +134,7 @@ class Grua:
         self.instancia_estanteria_actual.matriz_contenedor_items[
             vector_coordenada_almacenamiento] = instancia_item
 
-        return self._registrarCarga('D', *[int(escalar_indice) for escalar_indice in vector_coordenada_almacenamiento])
+        return self._registrarCarga('D', self._tiempoCapa(vector_coordenada_almacenamiento), *[int(escalar_indice) for escalar_indice in vector_coordenada_almacenamiento])
 
     # Métodos para interactuar con el punto E/S
 
@@ -151,7 +162,7 @@ class Grua:
             indice)
         self.vector_carga.append(instancia_item)
 
-        return self._registrarCarga('J', indice)
+        return self._registrarCarga('J', self.tiempo_cargadescarga, indice)
 
     def soltarItemEnPuntoES(self):
         # La grúa suelta un ítem en el punto E/S
@@ -160,7 +171,7 @@ class Grua:
         self.instancia_puntoES_actual.matriz_contenedor_temporal_items.append(
             instancia_item)
 
-        return self._registrarCarga('I')
+        return self._registrarCarga('I', self.tiempo_cargadescarga)
 
     def soltarItemEnPuntoESSalida(self):
         # La grúa suelta un ítem en el punto E/S
@@ -169,7 +180,7 @@ class Grua:
         self.instancia_puntoES_actual.matriz_contenedor_salida_items.append(
             instancia_item)
 
-        return self._registrarCarga('S')
+        return self._registrarCarga('S', self.tiempo_cargadescarga)
 
     # Métodos para reposicionar la grúa
 

@@ -8,14 +8,29 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from asrs.config import cargar_configuracion
+from asrs.config import cargar_configuracion as _cargar_configuracion_instancia
 from asrs.dominio.grua import Grua
 from asrs.dominio.item import Item
 from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS, PoliticaRecuperacionFCFSAccesible
 from asrs.politicas.registro import POLITICAS_ASIGNACION, crear_politica
 from asrs.politicas.restriccion import MatricesRestriccion
 from asrs.politicas.zonificacion import agrupar_skus_en_clases, construir_zonificacion
-from asrs.simulacion.simulacion import Simulacion
+from asrs.simulacion.simulacion import Simulacion as _Simulacion
+
+# Las pruebas usan los parámetros de la instancia del capítulo 6, pero con una lista de operación corta (el 10 % de las celdas)
+# para que se ejecuten en segundos: la instancia completa evalúa 100 000 tareas por corrida
+TAREAS_PRUEBA = 72
+
+
+def cargar_configuracion():
+    config = _cargar_configuracion_instancia()
+    config["escalar_largo_secuencia"] = TAREAS_PRUEBA
+    return config
+
+
+class Simulacion(_Simulacion):
+    def __init__(self, config=None):
+        super().__init__(config if config is not None else cargar_configuracion())
 
 
 def preparar_estado(txt_clave_politica):
@@ -90,6 +105,37 @@ class PruebasGrua(unittest.TestCase):
         self.assertAlmostEqual(sin.intancia_metricas.tiempoDezplamiento(origen, destino, sin.vector_velocidad), max(9.6 / 1.0, 12.6 / 1.5) + 2.7 / 0.7)
         self.assertGreater(con._tiempo(origen, destino), sin._tiempo(origen, destino))
 
+    def test_tiempo_de_toma_y_deposito_depende_de_la_capa(self):
+        # Instancia del capítulo 6: 3,43 s en el E/S y en la capa delantera, 6,86 s en la trasera
+        config = cargar_configuracion()
+        simulacion = Simulacion(config)
+        E, G, P = simulacion.crearInstancias()
+        G.entrarAlPasillo(E)
+        self.assertAlmostEqual(G.tiempo_capa_delantera, 3.43)
+        E.matriz_contenedor_items[3, 4, 1] = Item(1)   # capa delantera (mayor índice)
+        E.matriz_contenedor_items[3, 5, 0] = Item(2)   # capa trasera
+        self.assertAlmostEqual(G.cargarItemDeEstanteria((3, 4, 1)), 3.43)
+        self.assertAlmostEqual(G.cargarItemDeEstanteria((3, 5, 0)), 6.86)
+        self.assertAlmostEqual(G.soltarItemEnEstanteria((3, 5, 0)), 6.86)
+        self.assertAlmostEqual(G.soltarItemEnEstanteria((3, 4, 1)), 3.43)
+        P.matriz_contenedor_temporal_items.append(Item(3))
+        G.irAPuntoES(P)
+        self.assertAlmostEqual(G.cargarItemPuntoES(), 3.43)
+
+    def test_la_instancia_por_defecto_es_la_del_capitulo_6(self):
+        config = _cargar_configuracion_instancia()
+        self.assertEqual(config["vector_configuracion_estanteria"].tolist(), [18, 20, 2])
+        self.assertEqual(config["vector_velocidad_grua"].tolist(), [1, 1.5, 0.7])
+        self.assertEqual(config["vector_aceleracion_grua"].tolist(), [0.5, 0.5, 0])
+        self.assertEqual(config["escalar_numero_skus"], 180)
+        self.assertEqual(config["escalar_sigma_hausman"], 0.4)
+        self.assertEqual(config["escalar_largo_secuencia"], 100_000)
+        self.assertEqual(config["vector_proporcion_skus_por_clase"].tolist(), [0.2, 0.2, 0.6])
+        # El E/S queda 1 m sobre la base de la estantería y 1 m antes de la primera columna, con el riel en la cara frontal
+        E, G, P = Simulacion(_cargar_configuracion_instancia()).crearInstancias()
+        self.assertEqual(E.vector_posicion.tolist(), [-1.0, 1.0, 0])
+        self.assertAlmostEqual(G.vector_posicion_resposo[2], 2 * 1.2)
+
     def test_posicion_riel_no_se_trunca(self):
         grua = Grua(np.array([0, 0, 2.7]), np.array([1, 1.5, 0.7]), 0)
         grua.entrarAlPasillo(self.E)
@@ -102,7 +148,7 @@ class PruebasGrua(unittest.TestCase):
         simulacion = Simulacion(config)
         E, G, P = simulacion.crearInstancias()
         # El riel queda delante de la cara frontal de la estantería, también cuando esta se desplaza en profundidad
-        self.assertAlmostEqual(G.vector_posicion_resposo[2], 3.0 + 2 * 1.1 + 0.5)
+        self.assertAlmostEqual(G.vector_posicion_resposo[2], 3.0 + 2 * config["vector_cotas_estanteria"][2] + config["escalar_separacion_riel_grua"])
         self.assertTrue((E.posicionesCeldas()[:, :, :, 2] < G.vector_posicion_resposo[2]).all())
         # Al almacenar, la grúa va del E/S a la celda sin detenerse en la esquina de la estantería (0, 5)
         politica = crear_politica('mas_cercana_es', E, G, P, config)
@@ -350,9 +396,10 @@ class PruebasClasesPorDemanda(unittest.TestCase):
         simulacion = Simulacion()
         E, G, P = simulacion.crearInstancias()
         por_defecto = crear_politica('basada_en_clases', E, G, P, simulacion.config)
-        self.assertEqual(simulacion.config["texto_criterio_clases"], "iguales")
+        self.assertEqual(simulacion.config["texto_criterio_clases"], "skus")
         self.assertEqual(int(por_defecto.vector_clase_de_sku.max()), 3)
-        cinco = crear_politica('basada_en_clases', E, G, P, dict(simulacion.config, escalar_numero_clases=5))
+        # Con el criterio de partes iguales de la demanda, el número de clases es el configurado
+        cinco = crear_politica('basada_en_clases', E, G, P, dict(simulacion.config, texto_criterio_clases="iguales", escalar_numero_clases=5))
         self.assertEqual(int(cinco.vector_clase_de_sku.max()), 5)
 
 
@@ -467,7 +514,13 @@ class PruebasEscenarios(unittest.TestCase):
         for clave in POLITICAS_ASIGNACION:
             _, E, _, _, _ = preparar_estado(clave)
             esperado = int(E.escalar_capacidad_total * self.simulacion.config["escalar_nivel_ocupacion"])
-            self.assertEqual(np.count_nonzero(E.matriz_contenedor_items), esperado, clave)
+            almacenado = np.count_nonzero(E.matriz_contenedor_items)
+            if clave == 'full_turnover':
+                # Con una zona fija por SKU y pocos canales por SKU, el redondeo a canales completos deja sin lugar a algunas unidades
+                self.assertGreaterEqual(almacenado, 0.9 * esperado, clave)
+                self.assertLessEqual(almacenado, esperado, clave)
+            else:
+                self.assertEqual(almacenado, esperado, clave)
 
     def test_politicas_con_zonas_respetan_su_zona(self):
         for clave in ('basada_en_clases', 'full_turnover'):
@@ -544,7 +597,8 @@ class PruebasConfiguracion(unittest.TestCase):
     def test_aceleracion_por_defecto_y_validacion(self):
         from asrs.config import config_desde_json
         config = config_desde_json({})
-        self.assertEqual(config["vector_aceleracion_grua"].tolist(), [1.0, 1.0, 1.0])
+        # Instancia del capítulo 6: 0,5 m/s² en filas y columnas y velocidad constante en la profundidad
+        self.assertEqual(config["vector_aceleracion_grua"].tolist(), [0.5, 0.5, 0.0])
         self.assertEqual(config_desde_json({"vector_aceleracion_grua": [0, 0, 0]})["vector_aceleracion_grua"].tolist(), [0, 0, 0])
         for caso in ({"vector_aceleracion_grua": [1, -1, 1]}, {"vector_deceleracion_grua": [1, 1]}, {"vector_aceleracion_grua": [1, "x", 1]}):
             with self.assertRaises(ValueError, msg=str(caso)):
@@ -552,7 +606,7 @@ class PruebasConfiguracion(unittest.TestCase):
 
     def test_tareas_por_defecto_son_el_diez_por_ciento(self):
         from asrs.config import config_desde_json
-        self.assertEqual(config_desde_json({"vector_configuracion_estanteria": [10, 10, 2]})["escalar_largo_secuencia"], 20)
+        self.assertEqual(config_desde_json({"vector_configuracion_estanteria": [10, 10, 2], "escalar_numero_skus": 20})["escalar_largo_secuencia"], 20)
 
     def test_rechaza_valores_invalidos(self):
         from asrs.config import config_desde_json

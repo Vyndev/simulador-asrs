@@ -37,8 +37,9 @@ class Simulacion:
         vector_posicion_reposo_grua = np.array([0, 0, vector_coordenada_z_riel_grua], dtype=float)
 
         E = Estanteria(cfg["vector_posicion_estanteria"], cfg["vector_configuracion_estanteria"], cfg["vector_cotas_estanteria"], cfg["vector_centro_celda_estanteria"])
-        G = Grua(vector_posicion_reposo_grua, cfg["vector_velocidad_grua"], cfg["escalar_tiempo_carga_descarga"],
-                 cfg.get("vector_aceleracion_grua"), cfg.get("vector_deceleracion_grua"))
+        G = Grua(vector_posicion_reposo_grua, cfg["vector_velocidad_grua"], cfg["escalar_tiempo_toma_deposito_es"],
+                 cfg.get("vector_aceleracion_grua"), cfg.get("vector_deceleracion_grua"),
+                 cfg["escalar_tiempo_toma_deposito_capa_delantera"], cfg["escalar_tiempo_toma_deposito_capa_trasera"])
         P = PuntoES(vector_posicion_puntoES)
 
         return E, G, P

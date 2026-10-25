@@ -11,6 +11,8 @@ import uuid
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+import numpy as np
+
 from asrs.config import LIMITE_SKUS, LIMITE_TAREAS, cargar_configuracion, config_a_json, config_desde_json
 from asrs.generacion.datos_reales import leer_tareas, resumir_tareas
 from asrs.simulacion.estadistica import resumir
@@ -117,8 +119,10 @@ class Estado:
 
 
 def configuracion_por_defecto():
-    # Valores iniciales del formulario: la configuración del proyecto con una estadística corta para que la primera ejecución sea ágil
+    # Valores iniciales del formulario: la configuración del proyecto con una lista de tareas corta (el 10 % de las celdas) y una estadística
+    # corta para que la primera ejecución sea ágil: la instancia completa evalúa 100 000 tareas por corrida y tarda minutos por política
     config = cargar_configuracion()
+    config["escalar_largo_secuencia"] = round(float(np.prod(config["vector_configuracion_estanteria"])) * 0.1)
     config["escalar_cantidad_replicas"] = 20
     return config_a_json(config)
 

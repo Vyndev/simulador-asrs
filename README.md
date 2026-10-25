@@ -11,6 +11,26 @@ python main.py
 
 Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica, política de asignación y política de recuperación. Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
 
+## Instancia por defecto
+
+Los parámetros por defecto (`asrs/config.py`) son la instancia del capítulo 6 del documento de la tesis, tomada de la literatura (Lerher et al. 2010, Lehmann y Hußmann 2023, Gagliardi et al. 2012):
+
+| Parámetro | Valor |
+|---|---|
+| Estantería | 18 filas × 20 columnas × 2 capas |
+| Celda (alto × ancho × fondo) | 1,67 × 1,1 × 1,2 m |
+| Velocidades (filas; columnas; canales) | 1; 1,5; 0,7 m/s |
+| Aceleración y deceleración | 0,5 m/s² en filas y columnas; velocidad constante en canales |
+| Toma o depósito | 3,43 s en el E/S y en la capa delantera; 6,86 s en la trasera |
+| E/S | 1 m sobre la base y 1 m antes de la primera columna; riel en la cara frontal |
+| SKU y demanda | 180 SKU, curva de Hausman con σ = 0,4 |
+| Clases | 3, con el 20 %, 20 % y 60 % de los SKU |
+| Tareas por corrida | 100 000, tras un llenado inicial que hace de calentamiento |
+| Ocupación | 85 % por defecto; la instancia recorre 5 %, 10 %, …, 95 % (`NIVELES_OCUPACION`) |
+| Corridas | 1 por defecto |
+
+Una corrida completa de 100 000 tareas tarda minutos por política. La herramienta visual (`--servir`) arranca con una lista corta (el 10 % de las celdas) para que la primera ejecución sea ágil, y las pruebas usan 72 tareas.
+
 ## Herramienta visual
 
 ```bash

@@ -11,6 +11,10 @@ LIMITE_SKUS = 200
 LIMITE_CLASES = 8
 LIMITE_REPLICAS_ESTADISTICA = 2000
 
+# Niveles de ocupación de la instancia del capítulo 6 (Lehmann y Hußmann): 5 %, 10 %, ..., 95 %. Se varía 'escalar_nivel_ocupacion' sobre estos niveles
+TAREAS_POR_CORRIDA = 100_000 # Cantidad de tareas evaluadas por corrida en la instancia del capítulo 6
+NIVELES_OCUPACION = tuple(round(0.05 * nivel, 2) for nivel in range(1, 20))
+
 
 def cargar_configuracion():
     # Se cargan los párametros del modelo
@@ -21,28 +25,30 @@ def cargar_configuracion():
         # Se recomienda utilizar la convención de ejemplo, esto por que la matrices tradicionalmente se recorrecoren por filas y luego columnas
         # Sin embargo como se meciona, siempre y cuando se conserve congruencia las componente  verticales y horizontales son intercambiales sin implicaciones negativas
 
-        "vector_posicion_estanteria": np.array([0, 0, 0]), # (posición vertical, posición horizontal, posición de profundidad)
+        "vector_posicion_estanteria": np.array([-1.0, 1.0, 0]), # (posición vertical, posición horizontal, posición de profundidad), el E/S queda 1 m sobre la base de la estantería y 1 m antes de la primera columna
         "vector_configuracion_estanteria": np.array([18, 20, 2]), # (filas, columnas, capas de profundidad)
-        "vector_cotas_estanteria": np.array([1.6, 0.9, 1.1]), # (alto de fila, ancho de columna, profundid de celda)
+        "vector_cotas_estanteria": np.array([1.67, 1.1, 1.2]), # (alto de fila, ancho de columna, profundid de celda), 30 m de altura en 18 niveles, bahía de 1,1 m por 1,2 m
         "vector_centro_celda_estanteria": np.array([0.5, 0.5, 0.5]), # (% verical, % horizontal, % profundidad), representa un traslación del punto de referencia dentro de la celda
         "escalar_nivel_ocupacion": 0.85, # Porcentaje de la estatería que esta ocupada, intervalo [0, 1]
         "texto_perfil_inventario": "eoq", # Cuánto inventario tiene cada SKU: 'eoq' (lote económico, crece con la raíz de la demanda) o 'demanda' (proporcional)
-        "escalar_separacion_riel_grua": 0.5, # Unidades de separación entre la cara frontal de la estantería y el riel de la grúa
+        "escalar_separacion_riel_grua": 0, # Unidades de separación entre la cara frontal de la estantería y el riel de la grúa
         "vector_velocidad_grua": np.array([1, 1.5, 0.7]), #(Velocidad en filas, velocidad en columnas, velocidad a lo largo de canales)
-        "vector_aceleracion_grua": np.array([1.0, 1.0, 1.0]), # Aceleración de cada eje (filas, columnas, canales), 0 significa sin límite: el eje alcanza la velocidad al instante
-        "vector_deceleracion_grua": np.array([1.0, 1.0, 1.0]), # Deceleración de cada eje, 0 significa sin límite
-        "escalar_tiempo_carga_descarga": 0, # Tiempo que demora la grúa en cargar o descargar algún ítem
+        "vector_aceleracion_grua": np.array([0.5, 0.5, 0]), # Aceleración de cada eje (filas, columnas, canales), 0 significa sin límite: el eje alcanza la velocidad al instante
+        "vector_deceleracion_grua": np.array([0.5, 0.5, 0]), # Deceleración de cada eje, 0 significa sin límite
+        "escalar_tiempo_toma_deposito_es": 3.43, # Tiempo de tomar o depositar un ítem en el punto E/S
+        "escalar_tiempo_toma_deposito_capa_delantera": 3.43, # Tiempo de tomar o depositar un ítem en la capa de la estantería más cercana al pasillo
+        "escalar_tiempo_toma_deposito_capa_trasera": 6.86, # Tiempo de tomar o depositar un ítem en las capas más profundas
 
         # Demanda por SKU: la lista de tareas solo conoce SKUs, el SKU 1 es el más demandado
-        "escalar_numero_skus": 30, # Cantidad de SKUs
-        "escalar_sigma_hausman": 0.5, # Sesgo de la demanda según la curva de Hausman, 1 es demanda uniforme y menor es más concentrada
+        "escalar_numero_skus": 180, # Cantidad de SKUs, relación de 4 posiciones por producto
+        "escalar_sigma_hausman": 0.4, # Sesgo de la demanda según la curva de Hausman, 1 es demanda uniforme y menor es más concentrada
         "vector_demanda_sku_personalizada": None, # Opcional, demanda de cada SKU, reemplaza a los dos parámetros anteriores
         "vector_demanda_sku": None, # Se calcula a partir de lo anterior, suma 1
 
         # Agrupación de SKUs en clases, solo la usa la política basada en clases. La clase 1 agrupa a los más demandados
-        "texto_criterio_clases": "iguales", # 'iguales': N clases con la misma parte de la demanda; 'pareto': 80/15/5 de la demanda; 'skus': porcentaje de SKUs de cada clase a mano
+        "texto_criterio_clases": "skus", # 'iguales': N clases con la misma parte de la demanda; 'pareto': 80/15/5 de la demanda; 'skus': porcentaje de SKUs de cada clase a mano
         "escalar_numero_clases": 3, # Número de clases con el criterio 'iguales'
-        "vector_proporcion_skus_por_clase": np.array([0.2, 0.3, 0.5]), # Con el criterio 'skus', proporción de SKUs de cada clase
+        "vector_proporcion_skus_por_clase": np.array([0.2, 0.2, 0.6]), # Con el criterio 'skus', proporción de SKUs de cada clase
 
         "vector_prob_acum_AR": np.array([0.5, 1]), # Vector de probabilidad acumulada, para el almacenamiento y recuperación
 
@@ -52,7 +58,7 @@ def cargar_configuracion():
         "texto_tareas_csv": "", # Contenido del CSV, con una tarea por fila: actividad (A o R) y SKU
         "escalar_porcentaje_historial": 100, # Con datos reales, porcentaje inicial de la lista con el que las políticas conocen la demanda (llenado y clases)
         "escalar_largo_secuencia": 1,  # Valor inicial, se ajustará en la inicialización
-        "escalar_cantidad_replicas": 100, # la simulación se repetira según la cantidad de replicas
+        "escalar_cantidad_replicas": 1, # una corrida larga, como en la instancia del capítulo 6; con más corridas la estadística resume el promedio y el intervalo de confianza. Corrida de la instancia: # la simulación se repetira según la cantidad de replicas
         "escalar_replicas_animadas": 1, # la carrera muestra una réplica; la estadística usa escalar_cantidad_replicas
         "escalar_semilla": 2024, # Semilla base, la réplica i usa semilla + i, esto hace reproducibles los resultados
 
@@ -66,7 +72,7 @@ def cargar_configuracion():
         "vector_politicas_recuperacion": ('fcfs',),
     }
     # Se calcula el largo de secuencia y la demanda de cada SKU
-    config["escalar_largo_secuencia"] = round(np.prod(config["vector_configuracion_estanteria"]) * 0.1)
+    config["escalar_largo_secuencia"] = TAREAS_POR_CORRIDA
     config["vector_demanda_sku"] = demanda_hausman(config["escalar_numero_skus"], config["escalar_sigma_hausman"])
 
     return config
@@ -142,7 +148,13 @@ def config_desde_json(diccionario):
     config["vector_velocidad_grua"] = np.array(_vector(datos["vector_velocidad_grua"], 3, "Velocidad de la grúa", minimo=0, minimo_estricto=True, maximo=1000), dtype=float)
     config["vector_aceleracion_grua"] = np.array(_vector(datos["vector_aceleracion_grua"], 3, "Aceleración de la grúa", minimo=0, maximo=1000), dtype=float)
     config["vector_deceleracion_grua"] = np.array(_vector(datos["vector_deceleracion_grua"], 3, "Deceleración de la grúa", minimo=0, maximo=1000), dtype=float)
-    config["escalar_tiempo_carga_descarga"] = _numero(datos["escalar_tiempo_carga_descarga"], "Tiempo de carga y descarga", minimo=0, maximo=3600)
+    # Las configuraciones guardadas antes tenían un solo tiempo de carga y descarga para todo
+    if "escalar_tiempo_carga_descarga" in diccionario and not any(k.startswith("escalar_tiempo_toma_deposito") for k in diccionario):
+        for txt_clave in ("escalar_tiempo_toma_deposito_es", "escalar_tiempo_toma_deposito_capa_delantera", "escalar_tiempo_toma_deposito_capa_trasera"):
+            datos[txt_clave] = diccionario["escalar_tiempo_carga_descarga"]
+    config["escalar_tiempo_toma_deposito_es"] = _numero(datos["escalar_tiempo_toma_deposito_es"], "Tiempo de toma y depósito en el E/S", minimo=0, maximo=3600)
+    config["escalar_tiempo_toma_deposito_capa_delantera"] = _numero(datos["escalar_tiempo_toma_deposito_capa_delantera"], "Tiempo de toma y depósito en la capa delantera", minimo=0, maximo=3600)
+    config["escalar_tiempo_toma_deposito_capa_trasera"] = _numero(datos["escalar_tiempo_toma_deposito_capa_trasera"], "Tiempo de toma y depósito en las capas traseras", minimo=0, maximo=3600)
 
     origen = datos["texto_origen_tareas"]
     if origen not in ("generada", "datos"):
