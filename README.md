@@ -26,7 +26,7 @@ Los parámetros por defecto (`asrs/config.py`) son la instancia del capítulo 6 
 | SKU y demanda | 180 SKU, curva de Hausman con σ = 0,4 |
 | Clases | 3, con el 20 %, 20 % y 60 % de los SKU |
 | Tareas por corrida | 100 000, tras un llenado inicial que hace de calentamiento |
-| Ocupación | 85 % por defecto; la instancia recorre 5 %, 10 %, …, 95 % (`NIVELES_OCUPACION`) |
+| Ocupación | 85 % |
 | Corridas | 1 por defecto |
 
 Una corrida completa de 100 000 tareas tarda minutos por política. La herramienta visual (`--servir`) arranca con una lista corta (el 10 % de las celdas) para que la primera ejecución sea ágil, y las pruebas usan 72 tareas.

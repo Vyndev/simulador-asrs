@@ -11,9 +11,7 @@ LIMITE_SKUS = 200
 LIMITE_CLASES = 8
 LIMITE_REPLICAS_ESTADISTICA = 2000
 
-# Niveles de ocupación de la instancia del capítulo 6 (Lehmann y Hußmann): 5 %, 10 %, ..., 95 %. Se varía 'escalar_nivel_ocupacion' sobre estos niveles
 TAREAS_POR_CORRIDA = 100_000 # Cantidad de tareas evaluadas por corrida en la instancia del capítulo 6
-NIVELES_OCUPACION = tuple(round(0.05 * nivel, 2) for nivel in range(1, 20))
 
 
 def cargar_configuracion():
