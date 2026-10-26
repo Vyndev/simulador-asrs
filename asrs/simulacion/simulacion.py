@@ -11,15 +11,30 @@ from asrs.dominio.grua import Grua
 from asrs.dominio.item import Item
 from asrs.dominio.punto_es import PuntoES
 from asrs.generacion.probabilidades import perfil_inventario
+from asrs.generacion.reposicion import generar_escenario
 from asrs.generacion.secuencia import GeneradorSecuencia
-from asrs.politicas.registro import crear_politica, crear_politica_recuperacion
-from asrs.simulacion.resultados import guardar_resultados_csv
+from asrs.politicas.registro import POLITICAS_ASIGNACION, crear_politica, crear_politica_recuperacion
+from asrs.simulacion.resultados import guardar_resultados_csv, guardar_resumen_escenarios_csv
 
 
 class Simulacion:
     def __init__(self, config = None):
         # Se contruye la instancia de simulación con la configuración fijada
         self.config = config if config is not None else cargar_configuracion()
+        # Escenario de demanda de la última réplica generada, None con datos reales y antes de generar las secuencias
+        self.escenario_demanda = None
+
+    def configPolitica(self):
+        # Configuración que reciben las políticas: la misma de la simulación más el escenario, del que leen la popularidad móvil
+        return dict(self.config, escenario_demanda=self.escenario_demanda)
+
+    def argumentosOperacion(self, escalar_tareas):
+        # Argumentos del controlador para ejecutar las primeras tareas de la lista de operación: el día de cada tarea y los retiros
+        # Sin escenario (datos reales) no hay avisos de día ni retiros
+        if self.escenario_demanda is None:
+            return {}
+        return {"vector_dia_de_tarea": self.escenario_demanda.vector_dia_de_tarea[:escalar_tareas],
+                "conjunto_retiros": {escalar_indice for escalar_indice in self.escenario_demanda.conjunto_retiros if escalar_indice < escalar_tareas}}
 
     def crearInstancias(self):
         # Se crean la estantería, la grúa y el punto E/S vacíos
@@ -48,34 +63,48 @@ class Simulacion:
         # Se generan la secuencia de llenado y la secuencia de operación, comunes a todas las políticas de la réplica
         cfg = self.config
 
-        # Las llegadas y las solicitudes de cada SKU siguen su demanda, las tareas no saben nada de clases
-        vector_prob_acum_sku = np.cumsum(cfg["vector_demanda_sku"])
-        vector_prob_acum_sku[-1] = 1.0
-
-        # El llenado inicial sigue el perfil de inventario: cuántas unidades de cada SKU hay guardadas (no cuántas veces se piden)
-        vector_prob_acum_inventario = np.cumsum(perfil_inventario(cfg["vector_demanda_sku"], cfg["texto_perfil_inventario"]))
-        vector_prob_acum_inventario[-1] = 1.0
-
-        # Se calcula la cantidad de almacenamientos a realizar en el llenado, con el fin de alcanzar el nivel de ocupación fijado
-        escalar_capacidad_total = int(np.prod(cfg["vector_configuracion_estanteria"]))
-        escalar_largo_secuencia_llenado = int(escalar_capacidad_total * cfg["escalar_nivel_ocupacion"])
-
-        SA = GeneradorSecuencia(escalar_largo_secuencia_llenado, np.array([1, 1]), vector_prob_acum_inventario).generarSecuencia()
         if cfg.get("texto_origen_tareas") == "datos":
             # Lista real: es la misma en todas las réplicas, solo cambia el llenado inicial
-            S = [(int(escalar_actividad), int(escalar_sku)) for escalar_actividad, escalar_sku in cfg["secuencia_real"]]
-        else:
-            S = GeneradorSecuencia(cfg["escalar_largo_secuencia"], cfg["vector_prob_acum_AR"], vector_prob_acum_sku).generarSecuencia()
+            self.escenario_demanda = None
 
-        return SA, S
+            # El llenado inicial sigue el perfil de inventario: cuántas unidades de cada SKU hay guardadas (no cuántas veces se piden)
+            vector_prob_acum_inventario = np.cumsum(perfil_inventario(cfg["vector_demanda_sku"], cfg["texto_perfil_inventario"]))
+            vector_prob_acum_inventario[-1] = 1.0
+
+            # Se calcula la cantidad de almacenamientos a realizar en el llenado, con el fin de alcanzar el nivel de ocupación fijado
+            escalar_capacidad_total = int(np.prod(cfg["vector_configuracion_estanteria"]))
+            escalar_largo_secuencia_llenado = int(escalar_capacidad_total * cfg["escalar_nivel_ocupacion"])
+
+            SA = GeneradorSecuencia(escalar_largo_secuencia_llenado, np.array([1, 1]), vector_prob_acum_inventario).generarSecuencia()
+            S = [(int(escalar_actividad), int(escalar_sku)) for escalar_actividad, escalar_sku in cfg["secuencia_real"]]
+            return SA, S
+
+        # Lista generada: el modelo de suministro y demanda entrega el llenado (inventario al final del calentamiento) y la operación
+        # Todo su azar sale de un generador propio, sembrado desde la semilla de la réplica
+        self.escenario_demanda = generar_escenario(cfg, np.random.default_rng(rnd.getrandbits(64)))
+        return self.escenario_demanda.lista_llenado, self.escenario_demanda.lista_operacion
+
+    @staticmethod
+    def indiceSemillaPolitica(txt_clave_politica):
+        # Índice que fija el azar de una política: el de su política base en el registro, así no depende de qué otras políticas se eligen
+        # Una variante replanificada comparte el índice de la de plan fijo: parten del mismo plan y sus desempates al azar son los mismos
+        # Una clave desconocida recibe el índice siguiente al último, crear_politica la rechaza con un mensaje claro
+        vector_claves = list(POLITICAS_ASIGNACION)
+        txt_base = txt_clave_politica.removesuffix('_replanificada')
+        return vector_claves.index(txt_base) if txt_base in vector_claves else len(vector_claves)
+
+    @staticmethod
+    def semillaDePolitica(escalar_semilla, txt_clave_politica):
+        # Semilla con la que se ejecuta una política dentro de una réplica
+        return escalar_semilla * 1000 + Simulacion.indiceSemillaPolitica(txt_clave_politica)
 
     @staticmethod
     def escenarios(config):
         # Combinaciones de política de asignación y de recuperación que se comparan en cada réplica
-        # Devuelve (índice de la política de asignación, clave de asignación, clave de recuperación)
+        # Devuelve (índice de la política de asignación en el registro, clave de asignación, clave de recuperación)
         # El índice fija la semilla: las dos recuperaciones de una misma asignación comparten el azar y la comparación entre ellas es pareada
-        return [(escalar_indice_politica, txt_clave_politica, txt_clave_recuperacion)
-                for escalar_indice_politica, txt_clave_politica in enumerate(config["vector_politicas_asignacion"])
+        return [(Simulacion.indiceSemillaPolitica(txt_clave_politica), txt_clave_politica, txt_clave_recuperacion)
+                for txt_clave_politica in config["vector_politicas_asignacion"]
                 for txt_clave_recuperacion in config.get("vector_politicas_recuperacion", ('fcfs',))]
 
     def prepararEscenario(self, txt_clave_politica, SA, txt_clave_recuperacion = 'fcfs'):
@@ -85,7 +114,7 @@ class Simulacion:
         Item.escalar_contador_global_generacion = 0
 
         E, G, P = self.crearInstancias()
-        instancia_politica = crear_politica(txt_clave_politica, E, G, P, self.config)
+        instancia_politica = crear_politica(txt_clave_politica, E, G, P, self.configPolitica())
         instancia_politica_recuperacion = crear_politica_recuperacion(txt_clave_recuperacion)
 
         # Se ejecuta la secuencia de llenado al nivel de ocupación fijado
@@ -98,7 +127,7 @@ class Simulacion:
         E, G, P, instancia_politica, instancia_politica_recuperacion = self.prepararEscenario(txt_clave_politica, SA, txt_clave_recuperacion)
 
         # Se ejecuta la secuencia de operación sobre el estado alcanzado
-        C = ControladorGrua(E, G, P, S, instancia_politica, instancia_politica_recuperacion)
+        C = ControladorGrua(E, G, P, S, instancia_politica, instancia_politica_recuperacion, **self.argumentosOperacion(len(S)))
         C.ejecutarSecuencia()
 
         # Se recuperan las métricas resultado de la simulación y, con fin de llevar trazabilidad, se incluyen las políticas utilizadas
@@ -107,8 +136,9 @@ class Simulacion:
         return vector_resultados_escenario
 
     @staticmethod
-    def cargarReplica(vector_argumentos_replica):
+    def cargarReplicaConEscenario(vector_argumentos_replica):
         # Ejecuta una réplica completa: secuencias propias con semilla y todas las políticas sobre esas mismas secuencias
+        # Devuelve las filas de resultados y el resumen del escenario de la réplica (con datos reales, solo la semilla)
         config, escalar_semilla = vector_argumentos_replica
         instancia_simulacion = Simulacion(config)
 
@@ -116,12 +146,20 @@ class Simulacion:
         SA, S = instancia_simulacion.generarSecuencias()
 
         vector_resultados_replica = []
-        for escalar_indice_politica, txt_clave_politica, txt_clave_recuperacion in Simulacion.escenarios(config):
-            # Cada política tiene su propia semilla derivada, así el resultado no depende del orden de ejecución
-            rnd.seed(escalar_semilla * 1000 + escalar_indice_politica)
+        for _, txt_clave_politica, txt_clave_recuperacion in Simulacion.escenarios(config):
+            # Cada política tiene su propia semilla derivada, así el resultado no depende del orden de ejecución ni de las demás políticas elegidas
+            rnd.seed(Simulacion.semillaDePolitica(escalar_semilla, txt_clave_politica))
             vector_resultados_replica.append(instancia_simulacion.ejecutarEscenario(txt_clave_politica, SA, S, txt_clave_recuperacion))
 
-        return vector_resultados_replica
+        dic_resumen = {"semilla": escalar_semilla}
+        if instancia_simulacion.escenario_demanda is not None:
+            dic_resumen.update(instancia_simulacion.escenario_demanda.resumen)
+        return vector_resultados_replica, dic_resumen
+
+    @staticmethod
+    def cargarReplica(vector_argumentos_replica):
+        # Solo las filas de resultados de la réplica, el resumen del escenario se descarta
+        return Simulacion.cargarReplicaConEscenario(vector_argumentos_replica)[0]
 
     def ejecutarSimulacion(self):
 
@@ -136,7 +174,8 @@ class Simulacion:
         # Si se deja 'processes=mp.cpu_count()' entonces usará todos los núcleos
         # En cambio si se remplaza 'mo.cpu_count()' por algún número entero menor que la cantidad de núcleos disponibles en el procesador, entonces se limitara la cantidad de núcleos utilizados
         with mp.Pool(processes=mp.cpu_count()) as bahia:
-            resultados_por_replica = bahia.map(Simulacion.cargarReplica, matriz_lista_replicas)
+            resultados_por_replica = bahia.map(Simulacion.cargarReplicaConEscenario, matriz_lista_replicas)
 
-        resultados = [vector_resultado for resultados_replica in resultados_por_replica for vector_resultado in resultados_replica]
+        resultados = [vector_resultado for resultados_replica, _ in resultados_por_replica for vector_resultado in resultados_replica]
         guardar_resultados_csv(resultados)
+        guardar_resumen_escenarios_csv([dic_resumen for _, dic_resumen in resultados_por_replica])

@@ -9,7 +9,7 @@ pip install -r requirements.txt
 python main.py
 ```
 
-Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica, política de asignación y política de recuperación. Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
+Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica, política de asignación y política de recuperación, y `resultados_escenario.csv` con una fila por réplica y los indicadores de su escenario de demanda (ver "Modelo dinámico de suministro y demanda"). Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
 
 ## Instancia por defecto
 
@@ -23,13 +23,55 @@ Los parámetros por defecto (`asrs/config.py`) son la instancia del capítulo 6 
 | Aceleración y deceleración | 0,5 m/s² en filas y columnas; velocidad constante en canales |
 | Toma o depósito | 3,43 s en el E/S y en la capa delantera; 6,86 s en la trasera |
 | E/S | 1 m sobre la base y 1 m antes de la primera columna; riel en la cara frontal |
-| SKU y demanda | 180 SKU, curva de Hausman con σ = 0,4 |
+| SKU y demanda | 180 posiciones del surtido, ciclo de vida de Bass con estacionalidad; concentración media de la curva de Hausman con σ = 0,4 |
 | Clases | 3, con el 20 %, 20 % y 60 % de los SKU |
-| Tareas por corrida | 100 000, tras un llenado inicial que hace de calentamiento |
-| Ocupación | 85 % |
+| Tareas por corrida | 525 600 (un año de 365 días a 1 440 tareas por día), tras un calentamiento de 30 días y un llenado inicial |
+| Ocupación | 85 % de media, con un techo del 95 % |
+| Políticas de asignación | 7 (la basada en clases y la dedicada, con plan fijo y replanificadas cada 30 días) |
 | Corridas | 1 por defecto |
 
-Una corrida completa de 100 000 tareas tarda minutos por política. La herramienta visual (`--servir`) arranca con una lista corta (el 10 % de las celdas) para que la primera ejecución sea ágil, y las pruebas usan 72 tareas.
+Un año completo (525 600 tareas) tarda unos 3,5 minutos por política en un solo proceso y hasta unos 6,5 minutos con varios procesos en paralelo (se midieron 352 a 387 s con siete), así que las siete políticas de una réplica suman unos 25 minutos en un solo núcleo; `main.py` reparte las réplicas entre los núcleos. La herramienta visual (`--servir`) arranca con una lista corta (el 10 % de las celdas) para que la primera ejecución sea ágil, y las pruebas usan 72 tareas.
+
+## Modelo dinámico de suministro y demanda
+
+La lista de tareas generada sigue el modelo de la sección 6.2.3 del capítulo 6 (decisiones de control, tablas 6 y 7) y su diseño (`documento/disenos/2026-10-25-modelo-suministro-demanda.md`). El generador produce el escenario y las políticas solo ven la lista; el escenario es el mismo para todas las políticas de una réplica. Código en `asrs/generacion/ciclo_vida.py`, `reposicion.py` y `escenario.py`.
+
+- **Ciclo de vida.** Cada una de las 180 posiciones del surtido tiene siempre un producto activo con curva de Bass (p = 0,03, q = 0,38) y un ciclo de 18 meses (un mes son 365/12 días). Al cerrar el ciclo el producto se retira y la misma posición lanza un sucesor que hereda su altura y su estacionalidad. El SKU de la lista es el número de la posición (1 a 180).
+- **Estacionalidad.** Cada posición tiene una amplitud (cuantiles de Butters et al. 2025) y un mes de pico (44 % de diciembre a febrero, 37 % de junio a agosto, 19 % el resto). El día 0 del año es el 1 de enero.
+- **Demanda y mezcla.** Cada día hay en promedio R = 720 recuperaciones de demanda (60 ciclos por hora × 24 horas ÷ 2), repartidas entre las posiciones según su participación. La proporción de almacenamientos no es un parámetro (`vector_prob_acum_AR` no se aplica a la lista generada): resulta del modelo.
+- **Reposición.** Lotes EOQ, `Q = max(1, redondeo(κ √D))`, con `κ` recalculada cada día para que el inventario esperado sea el 85 % de las celdas. Punto de pedido y plazo 0: el lote entra justo después de la recuperación que deja un producto sin unidades. Hay un primer lote al lanzar el sucesor, un lote final cuando la demanda restante del producto es menor que Q, y un retiro de fin de ciclo que vacía la posición antes del primer lote del sucesor.
+- **Techo de ocupación.** Un lote que llevaría la ocupación por encima del 95 % se aplaza hasta que haya espacio. Si un producto sin existencias tiene el lote aplazado y le llega demanda, esa recuperación no se emite y se cuenta como demanda no atendida.
+- **Calentamiento y horizonte.** 30 días de prehistoria que el generador lleva sin que las políticas la ejecuten; su inventario final define la lista de llenado. El año evaluado son las 525 600 tareas siguientes.
+- **Popularidad móvil.** Es lo único que las políticas ven de la demanda: las recuperaciones de cada posición en los últimos 30 días. La popularidad de un sucesor arranca en cero.
+- **Datos reales.** El camino de datos reales no cambia: sin escenario no hay avisos de día ni retiros.
+
+**Siete políticas de asignación.** La basada en clases y la dedicada por SKU (`full_turnover`) planifican con la popularidad móvil y se evalúan en dos variantes que solo difieren en cuándo planifican. El *plan fijo* (`basada_en_clases`, `full_turnover`) forma las clases o las zonas antes del llenado inicial y no las cambia en el año. La *replanificada* (`basada_en_clases_replanificada`, `full_turnover_replanificada`) parte del mismo plan y lo rehace al empezar cada día múltiplo de `escalar_dias_replanificacion` (30, la ventana de la popularidad móvil). Las unidades ya guardadas no se mueven: las zonas nuevas rigen para los almacenamientos siguientes. El tamaño de cada zona es proporcional a la raíz de la popularidad (con el perfil EOQ el inventario medio crece con la raíz de la demanda) y, si la zona no tiene una celda libre accesible, se relaja la zonificación, así ninguna política descarta almacenamientos. Las otras tres políticas no usan la demanda y tienen una sola variante.
+
+**Claves nuevas de configuración** (`asrs/config.py`, valores por defecto de la instancia del capítulo 6):
+
+| Clave | Por defecto | Significado |
+|---|---|---|
+| `texto_modelo_demanda` | `ciclo_vida` | `ciclo_vida` (Bass y estacionalidad) o `estatica` (participaciones constantes de Hausman) |
+| `escalar_bass_p`, `escalar_bass_q` | 0,03; 0,38 | Coeficientes de innovación y de imitación de Bass |
+| `escalar_meses_ciclo_vida` | 18 | Duración del ciclo de vida |
+| `vector_cuantiles_amplitud` | [0,05; 0,10; 0,20; 0,47; 0,67] | Amplitud estacional (puntos logarítmicos) |
+| `vector_probabilidades_amplitud` | [0; 0,10; 0,50; 0,90; 1] | Probabilidad acumulada de cada cuantil |
+| `vector_reparto_mes_pico` | [0,44; 0,37; 0,19] | Posiciones con el pico en dic–feb, jun–ago y el resto |
+| `escalar_ciclos_por_hora`, `escalar_horas_por_dia` | 60; 24 | Fijan R = ciclos × horas ÷ 2 recuperaciones de demanda al día |
+| `escalar_dias_ventana_popularidad` | 30 | Ventana de la popularidad móvil |
+| `escalar_dias_calentamiento` | 30 | Días de prehistoria antes del año evaluado |
+| `escalar_techo_ocupacion` | 0,95 | Techo de ocupación de la estantería |
+| `escalar_dias_replanificacion` | 30 | Periodo de las políticas replanificadas |
+
+**Salidas nuevas.** `resultados_simulacion.csv` suma dos columnas, `Cant_RetirosFinCiclo` y `TiempoTotal_RetirosFinCiclo`: los retiros de fin de ciclo se cuentan además como recuperaciones, y su tiempo ya está incluido en el de recuperación. `resultados_escenario.csv` tiene una fila por réplica con `semilla`, `demanda_no_atendida`, `lotes_aplazados`, `retiros`, `lanzamientos`, `ocupacion_media`, `ocupacion_minima`, `ocupacion_maxima`, `participacion_top20_media`, `sigma_alturas` y `dias_operacion`. `retiros` cuenta tareas de retiro (una por unidad retirada), no productos; `lanzamientos` cuenta productos lanzados.
+
+**Límites.** `TAREAS_POR_CORRIDA` es ahora un año (525 600) y `LIMITE_TAREAS_GENERADAS` es 600 000 (para datos reales sigue `LIMITE_TAREAS` = 100 000).
+
+**Limitaciones conocidas**
+- El flujo diario R = 720 sale de los 60 ciclos por hora y no escala con la estantería. En estanterías muy pequeñas (por ejemplo 6×6×2 con 10 SKU) una parte grande de la demanda queda sin atender: hay que reducir `escalar_ciclos_por_hora`.
+- Con datos reales no hay escenario, así que las variantes replanificadas se comportan exactamente igual que las de plan fijo.
+- La página web envía siempre la clave del techo (0,95): con origen generado rechaza ocupaciones iguales o mayores al 95 %. Su lista de políticas sigue mostrando solo las cinco originales.
+- Con una lista generada, en la página el campo "% almacenar" se ignora (la mezcla es un resultado del modelo) y "Sesgo σ (Hausman)" es ahora la concentración objetivo 0,2^σ del 20 % de SKUs más demandados.
 
 ## Herramienta visual
 
@@ -47,18 +89,18 @@ Si recargas la página mientras corre una simulación, se reconecta y sigue su p
 
 **Parámetros editables**
 - Estantería: filas, columnas, capas de profundidad, medidas de la celda, posición y centro de referencia de la celda.
-- Origen de las tareas: generadas con una demanda por SKU (Hausman o lista propia) o **datos reales** desde un CSV con una tarea por fila y dos columnas, `SKU` y `Task` (A o R; separador y encabezado se detectan solos). Con datos reales la cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla de operaciones salen del archivo, y los SKUs se numeran por frecuencia (el 1 es el más frecuente) conservando su código en la animación. Las políticas planifican (llenado inicial y clases) con el primer porcentaje de la lista que se indique como historial, y después se ejecuta la lista completa, lo que permite medir cuánto afecta que la demanda real cambie respecto de la conocida. Todas las réplicas usan la misma lista y solo cambia el llenado inicial.
+- Origen de las tareas: generadas con el modelo dinámico de suministro y demanda (ciclo de vida de Bass y estacionalidad; con una lista de demanda propia esta fija la altura de la curva de cada SKU) o **datos reales** desde un CSV con una tarea por fila y dos columnas, `SKU` y `Task` (A o R; separador y encabezado se detectan solos). Con datos reales la cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla de operaciones salen del archivo, y los SKUs se numeran por frecuencia (el 1 es el más frecuente) conservando su código en la animación. Las políticas planifican (llenado inicial y clases) con el primer porcentaje de la lista que se indique como historial, y después se ejecuta la lista completa, lo que permite medir cuánto afecta que la demanda real cambie respecto de la conocida. Todas las réplicas usan la misma lista y solo cambia el llenado inicial.
 - Grúa y E/S: velocidades, aceleraciones y deceleraciones en filas, columnas y canales, tiempo de carga y descarga, separación del riel. Cada eje acelera, avanza a la velocidad máxima y frena (perfil trapezoidal, o triangular en distancias cortas); el tramo xy dura lo que tarda el eje más lento y luego se recorre z. Con aceleración o deceleración 0 no hay límite (velocidad constante). Por defecto son 1 m/s². Ver `asrs/cinematica.py`.
 - Ocupación inicial y perfil de inventario (cuántas unidades de cada SKU hay guardadas, ver más abajo).
 - Productos (SKU): cantidad (hasta 200), sesgo de la demanda según la curva de Hausman o una lista de demanda propia, con una vista previa de la demanda por SKU.
 - Clases de la política basada en clases (dentro de la propia política): la política agrupa los SKUs sola con la demanda definida en la pestaña Demanda (no la modifica) y solo se elige cómo formar las clases. *Misma demanda en cada clase* (de 1 a 8 clases, cada una con la misma parte de la demanda; es lo predeterminado, con 3 clases), *Pareto 80 / 15 / 5* (A con el 80 % de la demanda, B con el 15 % y C con el 5 %) o *a mano* con el porcentaje de SKUs de cada clase. Con los dos primeros no hace falta indicar cuántos SKUs tiene cada clase: salen de la curva de demanda acumulada (`agrupar_skus_por_demanda` en `asrs/politicas/zonificacion.py`), y la vista previa muestra el resultado.
 - Lista de tareas: cantidad (automática o fija) y porcentaje de almacenamientos.
-- Políticas a comparar: cualquier subconjunto de las cinco de asignación, combinadas con FCFS estricto, FCFS entre accesibles o las dos.
+- Políticas a comparar: cualquier subconjunto de las cinco originales de asignación (la página aún no muestra las variantes replanificadas), combinadas con FCFS estricto, FCFS entre accesibles o las dos.
 - Semilla y réplicas para la estadística (hasta 2000). La carrera anima siempre una réplica, la primera.
 
 Los parámetros se validan antes de ejecutar y los errores se muestran junto al formulario. Se pueden guardar y cargar como archivo JSON, y el navegador recuerda los últimos usados.
 
-**Color de los ítems.** Depende de la política y cada panel trae su leyenda: en la política basada en clases es la clase del SKU (A, B, C), y en las demás es la rotación del SKU, en un degradado de amarillo (más rotación) a violeta (menos). Así, en `full_turnover` se ve cómo los SKUs más rotativos ocupan las posiciones más cercanas al E/S sin que aparezcan clases.
+**Color de los ítems.** Depende de la política y cada panel trae su leyenda: en las políticas basadas en clases (de plan fijo o replanificada) es la clase del SKU (A, B, C), y en las demás es la rotación del SKU, en un degradado de amarillo (más rotación) a violeta (menos). Así, en `full_turnover` se ve cómo los SKUs más rotativos ocupan las posiciones más cercanas al E/S sin que aparezcan clases.
 
 **Qué muestra**
 - La carrera: todas las políticas ejecutan la misma lista de tareas sobre un mismo reloj. Cada una tiene su estantería y su grúa animadas, una tira con las tareas, un marcador en vivo y una tabla final de la réplica.
@@ -92,8 +134,10 @@ Como los canales se llenan desde el fondo, con FCFS estricto la unidad más anti
 | Clave de configuración | Nombre en resultados | Criterio |
 |---|---|---|
 | `aleatoria` | `Aleatoria` | Canal elegido al azar |
-| `basada_en_clases` | `BasadaEnClases` | La política agrupa los SKUs en clases por demanda (la clase A con los más demandados) y reserva una zona a cada clase; la clase A recibe las celdas más cercanas al E/S |
-| `full_turnover` | `FullTurnover` | Se hace una lista de SKUs ordenada por rotación y se empareja con la lista de posiciones ordenada por cercanía al E/S: el SKU más rotativo recibe las posiciones más cercanas, el siguiente las que siguen, y así sucesivamente (Hausman, Graves y Schwarz, 1976). No hay clases |
+| `basada_en_clases` | `BasadaEnClases` | La política agrupa los SKUs en clases por popularidad móvil (la clase A con los más demandados) y reserva una zona a cada clase; la clase A recibe las celdas más cercanas al E/S. Plan fijo: las clases se forman una vez, antes del llenado |
+| `basada_en_clases_replanificada` | `BasadaEnClasesReplanificada` | Igual que la anterior, pero rehace las clases y las zonas cada `escalar_dias_replanificacion` días |
+| `full_turnover` | `FullTurnover` | Se hace una lista de SKUs ordenada por rotación y se empareja con la lista de posiciones ordenada por cercanía al E/S: el SKU más rotativo recibe las posiciones más cercanas, el siguiente las que siguen, y así sucesivamente (Hausman, Graves y Schwarz, 1976). No hay clases. Plan fijo: la lista se ordena una vez, antes del llenado |
+| `full_turnover_replanificada` | `FullTurnoverReplanificada` | Igual que la anterior, pero rehace el orden y las zonas cada `escalar_dias_replanificacion` días |
 | `mas_cercana_es` | `MasCercanaAlES` | Celda libre más cercana al E/S |
 | `mas_cercana_grua` | `MasCercanaALaGrua` | Celda libre más cercana a la grúa: en reposo al almacenar, la celda del ítem que retira al reubicar |
 
@@ -118,9 +162,9 @@ Durante la lista de tareas cada SKU entra y sale al ritmo de su demanda, así qu
 
 La lista de tareas solo conoce **SKUs**: cada tarea es un par `(actividad, SKU)`, donde la actividad es almacenar o recuperar. Agrupar los SKUs en clases, si hace falta, es decisión de cada política y no del generador.
 
-- La demanda de cada SKU sigue la curva de Hausman `F(i) = (i/n)^σ` (σ = 1 es uniforme; menor σ concentra la demanda en pocos SKUs) o una lista propia. El SKU 1 es el más demandado.
-- Las cantidades son exactas (método del mayor resto): se reparte primero entre almacenar y recuperar según la mezcla y luego entre SKUs según su demanda. El azar solo decide el orden.
-- Cada réplica genera dos listas: una de llenado, solo almacenamientos, que deja la estantería en el nivel de ocupación inicial, y la lista de operación que se compara.
+- Con el modelo `ciclo_vida` (por defecto) la lista sale del escenario descrito en "Modelo dinámico de suministro y demanda": la demanda cambia día a día y la mezcla de almacenamientos y recuperaciones resulta de la reposición.
+- Con el modelo `estatica` la demanda de cada SKU es constante y sigue la curva de Hausman `F(i) = (i/n)^σ` (σ = 1 es uniforme; menor σ concentra la demanda en pocos SKUs) o una lista propia, y el SKU 1 es el más demandado. Es el caso de referencia del modelo dinámico.
+- Cada réplica genera dos listas: una de llenado, solo almacenamientos, que deja la estantería con el inventario del final del calentamiento (cerca del 85 % de ocupación), y la lista de operación que se compara, con exactamente `escalar_largo_secuencia` tareas.
 
 **Regla de minimización de varianza** (en todas las políticas): entre las celdas que la política considera equivalentes se elige la libre más profunda, así los canales se llenan desde el fondo. Solo se consideran celdas accesibles, es decir sin ítems delante. Si aún hay empate, se desempata al azar.
 
@@ -143,12 +187,16 @@ asrs/
     aleatoria.py  basada_en_clases.py  full_turnover.py
     mas_cercana_es.py  mas_cercana_grua.py
     zonificacion.py               Zonas por canales completos y agrupación de SKUs en clases
+    (basada_en_clases.py y full_turnover.py incluyen también la variante replanificada)
     recuperacion.py               PoliticaRecuperacionFCFS (estricto) y PoliticaRecuperacionFCFSAccesible
     restriccion.py                Ocupación y accesibilidad
     registro.py                   Registro y fábrica de políticas
   generacion/
     secuencia.py                  GeneradorSecuencia: lista de tareas por SKU
     probabilidades.py             Demanda por SKU (curva de Hausman)
+    ciclo_vida.py                 Cartera de posiciones: curva de Bass, estacionalidad y sucesión de productos
+    reposicion.py                 Lotes EOQ, techo, retiros de fin de ciclo y escenario de un año
+    escenario.py                  EscenarioDemanda: listas de llenado y de operación, días, retiros y popularidad
     datos_reales.py               Lista de tareas desde un CSV (SKU y Task)
   control/
     controlador_grua.py         Ejecuta la secuencia usando las políticas
@@ -169,4 +217,4 @@ Dependencias entre capas (solo hacia abajo): `simulacion` → `control` → `pol
 
 ## Modelo de réplicas
 
-Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de llenado y una de operación. Cada política parte de una estantería vacía, la llena con esa misma secuencia bajo su propia lógica y procesa la secuencia de operación (comparación pareada). Las métricas del llenado se descartan.
+Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de llenado y una de operación (con el modelo `ciclo_vida`, un escenario de un año y su resumen). Cada política tiene una semilla derivada de su política base en el registro (la variante replanificada usa la de su variante de plan fijo, así parten con los mismos desempates al azar), no de su posición en la lista elegida. Cada política parte de una estantería vacía, la llena con esa misma secuencia bajo su propia lógica y procesa la secuencia de operación (comparación pareada). Las métricas del llenado se descartan.

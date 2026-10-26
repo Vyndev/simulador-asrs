@@ -14,6 +14,10 @@ class Metricas:
         self.cantidad_reubicaciones = 0
         self.cantidad_operaciones = 0
 
+        # Retiros de fin de ciclo: recuperaciones que vacían una posición al terminar su ciclo de vida, ya contadas como recuperaciones
+        self.cantidad_retiros_fin_ciclo = 0
+        self.tiempo_total_retiros_fin_ciclo = 0
+
         # Contadores para las reubicaciones durante el almacenamiento y la recuperación
         self.cantidad_reubicaciones_almacenamiento = 0
         self.cantidad_reubicaciones_recuperacion = 0
@@ -65,6 +69,7 @@ class Metricas:
         G0, G1 = self.cantidad_reubicaciones_predeterminadas_almacenamiento, self.tiempo_total_reubicaciones_predeterminadas_almacenamiento
         H0, H1 = self.cantidad_reubicaciones_regulares_recuperacion, self.tiempo_total_reubicaciones_regulares_recuperacion
         I0, I1 = self.cantidad_reubicaciones_predeterminadas_recuperacion, self.tiempo_total_reubicaciones_predeterminadas_recuperacion
+        R0, R1 = self.cantidad_retiros_fin_ciclo, self.tiempo_total_retiros_fin_ciclo
 
         A2 = stdev(self.vector_tiempo_almacenamientos) if self.vector_tiempo_almacenamientos and len(self.vector_tiempo_almacenamientos) > 1 else 0
         B2 = stdev(self.vector_tiempo_recuperaciones) if self.vector_tiempo_recuperaciones and len(self.vector_tiempo_recuperaciones) > 1 else 0
@@ -81,7 +86,7 @@ self.vector_tiempo_reubicaciones_regulares_almacenamiento) > 1 else 0
             self.vector_tiempo_reubicaciones_predeterminadas_recuperacion) if self.vector_tiempo_reubicaciones_predeterminadas_recuperacion and len(
             self.vector_tiempo_reubicaciones_predeterminadas_recuperacion) > 1 else 0
 
-        return [A0, A1, A2, B0, B1, B2, C0, C1, C2, D0, D1, D2, E0, E1, E2, F0, F1, F2, G0, G1, G2, H0, H1, H2, I0, I1, I2, O0, O1]
+        return [A0, A1, A2, B0, B1, B2, C0, C1, C2, D0, D1, D2, E0, E1, E2, F0, F1, F2, G0, G1, G2, H0, H1, H2, I0, I1, I2, R0, R1, O0, O1]
 
     def tiempoDezplamiento(self, vector_posicion_inicial, vector_posicion_final, vector_velocidad, vector_aceleracion=None, vector_deceleracion=None):
         # Tiempo de un desplazamiento: el tramo xy (ejes simultáneos, cada uno con su perfil de velocidad) más el tramo z
@@ -110,6 +115,11 @@ self.vector_tiempo_reubicaciones_regulares_almacenamiento) > 1 else 0
         self.cantidad_recuperaciones += 1
         self.tiempo_total_recuperacion += tiempo
         self.vector_tiempo_recuperaciones.append(tiempo)
+
+    def registrarRetiro(self, tiempo):
+        # Agregar un retiro de fin de ciclo, su tiempo ya está incluido en el de recuperaciones
+        self.cantidad_retiros_fin_ciclo += 1
+        self.tiempo_total_retiros_fin_ciclo += tiempo
 
     def registrarReubicacion(self, tiempo, cantidad_items = 1):
         # Agregar el tiempo de reubicación al DataFrame

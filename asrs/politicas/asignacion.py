@@ -30,6 +30,21 @@ class PoliticaAsignacion:
         # Caché de matrices de cercanía por punto de referencia, con el punto E/S es siempre la misma
         self._cache_tiempos = {}
 
+    def iniciarDia(self, escalar_dia):
+        # El controlador avisa cuando empieza un día del escenario, por defecto no pasa nada
+        # Las políticas con zonas que se recalculan por día lo sobrescriben
+        pass
+
+    def demandaPlanificacion(self, escalar_dia=0):
+        # Demanda con la que las políticas con zonas planifican: la popularidad móvil del día si hay escenario (es lo único que ven de él)
+        # Sin escenario (datos reales) o sin recuperaciones en la ventana (todo en cero, no se podría repartir) se usa la demanda de la configuración
+        instancia_escenario = self.config.get("escenario_demanda")
+        if instancia_escenario is not None:
+            vector_popularidad = np.asarray(instancia_escenario.popularidad(escalar_dia), dtype=float)
+            if vector_popularidad.sum() > 0:
+                return vector_popularidad
+        return np.asarray(self.config["vector_demanda_sku"], dtype=float)
+
     def etiquetaZona(self, escalar_sku):
         # Zona que corresponde a un SKU, cada política con zonas decide cómo agrupa sus SKUs
         return escalar_sku

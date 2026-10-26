@@ -6,12 +6,13 @@ from asrs.generacion.probabilidades import PERFILES_INVENTARIO, demanda_hausman
 
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
 LIMITE_CELDAS = 6000
-LIMITE_TAREAS = 100_000
+LIMITE_TAREAS = 100_000 # Tareas de un archivo de datos reales
+LIMITE_TAREAS_GENERADAS = 600_000 # Tareas de una lista generada: un año de 525 600 tareas más margen
 LIMITE_SKUS = 200
 LIMITE_CLASES = 8
 LIMITE_REPLICAS_ESTADISTICA = 2000
 
-TAREAS_POR_CORRIDA = 100_000 # Cantidad de tareas evaluadas por corrida en la instancia del capítulo 6
+TAREAS_POR_CORRIDA = 525_600 # Cantidad de tareas evaluadas por corrida en la instancia del capítulo 6: un año de 365 días a 1 440 tareas por día
 
 
 def cargar_configuracion():
@@ -43,6 +44,20 @@ def cargar_configuracion():
         "vector_demanda_sku_personalizada": None, # Opcional, demanda de cada SKU, reemplaza a los dos parámetros anteriores
         "vector_demanda_sku": None, # Se calcula a partir de lo anterior, suma 1
 
+        # Modelo dinámico de suministro y demanda de la lista generada, fuente de cada valor: diseño del modelo de suministro y demanda, sección 6
+        "texto_modelo_demanda": "ciclo_vida", # 'ciclo_vida' (curva de Bass y estacionalidad) o 'estatica' (participaciones constantes de Hausman)
+        "escalar_bass_p": 0.03, # Coeficiente de innovación de Bass, promedio de Sultan et al. (1990) y Mahajan et al. (1995)
+        "escalar_bass_q": 0.38, # Coeficiente de imitación de Bass, mismas fuentes
+        "escalar_meses_ciclo_vida": 18, # Duración del ciclo de vida L, el caso más corto de Manzini et al. (2015); un mes son 365/12 días
+        "vector_cuantiles_amplitud": np.array([0.05, 0.10, 0.20, 0.47, 0.67]), # Amplitud estacional en puntos logarítmicos: mínimo, p10, mediana, p90 y máximo de Butters et al. (2025)
+        "vector_probabilidades_amplitud": np.array([0, 0.10, 0.50, 0.90, 1.0]), # Probabilidad acumulada de cada cuantil anterior, interpolación lineal entre ellos
+        "vector_reparto_mes_pico": np.array([0.44, 0.37, 0.19]), # Proporción de posiciones con el pico en diciembre a febrero, en junio a agosto y en el resto (Butters et al., 2025; Ang et al., 2012)
+        "escalar_ciclos_por_hora": 60, # Ciclos simples por hora, capacidad demandada del AS/RS de doble profundidad de Lerher et al. (2010)
+        "escalar_horas_por_dia": 24, # Operación continua, 24 horas los 7 días (Gagliardi et al., 2012)
+        "escalar_dias_ventana_popularidad": 30, # Ventana de la popularidad móvil (Manzini et al., 2015)
+        "escalar_dias_calentamiento": 30, # Días de prehistoria antes del año evaluado (Meneghetti et al., 2015; Lehmann y Hußmann, 2023)
+        "escalar_techo_ocupacion": 0.95, # Techo de ocupación de la estantería, el mayor factor de llenado de Lerher et al. (2010) y Rizqi y Chou (2025)
+
         # Agrupación de SKUs en clases, solo la usa la política basada en clases. La clase 1 agrupa a los más demandados
         "texto_criterio_clases": "skus", # 'iguales': N clases con la misma parte de la demanda; 'pareto': 80/15/5 de la demanda; 'skus': porcentaje de SKUs de cada clase a mano
         "escalar_numero_clases": 3, # Número de clases con el criterio 'iguales'
@@ -61,8 +76,11 @@ def cargar_configuracion():
         "escalar_semilla": 2024, # Semilla base, la réplica i usa semilla + i, esto hace reproducibles los resultados
 
         # Políticas de asignación de almacenamiento a comparar, también gobiernan la reubicación
-        # Disponibles: 'aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'
-        "vector_politicas_asignacion": ('aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'),
+        # Disponibles: 'aleatoria', 'basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover', 'full_turnover_replanificada', 'mas_cercana_es', 'mas_cercana_grua'
+        # Las dos con zonas tienen plan fijo (formado antes del llenado) y una variante '_replanificada' que rehace sus zonas cada escalar_dias_replanificacion días
+        "vector_politicas_asignacion": ('aleatoria', 'basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover', 'full_turnover_replanificada',
+                                        'mas_cercana_es', 'mas_cercana_grua'),
+        "escalar_dias_replanificacion": 30, # Periodo de las variantes que replanifican: la ventana de 30 días de la popularidad móvil (Manzini et al., 2015); la asignación se recalcula una vez por periodo (Roodbergen y Vis, 2009)
 
         # Políticas de recuperación: cada política de asignación se ejecuta con cada una
         # 'fcfs': sale el ítem más antiguo del SKU aunque esté bloqueado (FCFS estricto; control de lote)
@@ -154,6 +172,44 @@ def config_desde_json(diccionario):
     config["escalar_tiempo_toma_deposito_capa_delantera"] = _numero(datos["escalar_tiempo_toma_deposito_capa_delantera"], "Tiempo de toma y depósito en la capa delantera", minimo=0, maximo=3600)
     config["escalar_tiempo_toma_deposito_capa_trasera"] = _numero(datos["escalar_tiempo_toma_deposito_capa_trasera"], "Tiempo de toma y depósito en las capas traseras", minimo=0, maximo=3600)
 
+    # Modelo dinámico de suministro y demanda: solo lo usa la lista generada, con datos reales se valida igual para conservar la configuración completa
+    if datos["texto_modelo_demanda"] not in ("ciclo_vida", "estatica"):
+        raise ValueError("Modelo de demanda: debe ser 'ciclo_vida' o 'estatica'.")
+    config["texto_modelo_demanda"] = datos["texto_modelo_demanda"]
+    config["escalar_bass_p"] = _numero(datos["escalar_bass_p"], "Coeficiente de innovación de Bass", minimo=0, minimo_estricto=True, maximo=1)
+    config["escalar_bass_q"] = _numero(datos["escalar_bass_q"], "Coeficiente de imitación de Bass", minimo=0, minimo_estricto=True, maximo=5)
+    if config["escalar_bass_q"] <= config["escalar_bass_p"]:
+        raise ValueError("Coeficientes de Bass: el de imitación debe ser mayor que el de innovación.")
+    config["escalar_meses_ciclo_vida"] = _numero(datos["escalar_meses_ciclo_vida"], "Duración del ciclo de vida (meses)", minimo=0, minimo_estricto=True, maximo=600)
+    vector_cuantiles = _vector(datos["vector_cuantiles_amplitud"], 5, "Cuantiles de la amplitud estacional", minimo=0, maximo=3)
+    if any(vector_cuantiles[i] > vector_cuantiles[i + 1] for i in range(4)):
+        raise ValueError("Cuantiles de la amplitud estacional: no pueden decrecer.")
+    config["vector_cuantiles_amplitud"] = np.array(vector_cuantiles, dtype=float)
+    vector_probabilidades = _vector(datos["vector_probabilidades_amplitud"], 5, "Probabilidades de los cuantiles", minimo=0, maximo=1)
+    if any(vector_probabilidades[i] >= vector_probabilidades[i + 1] for i in range(4)):
+        raise ValueError("Probabilidades de los cuantiles: deben ser estrictamente crecientes.")
+    config["vector_probabilidades_amplitud"] = np.array(vector_probabilidades, dtype=float)
+    vector_reparto = _vector(datos["vector_reparto_mes_pico"], 3, "Reparto del mes de pico", minimo=0)
+    if sum(vector_reparto) <= 0:
+        raise ValueError("Reparto del mes de pico: la suma debe ser mayor que cero.")
+    config["vector_reparto_mes_pico"] = np.array(vector_reparto, dtype=float) / sum(vector_reparto)
+    config["escalar_ciclos_por_hora"] = _numero(datos["escalar_ciclos_por_hora"], "Ciclos por hora", minimo=0, minimo_estricto=True, maximo=1000)
+    config["escalar_horas_por_dia"] = _numero(datos["escalar_horas_por_dia"], "Horas por día", minimo=0, minimo_estricto=True, maximo=24)
+    if round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2) < 1:
+        raise ValueError("Ciclos por hora y horas por día: dan menos de una recuperación diaria.")
+    config["escalar_dias_ventana_popularidad"] = _numero(datos["escalar_dias_ventana_popularidad"], "Ventana de la popularidad (días)", entero=True, minimo=1, maximo=365)
+    config["escalar_dias_calentamiento"] = _numero(datos["escalar_dias_calentamiento"], "Calentamiento (días)", entero=True,
+                                                   minimo=config["escalar_dias_ventana_popularidad"], maximo=730)
+    escalar_techo = datos["escalar_techo_ocupacion"]
+    if "escalar_techo_ocupacion" not in diccionario and config["escalar_nivel_ocupacion"] >= base["escalar_techo_ocupacion"]:
+        escalar_techo = 1.0 # La herramienta web no tiene campo para el techo: con ocupaciones altas se sube a 1 en lugar de rechazar una configuración antes válida
+    config["escalar_dias_replanificacion"] = _numero(datos["escalar_dias_replanificacion"], "Periodo de replanificación (días)", entero=True, minimo=1, maximo=365)
+    config["escalar_techo_ocupacion"] = _numero(escalar_techo, "Techo de ocupación", minimo=0, minimo_estricto=True, maximo=1)
+    # Con datos reales no hay generador de escenario y el techo no interviene
+    if datos["texto_origen_tareas"] == "generada" and config["escalar_techo_ocupacion"] <= config["escalar_nivel_ocupacion"]:
+        raise ValueError(f"Techo de ocupación ({config['escalar_techo_ocupacion']:g}): debe ser mayor que el nivel de ocupación ({config['escalar_nivel_ocupacion']:g}); "
+                         "sube el techo o reduce la ocupación.")
+
     origen = datos["texto_origen_tareas"]
     if origen not in ("generada", "datos"):
         raise ValueError("Origen de las tareas: debe ser 'generada' o 'datos'.")
@@ -223,7 +279,7 @@ def config_desde_json(diccionario):
     largo = diccionario.get("escalar_largo_secuencia")
     if largo is None or largo == "":
         largo = max(1, round(escalar_celdas * 0.1))
-    config["escalar_largo_secuencia"] = len(config["secuencia_real"]) if origen == "datos" else _numero(largo, "Cantidad de tareas", entero=True, minimo=1, maximo=LIMITE_TAREAS)
+    config["escalar_largo_secuencia"] = len(config["secuencia_real"]) if origen == "datos" else _numero(largo, "Cantidad de tareas", entero=True, minimo=1, maximo=LIMITE_TAREAS_GENERADAS)
 
     config["escalar_semilla"] = _numero(datos["escalar_semilla"], "Semilla", entero=True, minimo=0, maximo=2 ** 31 - 1)
     config["escalar_replicas_animadas"] = 1      # ya no es un parámetro: la carrera anima siempre la primera réplica

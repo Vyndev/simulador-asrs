@@ -18,7 +18,7 @@ from asrs.politicas.zonificacion import agrupar_skus_en_clases, construir_zonifi
 from asrs.simulacion.simulacion import Simulacion as _Simulacion
 
 # Las pruebas usan los parámetros de la instancia del capítulo 6, pero con una lista de operación corta (el 10 % de las celdas)
-# para que se ejecuten en segundos: la instancia completa evalúa 100 000 tareas por corrida
+# para que se ejecuten en segundos: la instancia completa evalúa un año de tareas (525 600) por corrida
 TAREAS_PRUEBA = 72
 
 
@@ -41,7 +41,7 @@ def preparar_estado(txt_clave_politica):
     from asrs.control.controlador_grua import ControladorGrua
     Item.escalar_contador_global_generacion = 0
     E, G, P = simulacion.crearInstancias()
-    politica = crear_politica(txt_clave_politica, E, G, P, simulacion.config)
+    politica = crear_politica(txt_clave_politica, E, G, P, simulacion.configPolitica())
     ControladorGrua(E, G, P, SA, politica).ejecutarSecuencia()
     return simulacion, E, G, P, politica
 
@@ -129,8 +129,20 @@ class PruebasGrua(unittest.TestCase):
         self.assertEqual(config["vector_aceleracion_grua"].tolist(), [0.5, 0.5, 0])
         self.assertEqual(config["escalar_numero_skus"], 180)
         self.assertEqual(config["escalar_sigma_hausman"], 0.4)
-        self.assertEqual(config["escalar_largo_secuencia"], 100_000)
+        self.assertEqual(config["escalar_largo_secuencia"], 525_600)   # un año de 365 días a 1 440 tareas por día
         self.assertEqual(config["vector_proporcion_skus_por_clase"].tolist(), [0.2, 0.2, 0.6])
+        # Modelo de suministro y demanda del capítulo 6
+        self.assertEqual(config["texto_modelo_demanda"], "ciclo_vida")
+        self.assertEqual((config["escalar_bass_p"], config["escalar_bass_q"], config["escalar_meses_ciclo_vida"]), (0.03, 0.38, 18))
+        self.assertEqual(config["vector_cuantiles_amplitud"].tolist(), [0.05, 0.10, 0.20, 0.47, 0.67])
+        self.assertEqual(config["vector_probabilidades_amplitud"].tolist(), [0, 0.10, 0.50, 0.90, 1.0])
+        self.assertEqual(config["vector_reparto_mes_pico"].tolist(), [0.44, 0.37, 0.19])
+        self.assertEqual((config["escalar_ciclos_por_hora"], config["escalar_horas_por_dia"]), (60, 24))
+        self.assertEqual((config["escalar_dias_ventana_popularidad"], config["escalar_dias_calentamiento"]), (30, 30))
+        self.assertEqual(config["escalar_techo_ocupacion"], 0.95)
+        self.assertEqual(config["escalar_dias_replanificacion"], 30)
+        self.assertEqual(config["vector_politicas_asignacion"], ('aleatoria', 'basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover',
+                                                                 'full_turnover_replanificada', 'mas_cercana_es', 'mas_cercana_grua'))
         # El E/S queda 1 m sobre la base de la estantería y 1 m antes de la primera columna, con el riel en la cara frontal
         E, G, P = Simulacion(_cargar_configuracion_instancia()).crearInstancias()
         self.assertEqual(E.vector_posicion.tolist(), [-1.0, 1.0, 0])
@@ -240,17 +252,63 @@ class PruebasGeneradorTareas(unittest.TestCase):
         self.assertGreater(*(demanda / perfil_inventario(demanda, "eoq"))[[0, 3]])
         self.assertTrue(np.allclose(demanda / perfil_inventario(demanda, "demanda"), 1))
 
-    def test_el_llenado_sigue_el_perfil_de_inventario(self):
-        from asrs.generacion.probabilidades import perfil_inventario
-        from asrs.utilidades import repartir_entero
-        for txt_perfil in ("eoq", "demanda"):
-            simulacion = Simulacion(dict(cargar_configuracion(), texto_perfil_inventario=txt_perfil))
+    def test_el_llenado_sigue_el_inventario_del_calentamiento(self):
+        # El llenado es el inventario que el modelo lleva al final del calentamiento: cada SKU aparece tantas veces como unidades tiene
+        for txt_modelo in ("ciclo_vida", "estatica"):
+            simulacion = Simulacion(dict(cargar_configuracion(), texto_modelo_demanda=txt_modelo))
             random.seed(3)
             SA, S = simulacion.generarSecuencias()
             cfg = simulacion.config
             conteo = [sum(1 for _, sku in SA if sku == i) for i in range(1, cfg["escalar_numero_skus"] + 1)]
-            esperado = repartir_entero(len(SA), perfil_inventario(cfg["vector_demanda_sku"], txt_perfil))
-            self.assertEqual(conteo, list(esperado), txt_perfil)
+            self.assertEqual(conteo, simulacion.escenario_demanda.vector_inventario_inicial.tolist(), txt_modelo)
+            self.assertGreater(len(SA), 0)
+
+    def test_generar_secuencias_usa_el_escenario(self):
+        simulacion = Simulacion()
+        random.seed(5)
+        SA, S = simulacion.generarSecuencias()
+        self.assertIsNotNone(simulacion.escenario_demanda)
+        self.assertEqual(SA, simulacion.escenario_demanda.lista_llenado)
+        self.assertEqual(S, simulacion.escenario_demanda.lista_operacion)
+        self.assertEqual(len(S), TAREAS_PRUEBA)
+        # La misma semilla da el mismo escenario
+        otra = Simulacion()
+        random.seed(5)
+        self.assertEqual(otra.generarSecuencias(), (SA, S))
+
+    def test_argumentos_de_operacion_con_escenario(self):
+        simulacion = Simulacion()
+        self.assertIsNone(simulacion.escenario_demanda)
+        self.assertEqual(simulacion.argumentosOperacion(10), {})
+        self.assertIsNone(simulacion.configPolitica()["escenario_demanda"])
+        random.seed(5)
+        simulacion.generarSecuencias()
+        escenario = simulacion.escenario_demanda
+        self.assertIs(simulacion.configPolitica()["escenario_demanda"], escenario)
+        self.assertNotIn("escenario_demanda", simulacion.config)    # la configuración original no se modifica
+        argumentos = simulacion.argumentosOperacion(TAREAS_PRUEBA)
+        self.assertEqual(argumentos["vector_dia_de_tarea"], escenario.vector_dia_de_tarea[:TAREAS_PRUEBA])
+        self.assertEqual(argumentos["conjunto_retiros"], escenario.conjunto_retiros)
+        corto = simulacion.argumentosOperacion(5)
+        self.assertEqual(len(corto["vector_dia_de_tarea"]), 5)
+        self.assertEqual(corto["conjunto_retiros"], {i for i in escenario.conjunto_retiros if i < 5})
+
+    def test_argumentos_de_operacion_recortan_los_retiros(self):
+        # Horizonte largo y ciclo de un mes: hay cientos de retiros repartidos por toda la lista
+        simulacion = Simulacion(dict(cargar_configuracion(), escalar_largo_secuencia=90 * 1440, escalar_meses_ciclo_vida=1))
+        random.seed(5)
+        simulacion.generarSecuencias()
+        conjunto_total = simulacion.escenario_demanda.conjunto_retiros
+        escalar_n = 45 * 1440
+        self.assertGreater(len(conjunto_total), 100)
+        argumentos = simulacion.argumentosOperacion(escalar_n)
+        conjunto_corto = argumentos["conjunto_retiros"]
+        self.assertGreater(len(conjunto_corto), 0)
+        self.assertLess(len(conjunto_corto), len(conjunto_total))
+        self.assertTrue(all(i < escalar_n for i in conjunto_corto))
+        self.assertEqual(len(conjunto_corto), sum(1 for i in conjunto_total if i < escalar_n))
+        self.assertEqual(len(argumentos["vector_dia_de_tarea"]), escalar_n)
+        self.assertEqual(argumentos["vector_dia_de_tarea"], simulacion.escenario_demanda.vector_dia_de_tarea[:escalar_n])
 
 
 class PruebasDatosReales(unittest.TestCase):
@@ -298,6 +356,56 @@ class PruebasDatosReales(unittest.TestCase):
         self.assertEqual(tareas, [tuple(t) for t in cfg["secuencia_real"]])
         resultado = Simulacion.cargarReplica((cfg, 1))
         self.assertEqual(len(resultado), len(cfg["vector_politicas_asignacion"]) * len(cfg["vector_politicas_recuperacion"]))
+
+    def test_datos_reales_sin_escenario(self):
+        from asrs.config import config_a_json, config_desde_json
+        datos = config_a_json(cargar_configuracion())
+        datos.update(texto_origen_tareas="datos", texto_tareas_csv=self.CSV, escalar_porcentaje_historial=50)
+        simulacion = Simulacion(config_desde_json(datos))
+        random.seed(1)
+        simulacion.generarSecuencias()
+        self.assertIsNone(simulacion.escenario_demanda)
+        self.assertEqual(simulacion.argumentosOperacion(10), {})
+        self.assertIsNone(simulacion.configPolitica()["escenario_demanda"])
+        # La réplica con datos reales solo informa la semilla y el controlador no cuenta retiros
+        filas, dic_resumen = Simulacion.cargarReplicaConEscenario((simulacion.config, 1))
+        self.assertEqual(dic_resumen, {"semilla": 1})
+        # Cant_RetirosFinCiclo es la cuarta columna desde el final de la fila
+        self.assertTrue(all(fila[-4] == 0 for fila in filas))
+
+    def config_real_larga(self):
+        # Lista real de 400 tareas sobre 12 SKUs, con muchos almacenamientos y recuperaciones intercalados para que los desempates al azar importen
+        from asrs.config import config_a_json, config_desde_json
+        generador = np.random.default_rng(3)
+        vector_filas = ["SKU;Task"] + [f"P{generador.integers(1, 13)};{'A' if i % 2 == 0 else 'R'}" for i in range(400)]
+        datos = config_a_json(cargar_configuracion())
+        datos.update(texto_origen_tareas="datos", texto_tareas_csv="\n".join(vector_filas), escalar_porcentaje_historial=100)
+        return config_desde_json(datos)
+
+    def test_con_datos_reales_las_variantes_replanificadas_son_iguales_a_las_de_plan_fijo(self):
+        # Sin escenario no hay replanificación y ambas variantes comparten la semilla: deben dar exactamente lo mismo
+        config = self.config_real_larga()
+        config["vector_politicas_asignacion"] = ('basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover', 'full_turnover_replanificada')
+        filas = Simulacion.cargarReplica((config, 3))
+        self.assertEqual(len(filas), 4)
+        for fija, replanificada in ((filas[0], filas[1]), (filas[2], filas[3])):
+            self.assertEqual(fija[2:], replanificada[2:], fija[0])
+
+    def test_la_semilla_de_una_politica_no_depende_de_las_demas_elegidas(self):
+        config = self.config_real_larga()
+        config["vector_politicas_asignacion"] = tuple(POLITICAS_ASIGNACION)
+        dic_completo = {fila[0]: fila for fila in Simulacion.cargarReplica((config, 3))}
+        for vector_subconjunto in (('full_turnover_replanificada', 'aleatoria'), ('mas_cercana_grua', 'basada_en_clases')):
+            config["vector_politicas_asignacion"] = vector_subconjunto
+            for fila in Simulacion.cargarReplica((config, 3)):
+                self.assertEqual(fila, dic_completo[fila[0]], vector_subconjunto)
+        # Es reproducible: repetir la réplica da lo mismo
+        config["vector_politicas_asignacion"] = tuple(POLITICAS_ASIGNACION)
+        self.assertEqual({fila[0]: fila for fila in Simulacion.cargarReplica((config, 3))}, dic_completo)
+        # La variante replanificada usa la semilla de su política base y las demás las suyas
+        self.assertEqual(Simulacion.semillaDePolitica(3, 'basada_en_clases_replanificada'), Simulacion.semillaDePolitica(3, 'basada_en_clases'))
+        self.assertEqual(len({Simulacion.semillaDePolitica(3, txt_clave) for txt_clave in ('aleatoria', 'basada_en_clases', 'full_turnover',
+                                                                                              'mas_cercana_es', 'mas_cercana_grua')}), 5)
 
     def test_datos_invalidos_se_rechazan_en_la_configuracion(self):
         from asrs.config import config_a_json, config_desde_json
@@ -501,6 +609,81 @@ class PruebasRecuperacion(unittest.TestCase):
         self.assertNotEqual((traslados[0][3], traslados[0][4]), (0.0, 0.0))
 
 
+class PruebasControladorDinamico(unittest.TestCase):
+    def test_controlador_avisa_el_inicio_de_cada_dia(self):
+        from asrs.control.controlador_grua import ControladorGrua
+        from asrs.politicas.mas_cercana_es import PoliticaMasCercanaAlES
+
+        class PoliticaConDias(PoliticaMasCercanaAlES):
+            def __init__(self, *args):
+                super().__init__(*args)
+                self.vector_dias = []
+
+            def iniciarDia(self, escalar_dia):
+                self.vector_dias.append(escalar_dia)
+
+        simulacion = Simulacion()
+        vector_secuencia = [(0, 1), (0, 2), (0, 1), (0, 2), (0, 1), (0, 2)]
+        for vector_dia_de_tarea, vector_esperado in (([0, 0, 1, 1, 1, 2], [0, 1, 2]), (None, [])):
+            E, G, P = simulacion.crearInstancias()
+            politica = PoliticaConDias(E, G, P, simulacion.config)
+            ControladorGrua(E, G, P, vector_secuencia, politica, vector_dia_de_tarea=vector_dia_de_tarea).ejecutarSecuencia()
+            self.assertEqual(politica.vector_dias, vector_esperado)
+
+    def test_retiros_se_cuentan_aparte(self):
+        from asrs.control.controlador_grua import ControladorGrua
+        simulacion = Simulacion()
+        E, G, P = simulacion.crearInstancias()
+        politica = crear_politica('mas_cercana_es', E, G, P, simulacion.config)
+        C = ControladorGrua(E, G, P, [(0, 1), (1, 1)], politica, conjunto_retiros={1})
+        C.ejecutarSecuencia()
+        M = C.instancia_metricas
+        vector_fila = M.recuperarInformcion()
+        # [..., I0, I1, I2, R0, R1, O0, O1]
+        self.assertEqual(vector_fila[-4], 1)
+        self.assertGreater(vector_fila[-3], 0)
+        self.assertAlmostEqual(vector_fila[-3], M.tiempo_total_recuperacion)
+        self.assertEqual(vector_fila[3], 1)
+        self.assertEqual(len(vector_fila), 31)
+
+    def test_zona_llena_se_relaja_al_almacenar(self):
+        from asrs.control.controlador_grua import ControladorGrua
+        config = dict(cargar_configuracion(), vector_configuracion_estanteria=np.array([2, 3, 2]),
+                      vector_demanda_sku=np.array([0.2, 0.3, 0.5]), escalar_numero_skus=3)
+        simulacion = Simulacion(config)
+        E, G, P = simulacion.crearInstancias()
+        politica = crear_politica('full_turnover', E, G, P, config)
+        matriz_zona_1 = politica.matriz_zonificacion == politica.etiquetaZona(1)
+        for indice in zip(*np.nonzero(matriz_zona_1)):
+            E.matriz_contenedor_items[indice] = Item(1)
+        C = ControladorGrua(E, G, P, [(0, 1), (0, 2)], politica)
+        C.ejecutarSecuencia()
+        # El almacenamiento del SKU 1 no se descarta aunque su zona esté llena: queda fuera de ella
+        self.assertEqual(C.instancia_metricas.cantidad_almacenamientos, 2)
+        vector_indices_1 = [i for i in np.ndindex(E.matriz_contenedor_items.shape)
+                            if isinstance(E.matriz_contenedor_items[i], Item) and E.matriz_contenedor_items[i].escalar_sku == 1]
+        self.assertEqual(sum(1 for i in vector_indices_1 if not matriz_zona_1[i]), 1)
+        # El SKU 2 tiene espacio en su zona y se queda en ella
+        vector_indices_2 = [i for i in np.ndindex(E.matriz_contenedor_items.shape)
+                            if isinstance(E.matriz_contenedor_items[i], Item) and E.matriz_contenedor_items[i].escalar_sku == 2]
+        self.assertEqual(len(vector_indices_2), 1)
+        self.assertEqual(politica.matriz_zonificacion[vector_indices_2[0]], politica.etiquetaZona(2))
+
+
+class PruebasResultados(unittest.TestCase):
+    def test_encabezado_de_resultados(self):
+        import csv
+        import tempfile
+        from asrs.simulacion.resultados import guardar_resultados_csv
+        with tempfile.TemporaryDirectory() as txt_carpeta:
+            txt_ruta = os.path.join(txt_carpeta, 'resultados.csv')
+            guardar_resultados_csv([], txt_ruta)
+            with open(txt_ruta, newline='') as archivo:
+                vector_encabezado = next(csv.reader(archivo, delimiter=';'))
+        self.assertEqual(len(vector_encabezado), 33)
+        self.assertEqual(vector_encabezado[-4:], ["Cant_RetirosFinCiclo", "TiempoTotal_RetirosFinCiclo", "Cant_Operaciones", "TiempoTotal_Operacion"])
+
+
 class PruebasEscenarios(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -510,25 +693,24 @@ class PruebasEscenarios(unittest.TestCase):
     def test_largo_de_secuencias(self):
         self.assertEqual(len(self.S), self.simulacion.config["escalar_largo_secuencia"])
 
-    def test_llenado_alcanza_la_ocupacion_fijada(self):
+    def test_llenado_reproduce_el_inventario_del_calentamiento(self):
         for clave in POLITICAS_ASIGNACION:
-            _, E, _, _, _ = preparar_estado(clave)
-            esperado = int(E.escalar_capacidad_total * self.simulacion.config["escalar_nivel_ocupacion"])
-            almacenado = np.count_nonzero(E.matriz_contenedor_items)
-            if clave == 'full_turnover':
-                # Con una zona fija por SKU y pocos canales por SKU, el redondeo a canales completos deja sin lugar a algunas unidades
-                self.assertGreaterEqual(almacenado, 0.9 * esperado, clave)
-                self.assertLessEqual(almacenado, esperado, clave)
-            else:
-                self.assertEqual(almacenado, esperado, clave)
+            simulacion, E, _, _, _ = preparar_estado(clave)
+            # Con la regla de zona llena ninguna política descarta unidades, ni siquiera la de zonas dedicadas
+            self.assertEqual(np.count_nonzero(E.matriz_contenedor_items), len(simulacion.escenario_demanda.lista_llenado), clave)
 
     def test_politicas_con_zonas_respetan_su_zona(self):
-        for clave in ('basada_en_clases', 'full_turnover'):
+        for clave in ('basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover', 'full_turnover_replanificada'):
             _, E, _, _, politica = preparar_estado(clave)
+            matriz_ocupacion = MatricesRestriccion().ocupacion(E)
+            matriz_libres_accesibles = np.logical_not(matriz_ocupacion) & MatricesRestriccion().accesibilidad(matriz_ocupacion)
             for indice in np.ndindex(E.matriz_contenedor_items.shape):
                 item = E.matriz_contenedor_items[indice]
-                if isinstance(item, Item):
-                    self.assertEqual(politica.matriz_zonificacion[indice], politica.etiquetaZona(item.escalar_sku))
+                if isinstance(item, Item) and politica.matriz_zonificacion[indice] != politica.etiquetaZona(item.escalar_sku):
+                    # Regla de zona llena: una unidad fuera de su zona solo es posible si la zona no tiene celdas libres accesibles
+                    # Durante el llenado no hay recuperaciones, así que una zona que se llenó sigue llena
+                    matriz_zona = politica.matriz_zonificacion == politica.etiquetaZona(item.escalar_sku)
+                    self.assertFalse((matriz_zona & matriz_libres_accesibles).any(), (clave, indice))
 
     def test_no_quedan_fondos_libres_tras_un_item_frontal(self):
         for clave in POLITICAS_ASIGNACION:
@@ -545,10 +727,30 @@ class PruebasEscenarios(unittest.TestCase):
         r2 = Simulacion.cargarReplica((config, 7))
         self.assertEqual(r1, r2)
         self.assertEqual(len(r1), len(config["vector_politicas_asignacion"]) * len(config["vector_politicas_recuperacion"]))
-        self.assertEqual(len(r1[0]), 31)
+        self.assertEqual(len(r1[0]), 33)
         self.assertEqual([fila[0] for fila in r1[::2]],
-                         ['Aleatoria', 'BasadaEnClases', 'FullTurnover', 'MasCercanaAlES', 'MasCercanaALaGrua'])
+                         ['Aleatoria', 'BasadaEnClases', 'BasadaEnClasesReplanificada', 'FullTurnover', 'FullTurnoverReplanificada',
+                          'MasCercanaAlES', 'MasCercanaALaGrua'])
         self.assertEqual({(fila[1]) for fila in r1}, {'FCFS', 'FCFS-Accesible'})
+
+    def test_resumen_de_escenario_por_replica(self):
+        import csv
+        import tempfile
+        from asrs.simulacion.resultados import guardar_resumen_escenarios_csv
+        config = cargar_configuracion()
+        filas, dic_resumen = Simulacion.cargarReplicaConEscenario((config, 7))
+        self.assertEqual(filas, Simulacion.cargarReplica((config, 7)))
+        for txt_clave in ("semilla", "ocupacion_media", "demanda_no_atendida"):
+            self.assertIn(txt_clave, dic_resumen)
+        self.assertEqual(dic_resumen["semilla"], 7)
+        with tempfile.TemporaryDirectory() as txt_carpeta:
+            txt_ruta = os.path.join(txt_carpeta, 'escenario.csv')
+            guardar_resumen_escenarios_csv([dic_resumen], txt_ruta)
+            with open(txt_ruta, newline='') as archivo:
+                vector_filas = list(csv.reader(archivo, delimiter=';'))
+        self.assertEqual(vector_filas[0], list(dic_resumen))
+        self.assertEqual(len(vector_filas), 2)
+        self.assertEqual(vector_filas[1][0], "7")
 
     def test_fcfs_entre_accesibles_reubica_menos(self):
         # Con la misma asignación y el mismo azar, elegir entre los accesibles nunca debería reubicar más que FCFS estricto
@@ -573,6 +775,62 @@ class PruebasVisualizacion(unittest.TestCase):
             self.assertEqual(sum(1 for e in politica["eventos"] if e[1] == 'T'), len(replica["secuencia"]))
 
 
+    def test_los_items_se_colorean_por_clase_solo_en_las_politicas_basadas_en_clases(self):
+        from asrs.visualizacion.generador import generar_datos
+        config = cargar_configuracion()
+        vector_claves = config["vector_politicas_asignacion"]
+        self.assertIn('basada_en_clases_replanificada', vector_claves)
+        replica = generar_datos(config, [2024])["replicas"][0]
+        for txt_clave, politica in zip(vector_claves, replica["politicas"]):
+            txt_esperado = "clase" if txt_clave.startswith('basada_en_clases') else "sku"
+            self.assertEqual(politica["color_por"], txt_esperado, txt_clave)
+
+    def test_la_animacion_colorea_con_la_popularidad_del_escenario_generado(self):
+        from asrs.politicas.zonificacion import clasificar_skus
+        from asrs.visualizacion.generador import _rango_por_demanda, generar_datos
+        config = cargar_configuracion()
+        datos = generar_datos(config, [2024, 2025])
+        for replica in datos["replicas"]:
+            # El mismo escenario que ven las políticas: la popularidad móvil del día 0 de esa semilla
+            simulacion = Simulacion(config)
+            random.seed(replica["semilla"])
+            simulacion.generarSecuencias()
+            vector_popularidad = simulacion.escenario_demanda.popularidad(0).astype(float)
+            self.assertEqual(replica["clase_sku"], clasificar_skus(vector_popularidad, config).tolist())
+            self.assertEqual(replica["rango_sku"], _rango_por_demanda(vector_popularidad).tolist())
+            self.assertAlmostEqual(sum(replica["demanda_sku"]), 1.0, places=4)
+            self.assertNotEqual(replica["clase_sku"], clasificar_skus(config["vector_demanda_sku"], config).tolist())
+        # La plantilla lee las claves de la raíz, que son las de la primera réplica
+        for txt_clave in ("clase_sku", "rango_sku", "demanda_sku"):
+            self.assertEqual(datos[txt_clave], datos["replicas"][0][txt_clave])
+        self.assertNotEqual(datos["replicas"][0]["clase_sku"], datos["replicas"][1]["clase_sku"])
+
+    def test_la_animacion_con_datos_reales_conserva_la_demanda_de_la_configuracion(self):
+        from asrs.config import config_a_json, config_desde_json
+        from asrs.politicas.zonificacion import clasificar_skus
+        from asrs.visualizacion.generador import generar_datos
+        datos_config = config_a_json(cargar_configuracion())
+        datos_config.update(texto_origen_tareas="datos", texto_tareas_csv=PruebasDatosReales.CSV, escalar_porcentaje_historial=100)
+        config = config_desde_json(datos_config)
+        datos = generar_datos(config, [1])
+        self.assertEqual(datos["clase_sku"], clasificar_skus(config["vector_demanda_sku"], config).tolist())
+        self.assertEqual(datos["replicas"][0]["clase_sku"], datos["clase_sku"])
+
+    def test_la_animacion_graba_solo_las_primeras_tareas(self):
+        from unittest import mock
+        from asrs.visualizacion import generador
+        config = cargar_configuracion()
+        config["vector_politicas_asignacion"] = ('mas_cercana_es', 'basada_en_clases')
+        # Una animación más corta que la lista: el controlador recibe los días y los retiros recortados igual que la lista
+        with mock.patch.object(generador, "TAREAS_ANIMACION", 30):
+            datos = generador.generar_datos(config, [2024])
+        replica = datos["replicas"][0]
+        self.assertEqual(len(replica["secuencia"]), 30)
+        self.assertEqual(replica["tareas_totales"], TAREAS_PRUEBA)
+        for politica in replica["politicas"]:
+            self.assertEqual(sum(1 for e in politica["eventos"] if e[1] == 'T'), 30)
+
+
 class PruebasConfiguracion(unittest.TestCase):
     def test_ida_y_vuelta_conserva_los_valores(self):
         from asrs.config import config_a_json, config_desde_json
@@ -581,6 +839,52 @@ class PruebasConfiguracion(unittest.TestCase):
         self.assertEqual(copia["vector_configuracion_estanteria"].tolist(), [18, 20, 2])
         self.assertEqual(copia["escalar_largo_secuencia"], original["escalar_largo_secuencia"])
         self.assertEqual(copia["vector_politicas_asignacion"], original["vector_politicas_asignacion"])
+        self.assertEqual(copia["texto_modelo_demanda"], original["texto_modelo_demanda"])
+        self.assertEqual(copia["escalar_dias_replanificacion"], original["escalar_dias_replanificacion"])
+        self.assertEqual(config_desde_json({**config_a_json(original), "escalar_dias_replanificacion": 7})["escalar_dias_replanificacion"], 7)
+        self.assertEqual(copia["escalar_meses_ciclo_vida"], original["escalar_meses_ciclo_vida"])
+        self.assertEqual(copia["vector_cuantiles_amplitud"].tolist(), original["vector_cuantiles_amplitud"].tolist())
+
+    def test_la_configuracion_por_defecto_pasa_su_propia_validacion(self):
+        from asrs.config import cargar_configuracion as cargar_defecto, config_a_json, config_desde_json
+        # El valor por defecto (un año de tareas) supera el límite de los archivos reales, pero no el de las listas generadas
+        copia = config_desde_json(config_a_json(cargar_defecto()))
+        self.assertEqual(copia["escalar_largo_secuencia"], 525_600)
+
+    def test_limite_de_tareas_generadas(self):
+        from asrs.config import LIMITE_TAREAS_GENERADAS, config_desde_json
+        self.assertEqual(LIMITE_TAREAS_GENERADAS, 600_000)
+        self.assertEqual(config_desde_json({"escalar_largo_secuencia": 600_000})["escalar_largo_secuencia"], 600_000)
+        with self.assertRaises(ValueError):
+            config_desde_json({"escalar_largo_secuencia": 600_001})
+
+    def test_techo_de_ocupacion_sin_clave_se_sube_para_ocupaciones_altas(self):
+        from asrs.config import config_desde_json
+        # La herramienta web no muestra el techo: con una ocupación de 95 % o más y sin techo explícito, el techo pasa a 1
+        for escalar_ocupacion in (0.95, 0.97):
+            config = config_desde_json({"escalar_nivel_ocupacion": escalar_ocupacion})
+            self.assertEqual(config["escalar_techo_ocupacion"], 1.0)
+        self.assertEqual(config_desde_json({"escalar_nivel_ocupacion": 0.9})["escalar_techo_ocupacion"], 0.95)
+
+    def test_techo_de_ocupacion_no_aplica_con_datos_reales(self):
+        from asrs.config import config_a_json, config_desde_json
+        datos = config_a_json(cargar_configuracion())
+        datos.update(texto_origen_tareas="datos", texto_tareas_csv=PruebasDatosReales.CSV, escalar_nivel_ocupacion=1.0)
+        self.assertEqual(config_desde_json(datos)["escalar_nivel_ocupacion"], 1.0)
+
+    def test_techo_explicito_que_no_supera_la_ocupacion_se_rechaza_con_mensaje_claro(self):
+        from asrs.config import config_desde_json
+        for caso in ({"escalar_nivel_ocupacion": 0.95, "escalar_techo_ocupacion": 0.95},
+                     {"escalar_nivel_ocupacion": 1.0}):    # sin techo explícito, pero el techo no puede pasar de 1
+            with self.assertRaises(ValueError, msg=str(caso)) as contexto:
+                config_desde_json(caso)
+            self.assertIn("Techo de ocupación", str(contexto.exception))
+            self.assertIn("nivel de ocupación", str(contexto.exception))
+
+    def test_el_reparto_de_meses_pico_se_normaliza(self):
+        from asrs.config import config_desde_json
+        config = config_desde_json({"vector_reparto_mes_pico": [2, 1, 1]})
+        self.assertEqual(config["vector_reparto_mes_pico"].tolist(), [0.5, 0.25, 0.25])
 
     def test_demanda_personalizada_se_normaliza_y_fija_la_cantidad_de_skus(self):
         from asrs.config import config_desde_json
@@ -635,6 +939,28 @@ class PruebasConfiguracion(unittest.TestCase):
             {"texto_regla_recuperacion": "lifo"},
             {"vector_politicas_recuperacion": []},
             {"vector_politicas_recuperacion": ["fcfs", "fcfs"]},
+            {"texto_modelo_demanda": "otro"},
+            {"escalar_bass_q": 0.01},                                   # q no supera a p
+            {"escalar_bass_p": 0},
+            {"escalar_bass_q": 6},
+            {"escalar_meses_ciclo_vida": 0},
+            {"escalar_techo_ocupacion": 0.8},                           # el techo no supera la ocupación
+            {"escalar_techo_ocupacion": 1.2},
+            {"escalar_horas_por_dia": 25},
+            {"escalar_ciclos_por_hora": 0},
+            {"escalar_ciclos_por_hora": 0.5, "escalar_horas_por_dia": 1},  # menos de una recuperación por día
+            {"vector_cuantiles_amplitud": [0.2, 0.1, 0.3, 0.4, 0.5]},
+            {"vector_cuantiles_amplitud": [0.1, 0.2, 0.3, 0.4]},
+            {"vector_probabilidades_amplitud": [0, 0.5, 0.5, 0.9, 1]},
+            {"vector_reparto_mes_pico": [1, -1, 1]},
+            {"vector_reparto_mes_pico": [0, 0, 0]},
+            {"escalar_dias_calentamiento": 10},                         # menor que la ventana
+            {"escalar_dias_ventana_popularidad": 0},
+            {"escalar_dias_replanificacion": 0},
+            {"escalar_dias_replanificacion": 400},
+            {"escalar_dias_ventana_popularidad": 400, "escalar_dias_calentamiento": 500},
+            {"escalar_dias_calentamiento": 731},
+            {"escalar_largo_secuencia": 600_001},
         ]
         for caso in invalidos:
             with self.assertRaises(ValueError, msg=str(caso)):

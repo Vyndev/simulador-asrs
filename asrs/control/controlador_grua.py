@@ -8,7 +8,7 @@ from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS
 
 class ControladorGrua:
     def __init__(self, instancia_estanteria, instancia_grua, instancia_puntoES, vector_secuencia_operaciones,
-                 instancia_politica_asignacion, instancia_politica_recuperacion = None) -> None:
+                 instancia_politica_asignacion, instancia_politica_recuperacion = None, vector_dia_de_tarea = None, conjunto_retiros = None) -> None:
 
         # Se inicializan los atributos de clase
         self.instancia_grua = instancia_grua
@@ -20,6 +20,11 @@ class ControladorGrua:
         # La política de asignación se usa para almacenar y también para reubicar: reubicar es almacenar desde otro punto de referencia
         self.instancia_politica_asignacion = instancia_politica_asignacion
         self.instancia_politica_recuperacion = instancia_politica_recuperacion if instancia_politica_recuperacion is not None else PoliticaRecuperacionFCFS()
+
+        # Con un escenario de suministro y demanda: el día de cada tarea y los índices de las tareas que son retiros de fin de ciclo
+        # Sin escenario (datos reales o llenado) ambos son None, la política no recibe avisos de día y no se cuentan retiros
+        self.vector_dia_de_tarea = vector_dia_de_tarea
+        self.conjunto_retiros = conjunto_retiros if conjunto_retiros is not None else set()
 
     def listarObstrucciones(self, vector_indice_celda_objetivo):
         # Esta función lista los indices de las celdas que obstruyen a la celda objetivo
@@ -305,8 +310,16 @@ class ControladorGrua:
         escalar_almacenamiento = 0
         escalar_recuperacion = 1
 
+        # Día de la tarea anterior, se usa para avisar a la política cuando empieza un día nuevo
+        escalar_dia_actual = None
+
         # Se recorre la secuencia de operaciones, operación por operación
-        for vector_operacion in vector_secuencia_operaciones:
+        for escalar_indice_tarea, vector_operacion in enumerate(vector_secuencia_operaciones):
+
+            # Si hay escenario, la política se entera cuando empieza cada día (antes de la primera tarea y en cada cambio de día)
+            if self.vector_dia_de_tarea is not None and self.vector_dia_de_tarea[escalar_indice_tarea] != escalar_dia_actual:
+                escalar_dia_actual = self.vector_dia_de_tarea[escalar_indice_tarea]
+                self.instancia_politica_asignacion.iniciarDia(escalar_dia_actual)
 
             # Se desmpaqueta la linea de operación, que se compone de un identificador de actividad, y un identificador del SKU
             escalar_actividad, escalar_sku = vector_operacion
@@ -317,6 +330,9 @@ class ControladorGrua:
                 # En caso verdadero se consulta la posición facitble en donde almacenar
                 # La política solo elige celdas accesibles, 'almacenar' conserva el manejo de obstrucciones por si se usa otra política
                 vector_indice_almacenamiento = self.instancia_politica_asignacion.asignar(escalar_sku)
+                if not len(vector_indice_almacenamiento):
+                    # Zona llena: si la zona del SKU no tiene celda accesible se relaja la zonificación antes de descartar la tarea
+                    vector_indice_almacenamiento = self.instancia_politica_asignacion.asignar(escalar_sku, booleano_restringir_zona = False)
 
                 # Se evalúa si dicha posicion factible existe
                 if len(vector_indice_almacenamiento):
@@ -343,7 +359,12 @@ class ControladorGrua:
 
                     # En caso verdadero, se realiza la recuperación del ítem
                     self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_sku, 1)
+                    escalar_tiempo_antes = self.instancia_metricas.tiempo_total_recuperacion
                     self.recuperar(vector_indice_recuperacion)
+
+                    # Los retiros de fin de ciclo se cuentan aparte, además de contar como recuperación
+                    if escalar_indice_tarea in self.conjunto_retiros:
+                        self.instancia_metricas.registrarRetiro(self.instancia_metricas.tiempo_total_recuperacion - escalar_tiempo_antes)
 
                 else:
                     self.instancia_grua.registrarEvento('T', escalar_actividad, escalar_sku, 0)
