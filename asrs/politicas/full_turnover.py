@@ -13,22 +13,30 @@ class PoliticaFullTurnover(PoliticaAsignacion):
         super().__init__(instancia_estanteria, instancia_grua, instancia_puntoES, config)
 
         # El plan se forma antes del llenado con la popularidad móvil del día 0 y rige también durante el llenado
-        self.planificar(self.demandaPlanificacion(0))
+        self.planificar(*self.demandaPlanificacion(0))
 
-    def planificar(self, vector_demanda):
-        # Los SKUs se ordenan de mayor a menor demanda y el más demandado recibe las ubicaciones fijas más cercanas
+    def planificar(self, vector_demanda, vector_activo=None):
+        # Los SKUs que existen se ordenan de mayor a menor demanda y el más demandado recibe las ubicaciones fijas más cercanas
         # A igual demanda se conserva el orden por número de SKU. El espacio de cada SKU es proporcional a su inventario
         # Con el perfil EOQ el orden por demanda coincide con el orden por rotación (demanda / inventario = raíz de la demanda)
         # Las unidades ya guardadas no se mueven, las zonas nuevas rigen para los almacenamientos siguientes
-        vector_orden_skus = [int(escalar_indice) + 1 for escalar_indice in np.argsort(-vector_demanda, kind='stable')]
+        vector_demanda = np.asarray(vector_demanda, dtype=float)
+        vector_activo = np.ones(len(vector_demanda), dtype=bool) if vector_activo is None else np.asarray(vector_activo, dtype=bool)
+        vector_indices = np.flatnonzero(vector_activo)
+        vector_orden_skus = vector_indices[np.argsort(-vector_demanda[vector_indices], kind='stable')]
+        self.vector_planificado = vector_activo.copy()
+        self.escalar_etiqueta_residual = int(vector_orden_skus[-1]) + 1
         self.matriz_zonificacion = construir_zonificacion(
             self.tiempoChebyshevXY(self.instancia_puntoES.vector_posicion),
-            perfil_inventario(vector_demanda, self.config["texto_perfil_inventario"]),
-            vector_orden_skus)
+            perfil_inventario(vector_demanda[vector_orden_skus], self.config["texto_perfil_inventario"]),
+            (vector_orden_skus + 1).tolist())
 
     def etiquetaZona(self, escalar_sku):
-        # Cada SKU es su propia zona
-        return int(escalar_sku)
+        # Cada SKU planificado es su propia zona; uno que no estaba en el plan (nació después de planificar) comparte la zona del SKU
+        # de menor demanda hasta la próxima planificación
+        if escalar_sku <= len(self.vector_planificado) and self.vector_planificado[escalar_sku - 1]:
+            return int(escalar_sku)
+        return self.escalar_etiqueta_residual
 
     def matrizCriterio(self, vector_posicion_referencia = None):
         # Dentro de la zona del SKU se prefiere la celda más cercana al punto E/S
@@ -51,4 +59,4 @@ class PoliticaFullTurnoverReplanificada(PoliticaFullTurnover):
         escalar_periodo = escalar_dia // self.config["escalar_dias_replanificacion"]
         if escalar_periodo > self.escalar_ultimo_periodo_replanificado:
             self.escalar_ultimo_periodo_replanificado = escalar_periodo
-            self.planificar(self.demandaPlanificacion(escalar_dia))
+            self.planificar(*self.demandaPlanificacion(escalar_dia))

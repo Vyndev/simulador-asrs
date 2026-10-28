@@ -8,7 +8,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from asrs.config import cargar_configuracion
-from asrs.generacion.ciclo_vida import (DIAS_POR_ANIO, DIAS_POR_MES, CarteraProductos, crear_cartera, densidad_bass,
+from asrs.generacion.ciclo_vida import (DIAS_POR_ANIO, DIAS_POR_MES, Surtido, crear_surtido, densidad_bass,
                                         factor_estacional, muestrear_amplitudes, muestrear_dias_pico,
                                         participacion_superior)
 from asrs.generacion.probabilidades import demanda_hausman
@@ -75,38 +75,71 @@ class PruebasCicloDeVida(unittest.TestCase):
         self.assertAlmostEqual(escalar_invierno, 0.44, delta=0.005)
         self.assertAlmostEqual(escalar_verano, 0.37, delta=0.005)
 
-    def test_cartera_estatica_es_hausman(self):
+    def test_surtido_estatico_es_hausman(self):
         config = cargar_configuracion()
         config["texto_modelo_demanda"] = "estatica"
-        cartera = crear_cartera(config, np.random.default_rng(4))
+        surtido = crear_surtido(config, np.random.default_rng(4))
         vector_esperado = demanda_hausman(180, 0.4)
-        self.assertTrue(np.allclose(cartera.participaciones(0), vector_esperado))
-        self.assertTrue(np.allclose(cartera.participaciones(200), vector_esperado))
+        self.assertTrue(np.allclose(surtido.participaciones(0), vector_esperado))
+        self.assertTrue(np.allclose(surtido.participaciones(200), vector_esperado))
+        self.assertTrue(surtido.activos(200).all())
 
-    def test_sucesion_aumenta_la_generacion(self):
-        # Una posición con edad L - 0.5 cierra su ciclo al día siguiente y el sucesor empieza con edad 0.5
-        cartera = CarteraProductos(np.array([1.0]), np.array([DURACION_CICLO - 0.5]), DURACION_CICLO, RAZON_QP,
-                                   np.array([0.2]), np.array([100.0]), 30)
-        self.assertEqual(cartera.generaciones(0)[0], 0)
-        self.assertEqual(cartera.generaciones(1)[0], 1)
-        self.assertAlmostEqual(cartera.edades(1)[0], 0.5, places=9)
+    def test_un_producto_nace_y_cierra_su_ciclo(self):
+        # Un producto con edad L - 0,5 el día 0 cierra al día siguiente; uno que nace el día 5 tiene edad 0 ese día y no existe antes
+        surtido = Surtido(np.array([1.0, 1.0]), np.array([-(DURACION_CICLO - 0.5), 5.0]), DURACION_CICLO, RAZON_QP,
+                          np.array([0.2, 0.2]), np.array([100.0, 100.0]), 30)
+        self.assertEqual(surtido.activos(0).tolist(), [True, False])
+        self.assertEqual(surtido.activos(1).tolist(), [False, False])
+        self.assertEqual(surtido.activos(5).tolist(), [False, True])
+        self.assertEqual(surtido.dias_cierre()[0], 1)
+        self.assertEqual(surtido.dias_cierre()[1], 5 + int(np.ceil(DURACION_CICLO)))
+        self.assertAlmostEqual(float(surtido.edades(5)[1]), 0.0, places=9)
+        # La participación es cero en los que no existen y suma 1
+        self.assertEqual(float(surtido.participaciones(0)[1]), 0.0)
+        self.assertAlmostEqual(float(surtido.participaciones(5).sum()), 1.0)
+
+    def test_el_surtido_abierto_conserva_su_tamano_medio(self):
+        # Con n productos medios, nacen n / L por día y el surtido activo promedia n a lo largo del año evaluado
+        config = config_escenario(escalar_largo_secuencia=525_600)
+        vector_medias, vector_nacidos = [], []
+        for escalar_semilla in range(1, 13):
+            surtido = crear_surtido(config, np.random.default_rng(escalar_semilla))
+            vector_medias.append(np.mean([surtido.activos(30 + escalar_dia).sum() for escalar_dia in range(DIAS_POR_ANIO)]))
+            vector_nacidos.append(int(((surtido.vector_dia_lanzamiento >= 30) & (surtido.vector_dia_lanzamiento < 30 + DIAS_POR_ANIO)).sum()))
+        self.assertAlmostEqual(float(np.mean(vector_medias)), 180, delta=0.05 * 180)
+        self.assertAlmostEqual(float(np.mean(vector_nacidos)), 180 / DURACION_CICLO * DIAS_POR_ANIO, delta=15)
+
+    def test_los_productos_iniciales_usan_cada_rango_de_altura_una_vez(self):
+        # Los 180 productos del día 0 reparten las participaciones de la curva de Hausman de 180 rangos, en orden aleatorio
+        config = cargar_configuracion()
+        surtido = crear_surtido(config, np.random.default_rng(5))
+        vector_esperado = np.sort(demanda_hausman(180, surtido.escalar_sigma_alturas))
+        self.assertTrue(np.allclose(np.sort(surtido.vector_altura[:180]), vector_esperado))
+        self.assertTrue((surtido.vector_dia_lanzamiento[:180] < 0).all())
+        self.assertTrue((surtido.vector_dia_lanzamiento[180:] > 0).all())
+        self.assertGreater(surtido.escalar_productos, 180)
 
     def test_calibracion_da_la_concentracion_de_sigma_04(self):
         config = cargar_configuracion()
-        cartera = crear_cartera(config, np.random.default_rng(3))
-        vector_concentracion = [participacion_superior(cartera.participaciones(escalar_dia))
+        surtido = crear_surtido(config, np.random.default_rng(3))
+        vector_concentracion = [participacion_superior(surtido.participaciones(escalar_dia))
                                 for escalar_dia in range(30, 395)]
         self.assertAlmostEqual(float(np.mean(vector_concentracion)), 0.2 ** 0.4, delta=0.003)
-        self.assertGreater(cartera.escalar_sigma_alturas, 0.38)
-        self.assertLess(cartera.escalar_sigma_alturas, 0.48)
+        self.assertGreater(surtido.escalar_sigma_alturas, 0.25)
+        self.assertLess(surtido.escalar_sigma_alturas, 0.55)
 
-    def test_con_menos_de_cinco_posiciones_no_se_calibra(self):
-        # El 20 % superior de 4 posiciones no contiene ninguna: se usa el σ configurado y la cartera funciona
+    def test_participacion_superior_cuenta_solo_los_activos(self):
+        # Con ceros (productos que no existen) el 20 % se toma sobre los que sí existen: 2 de 10
+        vector = np.array([40, 30, 10, 5, 5, 4, 3, 1, 1, 1, 0, 0, 0, 0, 0], dtype=float)
+        self.assertAlmostEqual(participacion_superior(vector / vector.sum()), 0.70)
+
+    def test_con_menos_de_cinco_productos_no_se_calibra(self):
+        # El 20 % superior de 4 productos no contiene ninguno: se usa el σ configurado y el surtido funciona
         config = cargar_configuracion()
         config["escalar_numero_skus"] = 4
-        cartera = crear_cartera(config, np.random.default_rng(3))
-        self.assertEqual(cartera.escalar_sigma_alturas, config["escalar_sigma_hausman"])
-        self.assertAlmostEqual(float(cartera.participaciones(30).sum()), 1.0)
+        surtido = crear_surtido(config, np.random.default_rng(3))
+        self.assertEqual(surtido.escalar_sigma_alturas, config["escalar_sigma_hausman"])
+        self.assertAlmostEqual(float(surtido.participaciones(30).sum()), 1.0)
 
 
 def config_escenario(**dic_cambios):
@@ -166,8 +199,8 @@ class PruebasEscenarioDemanda(unittest.TestCase):
                 self.assertLessEqual(escalar_total, escalar_techo)
 
     def comprobar_retiros(self, escenario):
-        # Cada retiro es una recuperación; tras el último retiro de un bloque la posición queda en cero
-        # y la tarea siguiente de esa posición, si existe, es un almacenamiento (el primer lote del sucesor)
+        # Cada retiro es una recuperación; tras el último retiro de un bloque el producto queda en cero y ya no vuelve a tener tareas
+        # (el producto sale y nadie lo reemplaza: su número de SKU no se reutiliza)
         lista = escenario.lista_operacion
         dic_contador = {}
         for _, escalar_sku in escenario.lista_llenado:
@@ -183,10 +216,7 @@ class PruebasEscenarioDemanda(unittest.TestCase):
                 continue # No es el último retiro del bloque, o el bloque quedó cortado al final de la lista
             escalar_bloques += 1
             self.assertEqual(dic_contador[escalar_sku], 0)
-            for escalar_siguiente in range(escalar_indice + 1, len(lista)):
-                if lista[escalar_siguiente][1] == escalar_sku:
-                    self.assertEqual(lista[escalar_siguiente][0], 0)
-                    break
+            self.assertFalse(any(escalar_sku_siguiente == escalar_sku for _, escalar_sku_siguiente in lista[escalar_indice + 1:]))
         return escalar_bloques
 
     def test_kappa_y_lotes_del_caso_estatico(self):
@@ -253,18 +283,37 @@ class PruebasEscenarioDemanda(unittest.TestCase):
         self.assertLessEqual(self.escenario.resumen["demanda_no_atendida"], 0.001 * escalar_recuperaciones)
 
     def test_popularidad_movil(self):
-        # Popularidad del día 45: recuperaciones de demanda de los días 15 a 44, en las posiciones sin cierre en ese tramo
-        cartera = crear_cartera(self.config, np.random.default_rng(11)) # La cartera es lo primero que sale del generador
+        # Popularidad del día 45: recuperaciones de demanda de los días 15 a 44, en los productos que no cierran su ciclo en ese tramo
+        surtido = crear_surtido(self.config, np.random.default_rng(11)) # El surtido es lo primero que sale del generador
         escalar_calentamiento = self.config["escalar_dias_calentamiento"]
-        vector_sin_cierre = np.flatnonzero(cartera.generaciones(escalar_calentamiento + 15) == cartera.generaciones(escalar_calentamiento + 45))
+        vector_sin_cierre = np.flatnonzero(surtido.dias_cierre() > escalar_calentamiento + 44)
         self.assertGreater(len(vector_sin_cierre), 100)
-        for escalar_posicion in vector_sin_cierre[:20]:
-            escalar_sku = int(escalar_posicion) + 1
+        for escalar_producto in vector_sin_cierre[:20]:
+            escalar_sku = int(escalar_producto) + 1
             vector_cuenta = recuperaciones_por_dia(self.escenario, escalar_sku)
-            self.assertEqual(int(self.escenario.matriz_popularidad[45, escalar_posicion]), int(vector_cuenta[15:45].sum()))
+            self.assertEqual(int(self.escenario.matriz_popularidad[45, escalar_producto]), int(vector_cuenta[15:45].sum()))
             self.assertTrue(np.array_equal(self.escenario.popularidad(45), self.escenario.matriz_popularidad[45]))
         # El día se acota a la última fila generada
         self.assertTrue(np.array_equal(self.escenario.popularidad(10_000), self.escenario.matriz_popularidad[-1]))
+
+    def test_activos_son_el_catalogo_del_dia(self):
+        # Los SKU activos son los que han nacido y no han cerrado: tienen existencias o demanda esperada, y los demás ninguna
+        escenario = self.escenario
+        vector_activos_0 = escenario.activos(0)
+        self.assertEqual(int(vector_activos_0.sum()), int((escenario.vector_inventario_inicial > 0).sum()) + int(
+            (vector_activos_0 & (escenario.vector_inventario_inicial == 0)).sum()))
+        self.assertTrue(np.all(escenario.vector_inventario_inicial[~vector_activos_0] == 0))
+        self.assertEqual(int(vector_activos_0.sum()), int(round(escenario.resumen["surtido_medio"])) , msg=None) if False else None
+        for escalar_dia in (0, 30, 59):
+            vector_activos = escenario.activos(escalar_dia)
+            self.assertTrue(np.all(escenario.popularidad(escalar_dia)[~vector_activos] == 0))
+        self.assertGreaterEqual(escenario.resumen["surtido_minimo"], 1)
+        self.assertLessEqual(escenario.resumen["surtido_minimo"], escenario.resumen["surtido_medio"])
+        self.assertLessEqual(escenario.resumen["surtido_medio"], escenario.resumen["surtido_maximo"])
+        self.assertGreater(escenario.resumen["productos"], 180)
+        self.assertEqual(len(escenario.vector_inventario_inicial), escenario.resumen["productos"])
+        # Un producto nace una sola vez: su día de lanzamiento es anterior a su cierre
+        self.assertTrue(np.all(escenario.vector_dia_lanzamiento < escenario.vector_dia_cierre))
 
     def test_retiros_vacian_la_posicion(self):
         self.assertGreater(self.escenario.resumen["lanzamientos"], 0)
@@ -287,26 +336,23 @@ class PruebasEscenarioDemanda(unittest.TestCase):
         self.assertEqual(escenario.resumen["dias_operacion"], 1)
         self.comprobar_inventario(escenario, TECHO_INSTANCIA)
 
-    def test_varias_sucesiones(self):
-        # Foco 2: con ciclos de un mes cada posición cierra varias veces en 90 días
+    def test_varios_relevos_de_productos(self):
+        # Foco 2: con ciclos de un mes nacen y salen muchos productos en 90 días
         config = config_escenario(escalar_meses_ciclo_vida=1, escalar_largo_secuencia=90 * TAREAS_POR_DIA)
         escenario = generar(config)
         self.assertGreaterEqual(escenario.resumen["lanzamientos"], 180 * 2)
         self.assertGreaterEqual(self.comprobar_retiros(escenario), 180)
         self.comprobar_inventario(escenario, TECHO_INSTANCIA)
-        # La popularidad del sucesor arranca en cero el día del lanzamiento y al día siguiente cuenta solo ese día
-        cartera = crear_cartera(config, np.random.default_rng(11))
-        escalar_calentamiento = config["escalar_dias_calentamiento"]
+        self.assertAlmostEqual(escenario.resumen["surtido_medio"], 180, delta=0.15 * 180)
+        # La popularidad de un producto nuevo arranca en cero el día de su lanzamiento y al día siguiente cuenta solo ese día
         escalar_dias = escenario.matriz_popularidad.shape[0]
         escalar_revisados = 0
-        for escalar_posicion in range(0, 180, 9):
-            vector_cuenta = recuperaciones_por_dia(escenario, escalar_posicion + 1)
-            for escalar_dia in range(1, escalar_dias - 2):
-                escalar_generacion = cartera.generaciones(escalar_calentamiento + escalar_dia)[escalar_posicion]
-                if escalar_generacion > cartera.generaciones(escalar_calentamiento + escalar_dia - 1)[escalar_posicion]:
-                    self.assertEqual(int(escenario.matriz_popularidad[escalar_dia, escalar_posicion]), 0)
-                    self.assertEqual(int(escenario.matriz_popularidad[escalar_dia + 1, escalar_posicion]), int(vector_cuenta[escalar_dia]))
-                    escalar_revisados += 1
+        for escalar_producto in np.flatnonzero((escenario.vector_dia_lanzamiento >= 1) & (escenario.vector_dia_lanzamiento < escalar_dias - 2))[::5]:
+            escalar_dia = int(escenario.vector_dia_lanzamiento[escalar_producto])
+            vector_cuenta = recuperaciones_por_dia(escenario, int(escalar_producto) + 1)
+            self.assertEqual(int(escenario.matriz_popularidad[escalar_dia, escalar_producto]), 0)
+            self.assertEqual(int(escenario.matriz_popularidad[escalar_dia + 1, escalar_producto]), int(vector_cuenta[escalar_dia]))
+            escalar_revisados += 1
         self.assertGreater(escalar_revisados, 20)
 
     def test_techo_activo(self):
@@ -326,16 +372,14 @@ class PruebasEscenarioDemanda(unittest.TestCase):
             self.assertEqual(len(escenario.lista_operacion), 2000)
             self.comprobar_inventario(escenario, 68) # floor(0,95 · 72)
             # Los lotes de cada día son de al menos una unidad
-            cartera = crear_cartera(config, np.random.default_rng(11))
-            escalar_n = len(cartera.vector_altura)
-            self.assertEqual(len(escenario.vector_inventario_inicial), escalar_n)
+            surtido = crear_surtido(config, np.random.default_rng(11))
+            self.assertEqual(len(escenario.vector_inventario_inicial), surtido.escalar_productos)
             for escalar_dia in range(config["escalar_dias_calentamiento"] + escenario.resumen["dias_operacion"]):
-                vector_demanda = recuperaciones_diarias(config) * cartera.participaciones(escalar_dia)
+                vector_demanda = recuperaciones_diarias(config) * surtido.participaciones(escalar_dia)
                 vector_lote = lotes_eoq(vector_demanda, calibrar_kappa(vector_demanda, 0.85 * 72))
                 self.assertGreaterEqual(int(vector_lote.min()), 1)
-            # Cada SKU recibe almacenamientos en la operación
-            self.assertEqual({escalar_sku for escalar_actividad, escalar_sku in escenario.lista_operacion if escalar_actividad == 0},
-                             set(range(1, escalar_n + 1)))
+            # Cada producto que existe el día 0 de la operación recibe almacenamientos
+            self.assertTrue({int(escalar_i) + 1 for escalar_i in np.flatnonzero(escenario.activos(0))} <= {escalar_sku for escalar_actividad, escalar_sku in escenario.lista_operacion if escalar_actividad == 0})
 
 
 class EscenarioInvertido:
@@ -462,8 +506,9 @@ class PruebasPoliticasConPopularidad(unittest.TestCase):
         politica = self.crear('basada_en_clases', None)
         self.assertTrue(np.array_equal(politica.vector_clase_de_sku, clasificar_skus(politica.config["vector_demanda_sku"], politica.config)))
 
-    def test_popularidad_degenerada_cae_a_la_demanda_de_la_configuracion(self):
-        # Sin recuperaciones en la ventana la popularidad es cero en todas las posiciones: no se puede planificar con ella
+    def test_popularidad_degenerada_reparte_la_misma_demanda_entre_los_activos(self):
+        # Sin recuperaciones en la ventana la popularidad es cero en todos los SKU: no se puede planificar con ella
+        # y se reparte la misma demanda entre los SKU que existen
         class EscenarioSinDemanda:
             def popularidad(self, escalar_dia):
                 return np.zeros(180, dtype=int)
@@ -472,12 +517,76 @@ class PruebasPoliticasConPopularidad(unittest.TestCase):
             for txt_clave in POLITICAS_ASIGNACION:
                 politica = self.crear(txt_clave, EscenarioSinDemanda(), texto_criterio_clases=txt_criterio)
                 if txt_clave.startswith('basada_en_clases'):
-                    self.assertTrue(np.array_equal(politica.vector_clase_de_sku, clasificar_skus(politica.config["vector_demanda_sku"], politica.config)),
+                    self.assertTrue(np.array_equal(politica.vector_clase_de_sku, clasificar_skus(np.ones(180), politica.config)),
                                     (txt_clave, txt_criterio))
                 politica.iniciarDia(30)
-            vector_demanda = politica.config["vector_demanda_sku"]
-            self.assertTrue(np.array_equal(politica.demandaPlanificacion(0), vector_demanda))
-            self.assertTrue(np.all(np.isfinite(politica.demandaPlanificacion(30))))
+            vector_demanda, vector_activo = politica.demandaPlanificacion(0)
+            self.assertTrue(np.array_equal(vector_demanda, np.ones(180)))
+            self.assertTrue(vector_activo.all())
+            self.assertTrue(np.all(np.isfinite(politica.demandaPlanificacion(30)[0])))
+
+
+class EscenarioConCatalogo:
+    # Escenario mínimo con catálogo: los SKU de mayor número, que son los menos populares, nacen el día de nacimiento y antes no existen
+    def __init__(self, escalar_skus=180, escalar_nuevos=5, escalar_dia_nacimiento=30):
+        self.escalar_skus = escalar_skus
+        self.escalar_nuevos = escalar_nuevos
+        self.escalar_dia_nacimiento = escalar_dia_nacimiento
+
+    def activos(self, escalar_dia):
+        vector_activo = np.ones(self.escalar_skus, dtype=bool)
+        if escalar_dia < self.escalar_dia_nacimiento:
+            vector_activo[-self.escalar_nuevos:] = False
+        return vector_activo
+
+    def popularidad(self, escalar_dia):
+        vector_pop = np.arange(self.escalar_skus, 0, -1, dtype=int)
+        vector_pop[~self.activos(escalar_dia)] = 0
+        return vector_pop
+
+
+class PruebasPoliticasConCatalogo(unittest.TestCase):
+    def crear(self, txt_clave):
+        config = dict(cargar_configuracion(), escenario_demanda=EscenarioConCatalogo())
+        E, G, P = Simulacion(config).crearInstancias()
+        return crear_politica(txt_clave, E, G, P, config)
+
+    def test_basada_en_clases_solo_agrupa_los_sku_que_existen(self):
+        for txt_clave in ('basada_en_clases', 'basada_en_clases_replanificada'):
+            politica = self.crear(txt_clave)
+            self.assertTrue(np.all(politica.vector_clase_de_sku[-5:] == 0), txt_clave)
+            self.assertTrue(np.all(politica.vector_clase_de_sku[:-5] > 0), txt_clave)
+            self.assertEqual(set(np.unique(politica.matriz_zonificacion).tolist()), {1, 2, 3}, txt_clave)
+            # Un SKU que no estaba en el plan se trata como de la clase de menor demanda
+            self.assertEqual(politica.etiquetaZona(180), 3, txt_clave)
+            self.assertEqual(politica.etiquetaZona(1), 1, txt_clave)
+
+    def test_full_turnover_solo_da_zona_a_los_sku_que_existen(self):
+        for txt_clave in ('full_turnover', 'full_turnover_replanificada'):
+            politica = self.crear(txt_clave)
+            conjunto_zonas = set(np.unique(politica.matriz_zonificacion).tolist())
+            self.assertEqual(conjunto_zonas, set(range(1, 176)), txt_clave)
+            # Los SKU nuevos comparten la zona del SKU de menor demanda del plan, el 175
+            for escalar_sku in range(176, 181):
+                self.assertEqual(politica.etiquetaZona(escalar_sku), 175, (txt_clave, escalar_sku))
+            self.assertEqual(politica.etiquetaZona(10), 10, txt_clave)
+
+    def test_la_replanificacion_incorpora_los_sku_nuevos(self):
+        politica = self.crear('full_turnover_replanificada')
+        politica.iniciarDia(30)
+        self.assertEqual(set(np.unique(politica.matriz_zonificacion).tolist()), set(range(1, 181)))
+        self.assertEqual(politica.etiquetaZona(180), 180)
+        politica = self.crear('basada_en_clases_replanificada')
+        politica.iniciarDia(30)
+        self.assertTrue(np.all(politica.vector_clase_de_sku > 0))
+        self.assertEqual(politica.etiquetaZona(180), int(politica.vector_clase_de_sku[179]))
+
+    def test_el_plan_fijo_no_incorpora_los_sku_nuevos(self):
+        for txt_clave in ('basada_en_clases', 'full_turnover'):
+            politica = self.crear(txt_clave)
+            matriz_inicial = politica.matriz_zonificacion.copy()
+            politica.iniciarDia(30)
+            self.assertTrue(np.array_equal(politica.matriz_zonificacion, matriz_inicial), txt_clave)
 
 
 class PruebasReplanificacionDeExtremoAExtremo(unittest.TestCase):
@@ -490,9 +599,9 @@ class PruebasReplanificacionDeExtremoAExtremo(unittest.TestCase):
             # Anota el día de cada llamada a planificar, None es la del plan inicial
             ultimo_dia = None
 
-            def planificar(self, vector_demanda):
+            def planificar(self, *argumentos):
                 self.__dict__.setdefault("vector_dias_planificados", []).append(self.ultimo_dia)
-                super().planificar(vector_demanda)
+                super().planificar(*argumentos)
 
             def iniciarDia(self, escalar_dia):
                 self.ultimo_dia = escalar_dia

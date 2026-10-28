@@ -39,7 +39,7 @@ def cargar_configuracion():
         "escalar_tiempo_toma_deposito_capa_trasera": 6.86, # Tiempo de tomar o depositar un ítem en las capas más profundas
 
         # Demanda por SKU: la lista de tareas solo conoce SKUs, el SKU 1 es el más demandado
-        "escalar_numero_skus": 180, # Cantidad de SKUs, relación de 4 posiciones por producto
+        "escalar_numero_skus": 180, # Surtido medio de productos activos, relación de 4 celdas por producto; nacen n / L por día y el surtido es abierto
         "escalar_sigma_hausman": 0.4, # Sesgo de la demanda según la curva de Hausman, 1 es demanda uniforme y menor es más concentrada
         "vector_demanda_sku_personalizada": None, # Opcional, demanda de cada SKU, reemplaza a los dos parámetros anteriores
         "vector_demanda_sku": None, # Se calcula a partir de lo anterior, suma 1

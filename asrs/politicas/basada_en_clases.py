@@ -3,7 +3,7 @@ import numpy as np
 
 from asrs.generacion.probabilidades import perfil_inventario
 from asrs.politicas.asignacion import PoliticaAsignacion
-from asrs.politicas.zonificacion import clasificar_skus, construir_zonificacion
+from asrs.politicas.zonificacion import clasificar_skus_activos, construir_zonificacion
 
 
 class PoliticaBasadaEnClases(PoliticaAsignacion):
@@ -13,24 +13,31 @@ class PoliticaBasadaEnClases(PoliticaAsignacion):
         super().__init__(instancia_estanteria, instancia_grua, instancia_puntoES, config)
 
         # El plan se forma antes del llenado con la popularidad móvil del día 0 y rige también durante el llenado
-        self.planificar(self.demandaPlanificacion(0))
+        self.planificar(*self.demandaPlanificacion(0))
 
-    def planificar(self, vector_demanda):
+    def planificar(self, vector_demanda, vector_activo=None):
         # La agrupación es parte de la política: los SKUs más demandados forman la clase 1 y reciben las celdas más cercanas al punto E/S
+        # Solo se agrupan los SKU que existen (vector_activo, por defecto todos); los demás quedan en la clase 0, que no tiene zona
         # Las unidades ya guardadas no se mueven, las zonas nuevas rigen para los almacenamientos siguientes
-        self.vector_clase_de_sku = clasificar_skus(vector_demanda, self.config)
+        vector_demanda = np.asarray(vector_demanda, dtype=float)
+        vector_activo = np.ones(len(vector_demanda), dtype=bool) if vector_activo is None else np.asarray(vector_activo, dtype=bool)
+        self.vector_clase_de_sku = clasificar_skus_activos(vector_demanda, vector_activo, self.config)
 
         # El espacio de cada clase es proporcional al inventario de sus SKUs (según el perfil de inventario), no a su demanda
         escalar_clases = int(self.vector_clase_de_sku.max())
-        vector_inventario = perfil_inventario(vector_demanda, self.config["texto_perfil_inventario"])
+        vector_inventario = np.zeros(len(vector_demanda))
+        vector_inventario[vector_activo] = perfil_inventario(vector_demanda[vector_activo], self.config["texto_perfil_inventario"])
         vector_espacio = np.array([vector_inventario[self.vector_clase_de_sku == clase].sum() for clase in range(1, escalar_clases + 1)])
+        self.escalar_clases = escalar_clases
         self.matriz_zonificacion = construir_zonificacion(
             self.tiempoChebyshevXY(self.instancia_puntoES.vector_posicion),
             vector_espacio,
             list(range(1, escalar_clases + 1)))
 
     def etiquetaZona(self, escalar_sku):
-        return int(self.vector_clase_de_sku[escalar_sku - 1])
+        # Un SKU que no estaba en el plan (nació después de planificar) se trata como de la clase de menor demanda hasta la próxima planificación
+        escalar_clase = int(self.vector_clase_de_sku[escalar_sku - 1]) if escalar_sku <= len(self.vector_clase_de_sku) else 0
+        return escalar_clase if escalar_clase > 0 else self.escalar_clases
 
     def matrizCriterio(self, vector_posicion_referencia = None):
         # Dentro de la zona de la clase se prefiere la celda más cercana al punto E/S
@@ -53,4 +60,4 @@ class PoliticaBasadaEnClasesReplanificada(PoliticaBasadaEnClases):
         escalar_periodo = escalar_dia // self.config["escalar_dias_replanificacion"]
         if escalar_periodo > self.escalar_ultimo_periodo_replanificado:
             self.escalar_ultimo_periodo_replanificado = escalar_periodo
-            self.planificar(self.demandaPlanificacion(escalar_dia))
+            self.planificar(*self.demandaPlanificacion(escalar_dia))

@@ -191,7 +191,7 @@ class PruebasZonificacion(unittest.TestCase):
     def test_zonas_por_canales_completos_y_en_orden(self):
         # 4 filas x 2 columnas x 2 capas, todas las capas de un canal tienen el mismo tiempo
         tiempos = np.repeat(np.arange(8, dtype=float).reshape(4, 2, 1), 2, axis=2)
-        zonas = construir_zonificacion(tiempos, [0.25, 0.75], [2, 1])
+        zonas = construir_zonificacion(tiempos, [0.75, 0.25], [2, 1])
         # cada canal pertenece por completo a una etiqueta
         self.assertTrue(np.all(zonas[:, :, 0] == zonas[:, :, 1]))
         # cada etiqueta recibe al menos un canal y todas las celdas quedan asignadas
@@ -259,8 +259,9 @@ class PruebasGeneradorTareas(unittest.TestCase):
             random.seed(3)
             SA, S = simulacion.generarSecuencias()
             cfg = simulacion.config
-            conteo = [sum(1 for _, sku in SA if sku == i) for i in range(1, cfg["escalar_numero_skus"] + 1)]
-            self.assertEqual(conteo, simulacion.escenario_demanda.vector_inventario_inicial.tolist(), txt_modelo)
+            vector_inventario_inicial = simulacion.escenario_demanda.vector_inventario_inicial
+            conteo = [sum(1 for _, sku in SA if sku == i) for i in range(1, len(vector_inventario_inicial) + 1)]
+            self.assertEqual(conteo, vector_inventario_inicial.tolist(), txt_modelo)
             self.assertGreater(len(SA), 0)
 
     def test_generar_secuencias_usa_el_escenario(self):
@@ -786,7 +787,7 @@ class PruebasVisualizacion(unittest.TestCase):
             self.assertEqual(politica["color_por"], txt_esperado, txt_clave)
 
     def test_la_animacion_colorea_con_la_popularidad_del_escenario_generado(self):
-        from asrs.politicas.zonificacion import clasificar_skus
+        from asrs.politicas.zonificacion import clasificar_skus_activos
         from asrs.visualizacion.generador import _rango_por_demanda, generar_datos
         config = cargar_configuracion()
         datos = generar_datos(config, [2024, 2025])
@@ -796,10 +797,13 @@ class PruebasVisualizacion(unittest.TestCase):
             random.seed(replica["semilla"])
             simulacion.generarSecuencias()
             vector_popularidad = simulacion.escenario_demanda.popularidad(0).astype(float)
-            self.assertEqual(replica["clase_sku"], clasificar_skus(vector_popularidad, config).tolist())
+            vector_activo = simulacion.escenario_demanda.activos(0)
+            vector_clase = clasificar_skus_activos(vector_popularidad, vector_activo, config)
+            vector_clase[vector_clase == 0] = vector_clase.max() # Los SKU que aún no existen se pintan como la clase de menor demanda
+            self.assertEqual(replica["clase_sku"], vector_clase.tolist())
             self.assertEqual(replica["rango_sku"], _rango_por_demanda(vector_popularidad).tolist())
             self.assertAlmostEqual(sum(replica["demanda_sku"]), 1.0, places=4)
-            self.assertNotEqual(replica["clase_sku"], clasificar_skus(config["vector_demanda_sku"], config).tolist())
+            self.assertGreater(len(replica["clase_sku"]), config["escalar_numero_skus"])
         # La plantilla lee las claves de la raíz, que son las de la primera réplica
         for txt_clave in ("clase_sku", "rango_sku", "demanda_sku"):
             self.assertEqual(datos[txt_clave], datos["replicas"][0][txt_clave])

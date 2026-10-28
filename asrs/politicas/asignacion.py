@@ -36,14 +36,20 @@ class PoliticaAsignacion:
         pass
 
     def demandaPlanificacion(self, escalar_dia=0):
-        # Demanda con la que las políticas con zonas planifican: la popularidad móvil del día si hay escenario (es lo único que ven de él)
-        # Sin escenario (datos reales) o sin recuperaciones en la ventana (todo en cero, no se podría repartir) se usa la demanda de la configuración
+        # Lo que las políticas con zonas saben para planificar: la popularidad móvil del día y qué SKU existen (el catálogo del almacén)
+        # Devuelve (demanda, activos), ambos con un elemento por SKU: los SKU que no existen ese día no se planifican
+        # Sin escenario (datos reales) todos los SKU existen y se usa la demanda de la configuración
+        # Sin recuperaciones en la ventana (todo en cero, no se podría repartir) se reparte la misma demanda entre los SKU que existen
         instancia_escenario = self.config.get("escenario_demanda")
-        if instancia_escenario is not None:
-            vector_popularidad = np.asarray(instancia_escenario.popularidad(escalar_dia), dtype=float)
-            if vector_popularidad.sum() > 0:
-                return vector_popularidad
-        return np.asarray(self.config["vector_demanda_sku"], dtype=float)
+        if instancia_escenario is None:
+            vector_demanda = np.asarray(self.config["vector_demanda_sku"], dtype=float)
+            return vector_demanda, np.ones(len(vector_demanda), dtype=bool)
+        vector_popularidad = np.asarray(instancia_escenario.popularidad(escalar_dia), dtype=float)
+        vector_activo = np.asarray(instancia_escenario.activos(escalar_dia), dtype=bool) if hasattr(instancia_escenario, "activos") \
+            else np.ones(len(vector_popularidad), dtype=bool)
+        if vector_popularidad[vector_activo].sum() > 0:
+            return vector_popularidad, vector_activo
+        return vector_activo.astype(float), vector_activo
 
     def etiquetaZona(self, escalar_sku):
         # Zona que corresponde a un SKU, cada política con zonas decide cómo agrupa sus SKUs

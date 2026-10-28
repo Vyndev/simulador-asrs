@@ -67,11 +67,20 @@ def clasificar_skus(vector_demanda_sku, config):
     return agrupar_skus_en_clases(vector_demanda_sku, config["vector_proporcion_skus_por_clase"])
 
 
-def construir_zonificacion(matriz_tiempos, vector_espacio_por_etiqueta, vector_orden_etiquetas):
+def clasificar_skus_activos(vector_demanda_sku, vector_activo, config):
+    # Clase de cada SKU que existe según el criterio de la configuración, y 0 en los SKU que no existen ese día
+    vector_demanda = np.asarray(vector_demanda_sku, dtype=float)
+    vector_activo = np.asarray(vector_activo, dtype=bool)
+    vector_clase = np.zeros(len(vector_demanda), dtype=int)
+    vector_clase[vector_activo] = clasificar_skus(vector_demanda[vector_activo], config)
+    return vector_clase
+
+
+def construir_zonificacion(matriz_tiempos, vector_espacio, vector_etiquetas):
     # Reparte las celdas en zonas contiguas, de las más cercanas (menor tiempo) a las más lejanas
     # matriz_tiempos: tiempo de viaje a cada celda, con la forma de la estantería
-    # vector_espacio_por_etiqueta: espacio que necesita cada etiqueta (clase o SKU), indexado por etiqueta - 1, no hace falta que sume 1
-    # vector_orden_etiquetas: etiquetas en el orden en que reciben las celdas más cercanas
+    # vector_etiquetas: etiquetas (clase o SKU) en el orden en que reciben las celdas más cercanas
+    # vector_espacio: espacio que necesita cada etiqueta, en el mismo orden que vector_etiquetas, no hace falta que sume 1
     # Cada etiqueta recibe al menos un canal. Devuelve una matriz con la etiqueta de cada celda
 
     escalar_cantidad_celdas = matriz_tiempos.size
@@ -84,13 +93,12 @@ def construir_zonificacion(matriz_tiempos, vector_espacio_por_etiqueta, vector_o
     # Las zonas se reparten por canales completos (todas las capas de un canal pertenecen a la misma etiqueta)
     # Así una frontera entre zonas nunca deja el fondo de un canal detrás del frente de otro, lo que obligaría a reubicar
     escalar_capas = matriz_tiempos.shape[2]
-    vector_canales_por_etiqueta = repartir_entero(escalar_cantidad_celdas // escalar_capas, vector_espacio_por_etiqueta, escalar_minimo=1)
+    vector_canales_por_etiqueta = repartir_entero(escalar_cantidad_celdas // escalar_capas, vector_espacio, escalar_minimo=1)
     vector_celdas_por_etiqueta = vector_canales_por_etiqueta * escalar_capas
 
     vector_zonificacion = np.zeros(escalar_cantidad_celdas, dtype=int)
     escalar_inicio = 0
-    for escalar_etiqueta in vector_orden_etiquetas:
-        escalar_cantidad = vector_celdas_por_etiqueta[escalar_etiqueta - 1]
+    for escalar_etiqueta, escalar_cantidad in zip(vector_etiquetas, vector_celdas_por_etiqueta):
         vector_zonificacion[vector_orden_celdas[escalar_inicio:escalar_inicio + escalar_cantidad]] = escalar_etiqueta
         escalar_inicio += escalar_cantidad
 

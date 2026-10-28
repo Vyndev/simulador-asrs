@@ -6,7 +6,7 @@ import random as rnd
 import numpy as np
 
 from asrs.control.controlador_grua import ControladorGrua
-from asrs.politicas.zonificacion import clasificar_skus
+from asrs.politicas.zonificacion import clasificar_skus, clasificar_skus_activos
 from asrs.simulacion.simulacion import Simulacion
 
 
@@ -19,19 +19,24 @@ def _rango_por_demanda(vector_demanda):
 
 def vectores_por_sku(instancia_simulacion, config):
     # Demanda, clase y ranking de rotación de cada SKU que usa la animación para colorear, indexados por SKU - 1
-    # Con un escenario generado el SKU es el número de su posición del surtido y la altura de su curva es aleatoria: lo que las políticas ven
-    # es la popularidad móvil del día 0, así que se ordena y se agrupa con ella. Con datos reales se conserva la demanda de la configuración
+    # Con un escenario generado el SKU es el número de su producto y la altura de su curva es aleatoria: lo que las políticas ven
+    # es la popularidad móvil del día 0 y qué SKU existen, así que se ordena y se agrupa con ellos. Con datos reales se conserva la demanda de la configuración
     vector_demanda = np.asarray(config["vector_demanda_sku"], dtype=float)
+    vector_clase = clasificar_skus(vector_demanda, config)
     instancia_escenario = instancia_simulacion.escenario_demanda
     if instancia_escenario is not None:
         vector_popularidad = np.asarray(instancia_escenario.popularidad(0), dtype=float)
-        # Si no hay recuperaciones en la ventana no se puede repartir y se usa la demanda de la configuración, como hacen las políticas
-        if vector_popularidad.sum() > 0:
-            vector_demanda = vector_popularidad / vector_popularidad.sum()
+        vector_activo = np.asarray(instancia_escenario.activos(0), dtype=bool)
+        # Si no hay recuperaciones en la ventana no se puede repartir y se reparte lo mismo entre los SKU que existen, como hacen las políticas
+        vector_demanda = vector_popularidad if vector_popularidad[vector_activo].sum() > 0 else vector_activo.astype(float)
+        vector_demanda = vector_demanda / vector_demanda.sum()
+        # Los SKU que aún no existen se pintan como la clase de menor demanda, que es la que reciben las políticas
+        vector_clase = clasificar_skus_activos(vector_demanda, vector_activo, config)
+        vector_clase[vector_clase == 0] = vector_clase.max()
     return {
         "demanda_sku": [round(float(escalar), 6) for escalar in vector_demanda],
         # Clase de cada SKU según la agrupación de la política basada en clases, solo para colorear la animación
-        "clase_sku": [int(escalar) for escalar in clasificar_skus(vector_demanda, config)],
+        "clase_sku": [int(escalar) for escalar in vector_clase],
         # Posición de cada SKU en el ranking de rotación (0 = el más demandado)
         "rango_sku": [int(escalar) for escalar in _rango_por_demanda(vector_demanda)],
     }
@@ -106,7 +111,7 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         "deceleracion": [float(escalar) for escalar in config["vector_deceleracion_grua"]],
         "posicion": [float(escalar) for escalar in config["vector_posicion_estanteria"]],
         "centro": [float(escalar) for escalar in config["vector_centro_celda_estanteria"]],
-        "skus": int(config["escalar_numero_skus"]),
+        "skus": len(vector_replicas[0]["demanda_sku"]) if vector_replicas else int(config["escalar_numero_skus"]),
         # Demanda, clase y ranking de rotación de la primera réplica, que es la que anima la página (la plantilla lee estas claves)
         **(vectores_por_sku(instancia_simulacion, config) if not vector_replicas else
            {txt_clave: vector_replicas[0][txt_clave] for txt_clave in ("demanda_sku", "clase_sku", "rango_sku")}),
