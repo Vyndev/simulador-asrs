@@ -29,6 +29,7 @@ def cargar_configuracion():
         "vector_cotas_estanteria": np.array([1.67, 1.1, 1.2]), # (alto de fila, ancho de columna, profundid de celda), 30 m de altura en 18 niveles, bahía de 1,1 m por 1,2 m
         "vector_centro_celda_estanteria": np.array([0.5, 0.5, 0.5]), # (% verical, % horizontal, % profundidad), representa un traslación del punto de referencia dentro de la celda
         "escalar_nivel_ocupacion": 0.85, # Porcentaje de la estatería que esta ocupada, intervalo [0, 1]
+        "booleano_minimizacion_varianza": True, # Regla de minimización de varianza (Lehmann y Hußmann, 2023): entre las celdas equivalentes se elige la libre más profunda; sin ella, una al azar
         "texto_perfil_inventario": "eoq", # Cuánto inventario tiene cada SKU: 'eoq' (lote económico, crece con la raíz de la demanda) o 'demanda' (proporcional)
         "escalar_separacion_riel_grua": 0, # Unidades de separación entre la cara frontal de la estantería y el riel de la grúa
         "vector_velocidad_grua": np.array([1, 1.5, 0.7]), #(Velocidad en filas, velocidad en columnas, velocidad a lo largo de canales)
@@ -160,6 +161,9 @@ def config_desde_json(diccionario):
     if datos["texto_perfil_inventario"] not in PERFILES_INVENTARIO:
         raise ValueError(f"Perfil de inventario: debe ser {' o '.join(repr(p) for p in PERFILES_INVENTARIO)}.")
     config["texto_perfil_inventario"] = datos["texto_perfil_inventario"]
+    if not isinstance(datos["booleano_minimizacion_varianza"], bool):
+        raise ValueError("Minimización de varianza: debe ser verdadero o falso.")
+    config["booleano_minimizacion_varianza"] = datos["booleano_minimizacion_varianza"]
     config["escalar_separacion_riel_grua"] = _numero(datos["escalar_separacion_riel_grua"], "Separación del riel", minimo=0, maximo=100)
     config["vector_velocidad_grua"] = np.array(_vector(datos["vector_velocidad_grua"], 3, "Velocidad de la grúa", minimo=0, minimo_estricto=True, maximo=1000), dtype=float)
     config["vector_aceleracion_grua"] = np.array(_vector(datos["vector_aceleracion_grua"], 3, "Aceleración de la grúa", minimo=0, maximo=1000), dtype=float)

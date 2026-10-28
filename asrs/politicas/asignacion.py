@@ -3,8 +3,9 @@
 Una política de asignación decide en qué celda libre se coloca un ítem. Se usa tanto para almacenar
 como para reubicar: reubicar es almacenar un ítem que ya está en la estantería, desde la posición actual de la grúa.
 
-Todas las políticas aplican la regla de minimización de varianza: entre las celdas que la política considera
+Las políticas aplican por defecto la regla de minimización de varianza: entre las celdas que la política considera
 igual de buenas, se prefiere la libre más profunda, de modo que los canales se llenan desde el fondo.
+Con booleano_minimizacion_varianza en falso no se prefiere ninguna capa: entre las equivalentes se elige una al azar.
 """
 import random as rnd
 
@@ -103,7 +104,9 @@ class PoliticaAsignacion:
         matriz_indices = matriz_indices[vector_valores == vector_valores.min()]
 
         # Regla de minimización de varianza: entre las equivalentes, la libre más profunda (índice de capa menor)
-        matriz_indices = matriz_indices[matriz_indices[:, 2] == matriz_indices[:, 2].min()]
+        # Sin ella no se prefiere ninguna capa y todas las equivalentes quedan en empate
+        if self.config.get("booleano_minimizacion_varianza", True):
+            matriz_indices = matriz_indices[matriz_indices[:, 2] == matriz_indices[:, 2].min()]
 
         # Si aún hay empate se desempata al azar
         return tuple(matriz_indices[rnd.randrange(len(matriz_indices))])

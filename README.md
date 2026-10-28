@@ -62,6 +62,7 @@ La lista de tareas generada sigue el modelo de la sección 6.2.3 del capítulo 6
 | `escalar_dias_calentamiento` | 30 | Días de prehistoria antes del año evaluado |
 | `escalar_techo_ocupacion` | 0,95 | Techo de ocupación de la estantería |
 | `escalar_dias_replanificacion` | 30 | Periodo de las políticas replanificadas |
+| `booleano_minimizacion_varianza` | `True` | Regla de minimización de varianza: entre las celdas equivalentes se elige la libre más profunda. Con `False` se elige una al azar, y la política aleatoria sortea cualquier celda libre accesible en vez de un canal |
 
 **Salidas nuevas.** `resultados_simulacion.csv` suma dos columnas, `Cant_RetirosFinCiclo` y `TiempoTotal_RetirosFinCiclo`: los retiros de fin de ciclo se cuentan además como recuperaciones, y su tiempo ya está incluido en el de recuperación. `resultados_escenario.csv` tiene una fila por réplica con `semilla`, `demanda_no_atendida`, `lotes_aplazados`, `retiros`, `lanzamientos`, `ocupacion_media`, `ocupacion_minima`, `ocupacion_maxima`, `participacion_top20_media`, `sigma_alturas`, `dias_operacion`, `productos` (SKU distintos que existen), `surtido_medio`, `surtido_minimo` y `surtido_maximo`. `retiros` cuenta tareas de retiro (una por unidad retirada), no productos; `lanzamientos` cuenta productos nacidos en la operación.
 
@@ -72,6 +73,21 @@ La lista de tareas generada sigue el modelo de la sección 6.2.3 del capítulo 6
 - Con datos reales no hay escenario, así que las variantes replanificadas se comportan exactamente igual que las de plan fijo.
 - La página web envía siempre la clave del techo (0,95): con origen generado rechaza ocupaciones iguales o mayores al 95 %. Su lista de políticas sigue mostrando solo las cinco originales.
 - Con una lista generada, en la página el campo "% almacenar" se ignora (la mezcla es un resultado del modelo) y "Sesgo σ (Hausman)" es ahora la concentración objetivo 0,2^σ del 20 % de SKUs más demandados.
+
+## Capa del agente: perfil de SKU y celdas candidatas
+
+El paquete `asrs/agente/` es lo que el agente de aprendizaje observa; no cambia la simulación. Se apoya en dos datos que el escenario conserva: las recuperaciones de demanda por SKU y día (`escenario.recuperaciones(desde, hasta)`, sin los retiros de fin de ciclo, con días de prehistoria negativos) y el día de la primera llegada de cada SKU (`escenario.vector_dia_primera_llegada`: -10⁹ si ya tenía existencias el día 0).
+
+- **`perfil.py`.** `perfil_de_skus(escenario, día)` da, por SKU y solo con días anteriores al dado, el nivel ln(1 + r) con r la tasa por día dentro de su historia, la tendencia (tasa de los últimos 15 días frente a los 15 anteriores) y los días de historia acotados a la ventana de 30 días y divididos entre ella. Con `escalar_duracion_ciclo` añade la edad real como cuarta columna, la variable extra de la ablación.
+- **`candidatos.py`.** `celdas_candidatas(estantería, tiempos al E/S, perfiles, restringido)` lista las celdas libres y accesibles con sus características: tiempo al E/S, capa, celdas libres del canal, si el fondo quedaría inaccesible, si la unidad de atrás quedaría bloqueada y el perfil de esa unidad. En el modo restringido solo ofrece la celda más profunda de cada canal, que es la que elige la regla de minimización de varianza; en el libre ofrece todas.
+- **`scripts/separabilidad_perfil.py`.** Mide qué tan bien separa el perfil a un SKU creciente de uno en declive. Con nivel y tendencia acierta 0,95 en semillas de prueba y con la edad real 1,00; el nivel solo no distingue (0,53).
+
+**Por qué se diseñó así (deducciones).**
+1. El surtido es abierto y el SKU no se reutiliza, así que una entrada con un elemento por SKU cambiaría de tamaño y la identidad no serviría para un SKU nuevo: el agente observa el perfil, que sí se repite entre SKU.
+2. La popularidad tiene cola pesada (concentración de Hausman): el nivel usa ln(1 + r). Un SKU nuevo tiene la ventana incompleta: r se mide dentro de su historia. La curva de Bass es simétrica, así que un SKU al lanzamiento y otro al cierre tienen el mismo nivel y solo la tendencia los distingue (el script de separabilidad lo mide). La historia se acota a la ventana W porque con ella completa no informa sobre la confianza de la tasa y sin tope revelaría la edad real, que el supuesto S7 excluye.
+3. Con minimización de varianza cada canal ofrece una sola celda, la libre accesible más profunda, así que puntuar celdas candidatas mantiene la acción independiente del tamaño de la estantería y del surtido. El costo de una asignación viene del bloqueo, por eso cada candidata incluye el perfil de la unidad que quedaría detrás.
+4. Las heurísticas usan la minimización de varianza como desempate. Un agente libre tendría más libertad que ellas: el modo restringido permite compararlo en igualdad de reglas y el libre mide el valor de la libertad adicional. Por eso la clave `booleano_minimizacion_varianza` permite evaluar las heurísticas con y sin la regla.
+5. Con la configuración por defecto nada cambia: los tiempos de cuatro corridas de un año coinciden exactamente con los del piloto de réplicas.
 
 ## Herramienta visual
 

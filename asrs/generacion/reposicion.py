@@ -6,6 +6,7 @@ import numpy as np
 from asrs.generacion.ciclo_vida import ampliar_surtido, crear_surtido, dias_de_nacimientos, participacion_superior
 from asrs.generacion.escenario import EscenarioDemanda
 
+SIN_HISTORIA_PREVIA = -10 ** 9 # Primera llegada de un producto que ya tenía existencias el día 0 de la prehistoria: su historia es completa
 DIAS_SIN_AVANCE = 730 # Días seguidos de operación sin tareas nuevas tras los que el generador se declara bloqueado
 
 
@@ -111,6 +112,7 @@ class _GeneradorEscenario:
         self.lista_tupla_almacenar += [(0, escalar_producto + 1) for escalar_producto in range(escalar_antes, self.escalar_n)]
         self.lista_tupla_recuperar += [(1, escalar_producto + 1) for escalar_producto in range(escalar_antes, self.escalar_n)]
         self.vector_inventario += [0] * escalar_nuevos
+        self.vector_primera_llegada = np.concatenate([self.vector_primera_llegada, np.full(escalar_nuevos, np.inf)])
         self.preparar_demanda(self.escalar_dias_nacimientos + self.escalar_margen)
         return escalar_nuevos
 
@@ -129,6 +131,8 @@ class _GeneradorEscenario:
         escalar_cantidad = int(min(escalar_cantidad, self.escalar_limite - len(self.lista_tareas)))
         escalar_inicio = len(self.lista_tareas)
         if escalar_actividad == 0:
+            if np.isinf(self.vector_primera_llegada[escalar_producto]):
+                self.vector_primera_llegada[escalar_producto] = self.escalar_dia_tarea # Día de operación, negativo en la prehistoria
             self.lista_tareas.extend([self.lista_tupla_almacenar[escalar_producto]] * escalar_cantidad)
             self.lista_ocupacion.extend(range(self.escalar_total + 1, self.escalar_total + escalar_cantidad + 1))
             self.escalar_total += escalar_cantidad
@@ -234,6 +238,10 @@ class _GeneradorEscenario:
                                   for escalar_lote, booleano_activo in zip(self.vector_lote, vector_activo_inicial)]
         self.escalar_total = sum(self.vector_inventario)
         self.lista_pendientes = []
+        # Primera llegada de cada producto, en días de operación: los que existen el día 0 tienen historia completa y los demás, infinito hasta que entran
+        self.vector_primera_llegada = np.where(np.array(self.vector_inventario) > 0, float(SIN_HISTORIA_PREVIA), np.inf)
+        # Recuperaciones de demanda de cada producto por día del generador (calentamiento y operación), lo que observa el almacén de la demanda pasada
+        lista_recuperaciones_dia = []
         # Recuperaciones de demanda de cada producto en los últimos W días, en un arreglo circular por día
         matriz_historia = np.zeros((max(self.escalar_ventana, 1), self.escalar_n), dtype=np.int64)
         lista_popularidad = []
@@ -277,16 +285,17 @@ class _GeneradorEscenario:
                 self.recuperar_dia(escalar_dia)
                 # Fin del día: sus recuperaciones de demanda reemplazan las del día d - W en el arreglo circular
                 matriz_historia[escalar_dia % matriz_historia.shape[0]] = self.vector_hoy
+                lista_recuperaciones_dia.append(np.array(self.vector_hoy, dtype=np.int64))
                 if booleano_operacion:
                     escalar_dias_sin_avance = escalar_dias_sin_avance + 1 if len(self.lista_tareas) == escalar_largo_previo else 0
                     if escalar_dias_sin_avance >= DIAS_SIN_AVANCE:
                         raise RuntimeError("Escenario de demanda: la lista de operación no avanza, ningún lote cabe bajo el techo.")
                 escalar_dia += 1
         except _ListaCompleta:
-            pass
-        return self.escenario(lista_popularidad)
+            lista_recuperaciones_dia.append(np.array(self.vector_hoy, dtype=np.int64)) # El día en que termina la lista queda a medias
+        return self.escenario(lista_popularidad, lista_recuperaciones_dia)
 
-    def escenario(self, lista_popularidad):
+    def escenario(self, lista_popularidad, lista_recuperaciones_dia):
         # Arma el escenario y su resumen. La ocupación se mide con el total después de cada tarea de la operación
         escalar_dias_operacion = len(lista_popularidad)
         matriz_popularidad = np.zeros((escalar_dias_operacion, self.escalar_n), dtype=np.int64)
@@ -319,10 +328,14 @@ class _GeneradorEscenario:
             "surtido_minimo": int(vector_activos.min()),
             "surtido_maximo": int(vector_activos.max()),
         }
+        matriz_recuperaciones_dia = np.zeros((len(lista_recuperaciones_dia), self.escalar_n), dtype=np.int64)
+        for escalar_dia, vector_recuperaciones in enumerate(lista_recuperaciones_dia):
+            matriz_recuperaciones_dia[escalar_dia, :len(vector_recuperaciones)] = vector_recuperaciones
         vector_inventario_inicial = np.zeros(self.escalar_n, dtype=int) # Los productos agregados después del calentamiento no tenían unidades
         vector_inventario_inicial[:len(self.vector_inventario_inicial)] = self.vector_inventario_inicial
         return EscenarioDemanda(self.lista_llenado, self.lista_tareas, self.lista_dias, self.conjunto_retiros,
-                                matriz_popularidad, vector_inventario_inicial, dic_resumen, vector_dia_lanzamiento, vector_dia_cierre)
+                                matriz_popularidad, vector_inventario_inicial, dic_resumen, vector_dia_lanzamiento, vector_dia_cierre,
+                                matriz_recuperaciones_dia, self.vector_primera_llegada.copy(), self.escalar_calentamiento)
 
 
 def generar_escenario(config, generador):

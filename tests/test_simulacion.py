@@ -432,11 +432,43 @@ class PruebasPoliticas(unittest.TestCase):
             politica = crear_politica(clave, E, G, P, simulacion.config)
             self.assertEqual(politica.asignar(1)[2], 0, clave)
 
+    def test_sin_minimizacion_de_varianza_no_se_prefiere_el_fondo(self):
+        # Sin la regla las celdas equivalentes quedan en empate: en una estantería vacía, con muchas asignaciones al azar,
+        # aparecen tanto la capa más profunda como la delantera
+        simulacion = Simulacion(dict(cargar_configuracion(), booleano_minimizacion_varianza=False))
+        E, G, P = simulacion.crearInstancias()
+        for clave in ('mas_cercana_es', 'mas_cercana_grua', 'aleatoria'):
+            politica = crear_politica(clave, E, G, P, simulacion.config)
+            random.seed(7)
+            vector_capas = {politica.asignar(1)[2] for _ in range(60)}
+            self.assertEqual(vector_capas, {0, 1}, clave)
+
+    def test_aleatoria_sin_minimizacion_de_varianza_sortea_cualquier_celda(self):
+        # Con la regla se sortea el canal y se usa su fondo; sin ella se sortea la celda, así que se usan las dos capas de un canal
+        simulacion = Simulacion(dict(cargar_configuracion(), booleano_minimizacion_varianza=False))
+        E, G, P = simulacion.crearInstancias()
+        politica = crear_politica('aleatoria', E, G, P, simulacion.config)
+        random.seed(3)
+        matriz_vista = {politica.asignar(1) for _ in range(2000)}
+        self.assertGreater(len(matriz_vista), 400)       # sobre 720 celdas posibles, no solo los 360 fondos
+        self.assertTrue(any(tupla[2] == 1 for tupla in matriz_vista))
+
+    def test_la_regla_de_varianza_es_un_booleano_en_la_configuracion(self):
+        from asrs.config import config_desde_json
+        self.assertTrue(cargar_configuracion()["booleano_minimizacion_varianza"])
+        self.assertFalse(config_desde_json({"booleano_minimizacion_varianza": False})["booleano_minimizacion_varianza"])
+        with self.assertRaises(ValueError):
+            config_desde_json({"booleano_minimizacion_varianza": "no"})
+
     def test_mas_cercana_al_es_elige_el_canal_mas_cercano(self):
         simulacion = Simulacion()
         E, G, P = simulacion.crearInstancias()
         politica = crear_politica('mas_cercana_es', E, G, P, simulacion.config)
-        self.assertEqual(politica.asignar(1), (0, 0, 0))
+        # Varias filas de la primera columna empatan en tiempo desde el E/S (domina el eje horizontal): se elige una de ellas, en el fondo
+        celda = politica.asignar(1)
+        matriz_criterio = politica.matrizCriterio()
+        self.assertEqual(matriz_criterio[celda], matriz_criterio.min())
+        self.assertEqual(celda[1:], (0, 0))
 
     def test_politica_desconocida(self):
         simulacion = Simulacion()
