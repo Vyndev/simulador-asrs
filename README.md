@@ -5,11 +5,13 @@ Simulación de un sistema automatizado de almacenamiento y recuperación (ASRS) 
 ## Uso
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 python scripts/main.py
 ```
 
-Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica, política de asignación y política de recuperación. Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
+`pip install -e .` instala el paquete `asrs` y sus dependencias (`numpy`, `pandas`); `pip install -r requirements.txt` hace lo mismo. Con `pip install -e .[rl]` se añaden las librerías de aprendizaje por refuerzo.
+
+Genera `salidas/resultados_simulacion.csv` (separador `;`) con una fila por réplica, política de asignación y política de recuperación. Todo lo que generan los scripts va a `salidas/`, que git ignora. Para repetir un experimento, guarda sus parámetros en un JSON dentro de `experimentos/` y lanza `python scripts/main.py --config experimentos/ejemplo.json` (también lo aceptan `visualizar.py`, `entrenar_rl.py` y `comparar_rl.py`). Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
 
 ## Herramienta visual
 
@@ -42,7 +44,7 @@ La simulación se ejecuta en Python con el mismo código que `scripts/main.py`, 
 
 Opciones: `--puerto N` (por defecto 8765) y `--sin-abrir` (no abre el navegador).
 
-**Archivo autónomo.** Sin `--servir`, `python scripts/visualizar.py --abrir` genera `visualizacion.html`, que reproduce la carrera con la configuración de `asrs/config.py` y no necesita servidor (opciones `--replicas`, `--semilla`, `--salida`). La versión 2D anterior está en `legado/plantilla_visualizacion_2d.html`.
+**Archivo autónomo.** Sin `--servir`, `python scripts/visualizar.py --abrir` genera `salidas/visualizacion.html`, que reproduce la carrera con la configuración de `asrs/config.py` y no necesita servidor (opciones `--replicas`, `--semilla`, `--salida`). La versión 2D anterior está en `legado/plantilla_visualizacion_2d.html`.
 
 Pruebas:
 
@@ -132,9 +134,12 @@ asrs/
     entrenamiento.py              Creación de DQN y PPO y entrenamiento con entornos en paralelo
     entrenamiento_vivo.py         Proceso que entrena y emite su estado como JSON
     evaluacion.py  comparacion.py Evaluación y tabla comparativa con diferencias pareadas
-tests/                          Pruebas de regresión
-docs/                           Planes de implementación con fecha
+tests/                          Pruebas de regresión, una por módulo (test_dominio, test_politicas, ...); auxiliar.py tiene lo común
+experimentos/                   Configuraciones de experimentos en JSON, para repetir cada resultado
+salidas/                        Lo generado (CSV, HTML, modelos); lo ignora git
+docs/                           Planes de implementación con fecha y registro de decisiones (decisiones.md)
 legado/                         Versiones previas en un solo archivo
+pyproject.toml                  Paquete asrs, dependencias y extra [rl]
 ```
 
 Dependencias entre capas (solo hacia abajo): `simulacion` → `control` → `politicas` → `dominio` / `metricas`. Para añadir una política: crear una subclase de `PoliticaAsignacion` que implemente `matrizCriterio`, registrarla en `politicas/registro.py` y añadir su clave a `vector_politicas_asignacion`.
@@ -166,7 +171,7 @@ Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de
 |---|---|
 | Entrenar y comparar de una vez | `python scripts/entrenar_rl.py --algoritmo ambos --pasos 20000` |
 | Entrenar viendo la red por dentro | `python scripts/visualizar.py --servir` y la vista **Entrenamiento** |
-| Comparar los modelos ya guardados (`modelos/`) con un número fiable de estados | `python scripts/comparar_rl.py --pruebas 30 --csv resultados_rl.csv` |
+| Comparar los modelos ya guardados (`salidas/modelos/`) con un número fiable de estados | `python scripts/comparar_rl.py --pruebas 30 --csv resultados_rl.csv` (se guarda en `salidas/`) |
 
 El entrenamiento usa un entorno por núcleo (`--entornos`, por defecto los núcleos menos uno), porque lo más lento es la simulación y no las redes: con 7 entornos PPO pasó de 146 a unos 280 pasos por segundo y DQN llegó a unos 235. `--dispositivo cuda` entrena las redes en la tarjeta gráfica, pero hace falta PyTorch con CUDA (aquí se instaló el de CPU) y con redes tan pequeñas la ganancia es mínima.
 

@@ -4,6 +4,7 @@ import csv
 import numpy as np
 
 from asrs.rl.entrenamiento import CLASICAS
+from asrs.utilidades import ruta_salida
 
 
 def filas_comparacion(dic_resultados):
@@ -35,7 +36,7 @@ def tabla(dic_resultados):
 
 def guardar_csv(dic_resultados, txt_ruta):
     _, vector_filas = filas_comparacion(dic_resultados)
-    with open(txt_ruta, "w", encoding="utf-8", newline="") as archivo:
+    with open(ruta_salida(txt_ruta), "w", encoding="utf-8", newline="") as archivo:
         escritor = csv.DictWriter(archivo, fieldnames=list(vector_filas[0].keys()), delimiter=";")
         escritor.writeheader()
         escritor.writerows(vector_filas)

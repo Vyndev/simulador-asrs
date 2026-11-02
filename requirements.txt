@@ -1,2 +1,2 @@
-numpy
-pandas
+# Instala el paquete en modo editable con las dependencias del simulador (están en pyproject.toml)
+-e .

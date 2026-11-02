@@ -12,7 +12,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # raíz del proyecto, para importar asrs
 import argparse
 
-from asrs.config import cargar_configuracion
+from asrs.config import cargar_configuracion, cargar_configuracion_archivo
+from asrs.utilidades import DIR_MODELOS
 from asrs.rl import comparacion
 from asrs.rl.entrenamiento import CLASICAS, DESPLAZAMIENTO_PRUEBA, SEMILLA_BASE
 
@@ -22,6 +23,7 @@ def main():
     analizador.add_argument("--pruebas", type=int, default=30, help="estados de prueba (cuantos más, más fiable)")
     analizador.add_argument("--tareas", type=int, default=0, help="tareas por episodio (0 usa el 10 %% de las celdas); debe coincidir con las del entrenamiento")
     analizador.add_argument("--estados", type=int, default=16, help="estados de entrenamiento con los que se entrenó el agente")
+    analizador.add_argument("--config", default="", help="experimento en JSON (ver experimentos/); sin él se usa asrs/config.py")
     analizador.add_argument("--csv", default="", help="guarda la tabla en un CSV")
     argumentos = analizador.parse_args()
 
@@ -30,7 +32,7 @@ def main():
     from asrs.rl.entorno import EntornoAsignacion
     from asrs.rl.evaluacion import evaluar_agente, evaluar_politica_clasica
 
-    config = cargar_configuracion()
+    config = cargar_configuracion_archivo(argumentos.config) if argumentos.config else cargar_configuracion()
     if argumentos.tareas:
         config["escalar_largo_secuencia"] = argumentos.tareas
     vector_pruebas = list(range(DESPLAZAMIENTO_PRUEBA, DESPLAZAMIENTO_PRUEBA + argumentos.pruebas))
@@ -41,7 +43,7 @@ def main():
 
     for txt_algoritmo, clase in (("dqn", DQN), ("ppo", MaskablePPO)):
         for txt_sufijo in ("", "_vivo"):
-            txt_ruta = os.path.join("modelos", txt_algoritmo + txt_sufijo + ".zip")
+            txt_ruta = os.path.join(DIR_MODELOS, txt_algoritmo + txt_sufijo + ".zip")
             if os.path.exists(txt_ruta):
                 try:
                     modelo = clase.load(txt_ruta, device="cpu")
@@ -49,7 +51,7 @@ def main():
                 except Exception as error:
                     print(f"Se omite {txt_ruta}: no es compatible con el entorno actual ({type(error).__name__}). Vuelve a entrenarlo.")
     if len(dic_resultados) == len(CLASICAS):
-        print("No hay modelos entrenados en la carpeta modelos/: ejecuta primero entrenar_rl.py o la vista Entrenamiento.\n")
+        print("No hay modelos entrenados en la carpeta salidas/modelos/: ejecuta primero entrenar_rl.py o la vista Entrenamiento.\n")
     print(comparacion.tabla(dic_resultados))
     if argumentos.csv:
         comparacion.guardar_csv(dic_resultados, argumentos.csv)

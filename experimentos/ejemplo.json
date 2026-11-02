@@ -1,0 +1,6 @@
+{
+  "vector_configuracion_estanteria": [12, 16, 2],
+  "escalar_nivel_ocupacion": 0.8,
+  "escalar_numero_skus": 20,
+  "escalar_semilla": 7
+}

@@ -1,5 +1,21 @@
-"""Utilidades numéricas compartidas."""
+"""Utilidades compartidas: rutas de salida y operaciones numéricas."""
+import os
+
 import numpy as np
+
+RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DIR_SALIDAS = os.path.join(RAIZ_PROYECTO, "salidas")  # todo lo que generan los scripts va aquí (ignorado por git)
+DIR_MODELOS = os.path.join(DIR_SALIDAS, "modelos")
+
+
+def ruta_salida(txt_ruta):
+    # Un nombre suelto ("resultados.csv") se guarda en salidas/; una ruta con carpeta o absoluta se respeta tal cual
+    if os.path.isabs(txt_ruta) or os.path.dirname(txt_ruta):
+        txt_destino = txt_ruta
+    else:
+        txt_destino = os.path.join(DIR_SALIDAS, txt_ruta)
+    os.makedirs(os.path.dirname(os.path.abspath(txt_destino)), exist_ok=True)
+    return txt_destino
 
 
 def repartir_entero(escalar_total, vector_proporciones, escalar_minimo=0):
