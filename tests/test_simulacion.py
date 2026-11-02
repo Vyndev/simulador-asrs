@@ -122,6 +122,34 @@ class PruebasConfiguracion(unittest.TestCase):
                 config_desde_json(caso)
 
 
+class PruebasExperimentos(unittest.TestCase):
+    def test_archivo_json_completa_con_valores_por_defecto(self):
+        import json
+        import os
+        import tempfile
+        from asrs.config import cargar_configuracion_archivo
+        with tempfile.TemporaryDirectory() as carpeta:
+            ruta = os.path.join(carpeta, "experimento.json")
+            with open(ruta, "w", encoding="utf-8") as archivo:
+                json.dump({"escalar_numero_skus": 12}, archivo)
+            config = cargar_configuracion_archivo(ruta)
+        self.assertEqual(config["escalar_numero_skus"], 12)
+        self.assertEqual(config["escalar_semilla"], cargar_configuracion()["escalar_semilla"])
+
+    def test_ejemplo_de_experimentos_es_valido(self):
+        import os
+        from asrs.config import cargar_configuracion_archivo
+        from asrs.utilidades import RAIZ_PROYECTO
+        config = cargar_configuracion_archivo(os.path.join(RAIZ_PROYECTO, "experimentos", "ejemplo.json"))
+        self.assertEqual(config["vector_configuracion_estanteria"].tolist(), [12, 16, 2])
+
+    def test_ruta_salida(self):
+        import os
+        from asrs.utilidades import DIR_SALIDAS, ruta_salida
+        self.assertEqual(ruta_salida("x.csv"), os.path.join(DIR_SALIDAS, "x.csv"))
+        self.assertEqual(ruta_salida(os.path.join(DIR_SALIDAS, "sub", "y.csv")), os.path.join(DIR_SALIDAS, "sub", "y.csv"))
+
+
 class PruebasEstadistica(unittest.TestCase):
     def test_resumen_con_victorias_pareadas(self):
         from asrs.simulacion.estadistica import resumir
