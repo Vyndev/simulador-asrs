@@ -71,6 +71,21 @@ class PruebasPoliticas(unittest.TestCase):
             politica = crear_politica(clave, E, G, P, simulacion.config)
             self.assertEqual(politica.asignar(1)[2], 0, clave)
 
+    def test_minimizacion_de_varianza_llena_todos_los_fondos_antes_que_los_frentes(self):
+        # Lerher et al. (2010) y Lehmann y Hußmann (2023): hasta el 50 % de ocupación solo se usa la capa más profunda,
+        # así no hay reubicaciones; el frente de un canal no se ocupa mientras quede un fondo libre en otro canal
+        for clave in ('aleatoria', 'mas_cercana_es', 'mas_cercana_grua'):
+            simulacion = Simulacion()
+            E, G, P = simulacion.crearInstancias()
+            politica = crear_politica(clave, E, G, P, simulacion.config)
+            escalar_canales = E.matriz_contenedor_items.shape[0] * E.matriz_contenedor_items.shape[1]
+            for _ in range(escalar_canales):
+                celda = politica.asignar(1)
+                self.assertEqual(celda[2], 0, clave)
+                E.matriz_contenedor_items[celda] = Item(1)
+            # Con todos los fondos ocupados, el siguiente va a un frente
+            self.assertEqual(politica.asignar(1)[2], 1, clave)
+
     def test_mas_cercana_al_es_elige_el_canal_mas_cercano(self):
         simulacion = Simulacion()
         E, G, P = simulacion.crearInstancias()

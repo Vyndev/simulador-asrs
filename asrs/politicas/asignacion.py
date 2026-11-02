@@ -3,8 +3,9 @@
 Una política de asignación decide en qué celda libre se coloca un ítem. Se usa tanto para almacenar
 como para reubicar: reubicar es almacenar un ítem que ya está en la estantería, desde la posición actual de la grúa.
 
-Las políticas clásicas aplican siempre la regla de minimización de varianza (Lehmann y Hußmann, 2023): entre las celdas
-que la política considera igual de buenas, se prefiere la libre más profunda, de modo que los canales se llenan desde el fondo.
+Las políticas clásicas aplican siempre la regla de minimización de varianza (Lehmann y Hußmann, 2023), que minimiza la varianza
+del llenado de los canales: primero se ocupa la capa libre más profunda de todos los canales candidatos y solo después las
+capas de adelante (Lerher et al., 2010: se llena primero la segunda profundidad). La cercanía de la política desempata dentro de la capa.
 Es una decisión interna del simulador y no se configura. El agente, en cambio, puede elegir cualquier celda libre y accesible.
 """
 import random as rnd
@@ -99,13 +100,14 @@ class PoliticaAsignacion:
         if not len(matriz_indices):
             return ()
 
-        # Se prefieren las celdas de menor valor del criterio de la política
+        # Regla de minimización de varianza: primero la capa libre más profunda (índice de capa menor) entre todas las candidatas,
+        # así todos los canales (de la zona, si la política tiene zonas) tienen su fondo ocupado antes de que se use un frente
+        # y la varianza del llenado de los canales es mínima. Es una regla fija de las políticas clásicas, no un parámetro
+        matriz_indices = matriz_indices[matriz_indices[:, 2] == matriz_indices[:, 2].min()]
+
+        # Dentro de esa capa se prefieren las celdas de menor valor del criterio de la política
         vector_valores = self.matrizCriterio(vector_posicion_referencia)[tuple(matriz_indices.T)]
         matriz_indices = matriz_indices[vector_valores == vector_valores.min()]
-
-        # Regla de minimización de varianza: entre las equivalentes, la libre más profunda (índice de capa menor)
-        # Es una regla fija de las políticas clásicas, no un parámetro
-        matriz_indices = matriz_indices[matriz_indices[:, 2] == matriz_indices[:, 2].min()]
 
         # Si aún hay empate se desempata al azar
         return tuple(matriz_indices[rnd.randrange(len(matriz_indices))])
