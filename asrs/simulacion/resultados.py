@@ -1,11 +1,13 @@
 """Escritura de resultados en CSV."""
 import csv
 
+from asrs.utilidades import ruta_salida
+
 
 def guardar_resultados_csv(resultados, ruta = 'resultados_simulacion.csv'):
 
     # Es una función de utilidad, ayuda a escribir los resultados de la simulación en un archivo CSV
-    with open(ruta, 'w', newline='') as archivo:
+    with open(ruta_salida(ruta), 'w', newline='') as archivo:
 
         # Dependiendo de la configuración regional del lector de hojas de cálculo en ciertas ocaciones el .csv no se visualiza correctamente
         # Entonces, se recomienda modificar el delimitador/delimiter según sea necesario

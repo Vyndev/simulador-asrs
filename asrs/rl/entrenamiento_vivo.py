@@ -190,8 +190,9 @@ def main():
     resultado = evaluar_agente(modelo, argumentos.algoritmo, EntornoAsignacion(config, SEMILLA_BASE, argumentos.estados), vector_pruebas)
     emitir({"tipo": "evaluacion", "clave": argumentos.algoritmo.upper(), "media": round(float(resultado["tiempos"].mean()), 1)})
     import os
-    os.makedirs("modelos", exist_ok=True)
-    modelo.save(os.path.join("modelos", argumentos.algoritmo + "_vivo"))
+    from asrs.utilidades import DIR_MODELOS
+    os.makedirs(DIR_MODELOS, exist_ok=True)
+    modelo.save(os.path.join(DIR_MODELOS, argumentos.algoritmo + "_vivo"))
     emitir({"tipo": "fin", "segundos": round(escalar_segundos, 1), "pps": round(argumentos.pasos / escalar_segundos, 1)})
 
 

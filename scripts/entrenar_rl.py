@@ -17,6 +17,7 @@ import time
 import numpy as np
 
 from asrs.config import cargar_configuracion
+from asrs.utilidades import DIR_MODELOS
 
 from asrs.rl import entrenamiento
 from asrs.rl.entrenamiento import CLASICAS, DESPLAZAMIENTO_PRUEBA, SEMILLA_BASE
@@ -75,8 +76,8 @@ def main():
     for txt_algoritmo in (("dqn", "ppo") if argumentos.algoritmo == "ambos" else (argumentos.algoritmo,)):
         print(f"Entrenando {txt_algoritmo.upper()} ({argumentos.pasos} pasos, {argumentos.entornos} entornos en paralelo, {argumentos.dispositivo})...", flush=True)
         modelo, escalar_segundos = entrenar(txt_algoritmo, config, argumentos.pasos, argumentos.estados, argumentos.semilla, argumentos.entornos, argumentos.dispositivo)
-        os.makedirs("modelos", exist_ok=True)
-        modelo.save(os.path.join("modelos", txt_algoritmo))
+        os.makedirs(DIR_MODELOS, exist_ok=True)
+        modelo.save(os.path.join(DIR_MODELOS, txt_algoritmo))
         print(f"  entrenamiento: {escalar_segundos:.0f} s ({argumentos.pasos / escalar_segundos:.0f} pasos/s)")
         entorno = EntornoAsignacion(config, SEMILLA_BASE, argumentos.estados)
         resultado = evaluar_agente(modelo, txt_algoritmo, entorno, vector_pruebas)
