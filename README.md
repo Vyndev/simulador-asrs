@@ -5,11 +5,13 @@ Simulación de un sistema automatizado de almacenamiento y recuperación (ASRS) 
 ## Uso
 
 ```bash
-pip install -r requirements.txt
-python main.py
+pip install -e .
+python scripts/main.py
 ```
 
-Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica, política de asignación y política de recuperación, y `resultados_escenario.csv` con una fila por réplica y los indicadores de su escenario de demanda (ver "Modelo dinámico de suministro y demanda"). Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
+`pip install -e .` instala el paquete `asrs` y sus dependencias (`numpy`, `pandas`); `pip install -r requirements.txt` hace lo mismo. Todo lo que generan los scripts va a `salidas/`, que git ignora. Para repetir un experimento, guarda sus parámetros en un JSON dentro de `experimentos/` y lanza `python scripts/main.py --config experimentos/ejemplo.json` (también lo acepta `visualizar.py`).
+
+Genera `salidas/resultados_simulacion.csv` (separador `;`) con una fila por réplica, política de asignación y política de recuperación, y `salidas/resultados_escenario.csv` con una fila por réplica y los indicadores de su escenario de demanda (ver "Modelo dinámico de suministro y demanda"). Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
 
 ## Instancia por defecto
 
@@ -91,7 +93,7 @@ El paquete `asrs/agente/` es lo que el agente de aprendizaje observa; no cambia 
 ## Herramienta visual
 
 ```bash
-python visualizar.py --servir
+python scripts/visualizar.py --servir
 ```
 
 Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`, sin dependencias nuevas). Se trabaja en tres pasos, que están siempre a la vista en la barra superior junto al botón **Simular**:
@@ -123,11 +125,11 @@ Los parámetros se validan antes de ejecutar y los errores se muestran junto al 
 
 **Cómo se decide si una política es mejor.** El intervalo de confianza de cada promedio usa la t de Student con n − 1 grados de libertad (la desviación se estima con las mismas réplicas; con pocas réplicas la normal daría intervalos demasiado estrechos). Como todas las políticas corren las mismas secuencias en cada réplica, la comparación con la mejor es **pareada**: se calcula la diferencia réplica a réplica y su intervalo de confianza del 95 %. Si ese intervalo incluye el cero, la diferencia no es significativa: el veredicto dice que las políticas "quedan muy parejas" y la tabla la marca con *n. s.* Este criterio es más exigente con los datos que comparar si dos intervalos se solapan, porque descuenta la variación que comparten las políticas (la misma secuencia afecta a todas). Ver `asrs/simulacion/estadistica.py`.
 
-La simulación se ejecuta en Python con el mismo código que `main.py`, así que los resultados coinciden con el CSV para las mismas semillas. Las réplicas de la estadística corren en paralelo y la página muestra su progreso, con opción de cancelar.
+La simulación se ejecuta en Python con el mismo código que `scripts/main.py`, así que los resultados coinciden con el CSV para las mismas semillas. Las réplicas de la estadística corren en paralelo y la página muestra su progreso, con opción de cancelar.
 
 Opciones: `--puerto N` (por defecto 8765) y `--sin-abrir` (no abre el navegador).
 
-**Archivo autónomo.** Sin `--servir`, `python visualizar.py --abrir` genera `visualizacion.html`, que reproduce la carrera con la configuración de `asrs/config.py` y no necesita servidor (opciones `--replicas`, `--semilla`, `--salida`).
+**Archivo autónomo.** Sin `--servir`, `python scripts/visualizar.py --abrir` genera `salidas/visualizacion.html`, que reproduce la carrera con la configuración de `asrs/config.py` y no necesita servidor (opciones `--replicas`, `--semilla`, `--salida`).
 
 Pruebas:
 
@@ -190,7 +192,10 @@ Si no hay celda factible al reubicar, el ítem se lleva temporalmente al E/S y s
 ## Arquitectura
 
 ```
-main.py                         Punto de entrada
+scripts/
+  main.py                       Punto de entrada: ejecuta la simulación
+  visualizar.py                 Herramienta visual (--servir) o archivo autónomo
+  separabilidad_perfil.py       Mide qué tan bien separa el perfil a un SKU creciente de uno en declive
 asrs/
   config.py                     Parámetros del modelo, con validación y conversión a JSON
   metricas.py                   Conteos y tiempos (Metricas)
@@ -223,8 +228,11 @@ asrs/
     generador.py                Graba los eventos de la grúa y prepara los datos de la animación
     servidor.py                 Servidor local: sirve la página y ejecuta simulaciones como trabajos
     plantilla.html              Página con el formulario y la carrera (Three.js incluido en vendor/)
-visualizar.py                   Herramienta visual (--servir) o archivo autónomo
-tests/                          Pruebas de regresión
+tests/                          Pruebas de regresión, una por módulo (test_dominio, test_politicas, ...); auxiliar.py tiene lo común
+experimentos/                   Configuraciones de experimentos en JSON, para repetir cada resultado
+salidas/                        Lo generado (CSV, HTML); lo ignora git
+docs/                           Planes de implementación con fecha y registro de decisiones (decisiones.md)
+pyproject.toml                  Paquete asrs y sus dependencias
 ```
 
 Dependencias entre capas (solo hacia abajo): `simulacion` → `control` → `politicas` → `dominio` / `metricas`. Para añadir una política: crear una subclase de `PoliticaAsignacion` que implemente `matrizCriterio`, registrarla en `politicas/registro.py` y añadir su clave a `vector_politicas_asignacion`.

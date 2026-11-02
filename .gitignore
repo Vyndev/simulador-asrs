@@ -4,11 +4,11 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+build/
+*.egg-info/
 
-# Archivos generados al ejecutar (se regeneran con main.py y visualizar.py)
-resultados_simulacion.csv
-resultados_escenario.csv
-visualizacion.html
+# Todo lo que generan los scripts (CSV y visualizacion.html)
+salidas/
 
 # Configuración local del editor y de las vistas previas
 .claude/
@@ -16,4 +16,3 @@ visualizacion.html
 # Sistema operativo
 .DS_Store
 Thumbs.db
-

@@ -94,6 +94,13 @@ def cargar_configuracion():
     return config
 
 
+def cargar_configuracion_archivo(txt_ruta):
+    # Lee un experimento guardado en JSON: basta con poner los parámetros que cambian, el resto toma el valor por defecto
+    import json
+    with open(txt_ruta, encoding="utf-8") as archivo:
+        return config_desde_json(json.load(archivo))
+
+
 def config_a_json(config):
     # Convierte la configuración en un diccionario con tipos básicos, listo para serializar
     resultado = {}

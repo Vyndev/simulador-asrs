@@ -1,11 +1,13 @@
 """Escritura de resultados en CSV."""
 import csv
 
+from asrs.utilidades import ruta_salida
+
 
 def guardar_resultados_csv(resultados, ruta = 'resultados_simulacion.csv'):
 
     # Es una función de utilidad, ayuda a escribir los resultados de la simulación en un archivo CSV
-    with open(ruta, 'w', newline='') as archivo:
+    with open(ruta_salida(ruta), 'w', newline='') as archivo:
 
         # Dependiendo de la configuración regional del lector de hojas de cálculo en ciertas ocaciones el .csv no se visualiza correctamente
         # Entonces, se recomienda modificar el delimitador/delimiter según sea necesario
@@ -29,7 +31,7 @@ def guardar_resumen_escenarios_csv(vector_resumenes, ruta = 'resultados_escenari
 
     # Una fila por réplica con los indicadores de su escenario de demanda, las claves del resumen son las columnas
     vector_columnas = list(dict.fromkeys(txt_clave for dic_resumen in vector_resumenes for txt_clave in dic_resumen))
-    with open(ruta, 'w', newline='') as archivo:
+    with open(ruta_salida(ruta), 'w', newline='') as archivo:
         writer = csv.DictWriter(archivo, fieldnames=vector_columnas, delimiter=';')
         writer.writeheader()
         writer.writerows(vector_resumenes)
