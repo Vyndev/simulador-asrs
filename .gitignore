@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+build/
+*.egg-info/
 
 # Todo lo que generan los scripts: CSV, visualizacion.html y modelos entrenados
 salidas/
