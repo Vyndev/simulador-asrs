@@ -6,7 +6,7 @@ import random as rnd
 import numpy as np
 
 from asrs.control.controlador_grua import ControladorGrua
-from asrs.politicas.zonificacion import agrupar_skus_en_clases
+from asrs.politicas.zonificacion import clasificar_skus, clasificar_skus_activos
 from asrs.simulacion.simulacion import Simulacion
 
 
@@ -15,6 +15,31 @@ def _rango_por_demanda(vector_demanda):
     vector_rango = np.empty(len(vector_demanda), dtype=int)
     vector_rango[np.argsort(-np.asarray(vector_demanda), kind='stable')] = np.arange(len(vector_demanda))
     return vector_rango
+
+
+def vectores_por_sku(instancia_simulacion, config):
+    # Demanda, clase y ranking de rotación de cada SKU que usa la animación para colorear, indexados por SKU - 1
+    # Con un escenario generado el SKU es el número de su producto y la altura de su curva es aleatoria: lo que las políticas ven
+    # es la popularidad móvil del día 0 y qué SKU existen, así que se ordena y se agrupa con ellos. Con datos reales se conserva la demanda de la configuración
+    vector_demanda = np.asarray(config["vector_demanda_sku"], dtype=float)
+    vector_clase = clasificar_skus(vector_demanda, config)
+    instancia_escenario = instancia_simulacion.escenario_demanda
+    if instancia_escenario is not None:
+        vector_popularidad = np.asarray(instancia_escenario.popularidad(0), dtype=float)
+        vector_activo = np.asarray(instancia_escenario.activos(0), dtype=bool)
+        # Si no hay recuperaciones en la ventana no se puede repartir y se reparte lo mismo entre los SKU que existen, como hacen las políticas
+        vector_demanda = vector_popularidad if vector_popularidad[vector_activo].sum() > 0 else vector_activo.astype(float)
+        vector_demanda = vector_demanda / vector_demanda.sum()
+        # Los SKU que aún no existen se pintan como la clase de menor demanda, que es la que reciben las políticas
+        vector_clase = clasificar_skus_activos(vector_demanda, vector_activo, config)
+        vector_clase[vector_clase == 0] = vector_clase.max()
+    return {
+        "demanda_sku": [round(float(escalar), 6) for escalar in vector_demanda],
+        # Clase de cada SKU según la agrupación de la política basada en clases, solo para colorear la animación
+        "clase_sku": [int(escalar) for escalar in vector_clase],
+        # Posición de cada SKU en el ranking de rotación (0 = el más demandado)
+        "rango_sku": [int(escalar) for escalar in _rango_por_demanda(vector_demanda)],
+    }
 
 
 def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S, txt_clave_recuperacion = 'fcfs'):
@@ -28,7 +53,8 @@ def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S, txt_clave_
     # Desde aquí el reloj de la grúa empieza en cero y se registran los eventos
     G.escalar_reloj = 0.0
     G.vector_eventos = []
-    C = ControladorGrua(E, G, P, S, instancia_politica, instancia_politica_recuperacion)
+    # Con escenario de demanda, el controlador recibe el día de cada tarea y los retiros de las tareas que se graban (las de S)
+    C = ControladorGrua(E, G, P, S, instancia_politica, instancia_politica_recuperacion, **instancia_simulacion.argumentosOperacion(len(S)))
     C.ejecutarSecuencia()
     G.registrarEvento('F')
 
@@ -36,14 +62,19 @@ def grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S, txt_clave_
     return {
         "nombre": instancia_politica.nombre,
         "recuperacion": instancia_politica_recuperacion.nombre,
-        # Cómo se colorean los ítems: la política basada en clases usa la clase de cada SKU y las demás la rotación del SKU
-        "color_por": "clase" if txt_clave_politica == 'basada_en_clases' else "sku",
+        # Cómo se colorean los ítems: las políticas basadas en clases usan la clase de cada SKU y las demás la rotación del SKU
+        "color_por": "clase" if txt_clave_politica.startswith('basada_en_clases') else "sku",
         "inicial": vector_estado_inicial,
         "eventos": G.vector_eventos,
         "tiempo_total": round(float(vector_metricas[-1]), 4),
         "reubicaciones": int(vector_metricas[6]),
         "reloj_final": round(float(G.escalar_reloj), 4),
     }
+
+
+# La carrera anima como mucho estas tareas: con listas largas (datos reales de decenas de miles de tareas) los movimientos
+# de la grúa pesarían cientos de MB en el navegador. La estadística sí usa la lista completa
+TAREAS_ANIMACION = 2000
 
 
 def generar_datos(config, vector_semillas, al_avanzar=None):
@@ -57,13 +88,16 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         SA, S = instancia_simulacion.generarSecuencias()
 
         vector_politicas = []
-        for escalar_indice_politica, txt_clave_politica, txt_clave_recuperacion in Simulacion.escenarios(config):
-            rnd.seed(escalar_semilla * 1000 + escalar_indice_politica)
-            vector_politicas.append(grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S, txt_clave_recuperacion))
+        for _, txt_clave_politica, txt_clave_recuperacion in Simulacion.escenarios(config):
+            rnd.seed(Simulacion.semillaDePolitica(escalar_semilla, txt_clave_politica))
+            vector_politicas.append(grabar_escenario(instancia_simulacion, txt_clave_politica, SA, S[:TAREAS_ANIMACION], txt_clave_recuperacion))
 
         vector_replicas.append({
             "semilla": int(escalar_semilla),
-            "secuencia": [[int(escalar_actividad), int(escalar_clase)] for escalar_actividad, escalar_clase in S],
+            # Demanda, clase y ranking de rotación de los SKUs de esta réplica: con un escenario generado dependen de la semilla
+            **vectores_por_sku(instancia_simulacion, config),
+            "secuencia": [[int(escalar_actividad), int(escalar_clase)] for escalar_actividad, escalar_clase in S[:TAREAS_ANIMACION]],
+            "tareas_totales": len(S),
             "politicas": vector_politicas,
         })
         if al_avanzar is not None:
@@ -77,12 +111,10 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
         "deceleracion": [float(escalar) for escalar in config["vector_deceleracion_grua"]],
         "posicion": [float(escalar) for escalar in config["vector_posicion_estanteria"]],
         "centro": [float(escalar) for escalar in config["vector_centro_celda_estanteria"]],
-        "skus": int(config["escalar_numero_skus"]),
-        "demanda_sku": [round(float(escalar), 6) for escalar in config["vector_demanda_sku"]],
-        # Clase de cada SKU según la agrupación de la política basada en clases, solo para colorear la animación
-        "clase_sku": [int(escalar) for escalar in agrupar_skus_en_clases(config["vector_demanda_sku"], config["vector_proporcion_skus_por_clase"])],
-        # Posición de cada SKU en el ranking de rotación (0 = el más demandado), indexada por SKU - 1
-        "rango_sku": [int(escalar) for escalar in _rango_por_demanda(config["vector_demanda_sku"])],
+        "skus": len(vector_replicas[0]["demanda_sku"]) if vector_replicas else int(config["escalar_numero_skus"]),
+        # Demanda, clase y ranking de rotación de la primera réplica, que es la que anima la página (la plantilla lee estas claves)
+        **(vectores_por_sku(instancia_simulacion, config) if not vector_replicas else
+           {txt_clave: vector_replicas[0][txt_clave] for txt_clave in ("demanda_sku", "clase_sku", "rango_sku")}),
         # Etiquetas originales de los SKUs (solo con datos reales): el SKU número i se muestra con su código
         "etiquetas_sku": list(config.get("etiquetas_sku", [])) if config.get("texto_origen_tareas") == "datos" else [],
         "z_riel": float(instancia_simulacion.crearInstancias()[1].vector_posicion_resposo[2]),
@@ -98,11 +130,7 @@ def leer_plantilla():
     # La librería gráfica (Three.js) se incluye en la página para que funcione sin conexión a internet
     txt_ruta_libreria = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor", "three.min.js")
     with open(txt_ruta_libreria, encoding="utf-8") as archivo:
-        txt_pagina = txt_pagina.replace("<!--THREE-->", "<script>" + archivo.read() + "</script>")
-    # La vista Entrenamiento vive en su propio archivo para no engordar la plantilla
-    txt_ruta_vista = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vista_entrenamiento.js")
-    with open(txt_ruta_vista, encoding="utf-8") as archivo:
-        return txt_pagina.replace("<!--ENTRENAMIENTO-->", "<script>" + archivo.read() + "</script>")
+        return txt_pagina.replace("<!--THREE-->", "<script>" + archivo.read() + "</script>")
 
 
 def escribir_html(diccionario_datos, txt_ruta_salida):

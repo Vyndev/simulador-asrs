@@ -5,7 +5,6 @@ import numpy as np
 
 RAIZ_PROYECTO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIR_SALIDAS = os.path.join(RAIZ_PROYECTO, "salidas")  # todo lo que generan los scripts va aquí (ignorado por git)
-DIR_MODELOS = os.path.join(DIR_SALIDAS, "modelos")
 
 
 def ruta_salida(txt_ruta):

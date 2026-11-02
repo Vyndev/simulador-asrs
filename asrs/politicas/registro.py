@@ -1,7 +1,7 @@
 """Registro de políticas de asignación disponibles."""
 from asrs.politicas.aleatoria import PoliticaAleatoria
-from asrs.politicas.basada_en_clases import PoliticaBasadaEnClases
-from asrs.politicas.full_turnover import PoliticaFullTurnover
+from asrs.politicas.basada_en_clases import PoliticaBasadaEnClases, PoliticaBasadaEnClasesReplanificada
+from asrs.politicas.full_turnover import PoliticaFullTurnover, PoliticaFullTurnoverReplanificada
 from asrs.politicas.mas_cercana_es import PoliticaMasCercanaAlES
 from asrs.politicas.mas_cercana_grua import PoliticaMasCercanaALaGrua
 from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS, PoliticaRecuperacionFCFSAccesible
@@ -9,7 +9,9 @@ from asrs.politicas.recuperacion import PoliticaRecuperacionFCFS, PoliticaRecupe
 POLITICAS_ASIGNACION = {
     'aleatoria': PoliticaAleatoria,
     'basada_en_clases': PoliticaBasadaEnClases,
+    'basada_en_clases_replanificada': PoliticaBasadaEnClasesReplanificada,
     'full_turnover': PoliticaFullTurnover,
+    'full_turnover_replanificada': PoliticaFullTurnoverReplanificada,
     'mas_cercana_es': PoliticaMasCercanaAlES,
     'mas_cercana_grua': PoliticaMasCercanaALaGrua,
 }

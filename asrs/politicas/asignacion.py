@@ -3,8 +3,9 @@
 Una política de asignación decide en qué celda libre se coloca un ítem. Se usa tanto para almacenar
 como para reubicar: reubicar es almacenar un ítem que ya está en la estantería, desde la posición actual de la grúa.
 
-Todas las políticas aplican la regla de minimización de varianza: entre las celdas que la política considera
-igual de buenas, se prefiere la libre más profunda, de modo que los canales se llenan desde el fondo.
+Las políticas clásicas aplican siempre la regla de minimización de varianza (Lehmann y Hußmann, 2023): entre las celdas
+que la política considera igual de buenas, se prefiere la libre más profunda, de modo que los canales se llenan desde el fondo.
+Es una decisión interna del simulador y no se configura. El agente, en cambio, puede elegir cualquier celda libre y accesible.
 """
 import random as rnd
 
@@ -29,6 +30,27 @@ class PoliticaAsignacion:
 
         # Caché de matrices de cercanía por punto de referencia, con el punto E/S es siempre la misma
         self._cache_tiempos = {}
+
+    def iniciarDia(self, escalar_dia):
+        # El controlador avisa cuando empieza un día del escenario, por defecto no pasa nada
+        # Las políticas con zonas que se recalculan por día lo sobrescriben
+        pass
+
+    def demandaPlanificacion(self, escalar_dia=0):
+        # Lo que las políticas con zonas saben para planificar: la popularidad móvil del día y qué SKU existen (el catálogo del almacén)
+        # Devuelve (demanda, activos), ambos con un elemento por SKU: los SKU que no existen ese día no se planifican
+        # Sin escenario (datos reales) todos los SKU existen y se usa la demanda de la configuración
+        # Sin recuperaciones en la ventana (todo en cero, no se podría repartir) se reparte la misma demanda entre los SKU que existen
+        instancia_escenario = self.config.get("escenario_demanda")
+        if instancia_escenario is None:
+            vector_demanda = np.asarray(self.config["vector_demanda_sku"], dtype=float)
+            return vector_demanda, np.ones(len(vector_demanda), dtype=bool)
+        vector_popularidad = np.asarray(instancia_escenario.popularidad(escalar_dia), dtype=float)
+        vector_activo = np.asarray(instancia_escenario.activos(escalar_dia), dtype=bool) if hasattr(instancia_escenario, "activos") \
+            else np.ones(len(vector_popularidad), dtype=bool)
+        if vector_popularidad[vector_activo].sum() > 0:
+            return vector_popularidad, vector_activo
+        return vector_activo.astype(float), vector_activo
 
     def etiquetaZona(self, escalar_sku):
         # Zona que corresponde a un SKU, cada política con zonas decide cómo agrupa sus SKUs
@@ -82,6 +104,7 @@ class PoliticaAsignacion:
         matriz_indices = matriz_indices[vector_valores == vector_valores.min()]
 
         # Regla de minimización de varianza: entre las equivalentes, la libre más profunda (índice de capa menor)
+        # Es una regla fija de las políticas clásicas, no un parámetro
         matriz_indices = matriz_indices[matriz_indices[:, 2] == matriz_indices[:, 2].min()]
 
         # Si aún hay empate se desempata al azar

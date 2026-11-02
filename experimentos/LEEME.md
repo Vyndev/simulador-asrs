@@ -6,7 +6,6 @@ Cada archivo `.json` es un experimento reproducible: basta con escribir los par�
 ```bash
 python scripts/main.py --config experimentos/ejemplo.json
 python scripts/visualizar.py --config experimentos/ejemplo.json
-python scripts/comparar_rl.py --config experimentos/ejemplo.json
 ```
 
 Una clave que no existe se ignora y un valor inválido da un error con un mensaje en español. Guarda aquí cada

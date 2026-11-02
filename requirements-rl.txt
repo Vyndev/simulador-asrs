@@ -1,3 +1,0 @@
-# Simulador + aprendizaje por refuerzo (scripts/entrenar_rl.py)
-# torch en versión CPU: pip install torch --index-url https://download.pytorch.org/whl/cpu
--e .[rl]

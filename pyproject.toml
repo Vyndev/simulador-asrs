@@ -9,11 +9,6 @@ description = "Simulador de un ASRS de grúa para comparar políticas de asignac
 requires-python = ">=3.10"
 dependencies = ["numpy", "pandas"]
 
-[project.optional-dependencies]
-# Aprendizaje por refuerzo (scripts/entrenar_rl.py). torch en versión CPU:
-#   pip install torch --index-url https://download.pytorch.org/whl/cpu
-rl = ["torch", "gymnasium", "stable-baselines3", "sb3-contrib"]
-
 [tool.setuptools.packages.find]
 include = ["asrs*"]
 

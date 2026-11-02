@@ -7,7 +7,7 @@ venv/
 build/
 *.egg-info/
 
-# Todo lo que generan los scripts: CSV, visualizacion.html y modelos entrenados
+# Todo lo que generan los scripts (CSV y visualizacion.html)
 salidas/
 
 # Configuración local del editor y de las vistas previas
