@@ -127,7 +127,7 @@ La simulación se ejecuta en Python con el mismo código que `main.py`, así que
 
 Opciones: `--puerto N` (por defecto 8765) y `--sin-abrir` (no abre el navegador).
 
-**Archivo autónomo.** Sin `--servir`, `python visualizar.py --abrir` genera `visualizacion.html`, que reproduce la carrera con la configuración de `asrs/config.py` y no necesita servidor (opciones `--replicas`, `--semilla`, `--salida`). La versión 2D anterior está en `original/plantilla_visualizacion_2d.html`.
+**Archivo autónomo.** Sin `--servir`, `python visualizar.py --abrir` genera `visualizacion.html`, que reproduce la carrera con la configuración de `asrs/config.py` y no necesita servidor (opciones `--replicas`, `--semilla`, `--salida`).
 
 Pruebas:
 
@@ -225,7 +225,6 @@ asrs/
     plantilla.html              Página con el formulario y la carrera (Three.js incluido en vendor/)
 visualizar.py                   Herramienta visual (--servir) o archivo autónomo
 tests/                          Pruebas de regresión
-original/                       Versiones previas en un solo archivo
 ```
 
 Dependencias entre capas (solo hacia abajo): `simulacion` → `control` → `politicas` → `dominio` / `metricas`. Para añadir una política: crear una subclase de `PoliticaAsignacion` que implemente `matrizCriterio`, registrarla en `politicas/registro.py` y añadir su clave a `vector_politicas_asignacion`.
