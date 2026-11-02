@@ -16,15 +16,15 @@ import time
 
 import numpy as np
 
-from asrs.config import cargar_configuracion
+from asrs.config import cargar_configuracion, cargar_configuracion_archivo
 from asrs.utilidades import DIR_MODELOS
 
 from asrs.rl import entrenamiento
 from asrs.rl.entrenamiento import CLASICAS, DESPLAZAMIENTO_PRUEBA, SEMILLA_BASE
 
 
-def crear_config(escalar_tareas):
-    config = cargar_configuracion()
+def crear_config(escalar_tareas, txt_archivo=""):
+    config = cargar_configuracion_archivo(txt_archivo) if txt_archivo else cargar_configuracion()
     if escalar_tareas:
         config["escalar_largo_secuencia"] = escalar_tareas
     return config
@@ -51,6 +51,7 @@ def entrenar(txt_algoritmo, config, escalar_pasos, escalar_estados, escalar_semi
 
 def main():
     analizador = argparse.ArgumentParser(description="Entrena DQN y PPO y los compara con las políticas clásicas.")
+    analizador.add_argument("--config", default="", help="experimento en JSON (ver experimentos/); sin él se usa asrs/config.py")
     analizador.add_argument("--algoritmo", choices=("dqn", "ppo", "ambos"), default="ambos")
     analizador.add_argument("--pasos", type=int, default=20_000, help="decisiones de entrenamiento por algoritmo")
     analizador.add_argument("--estados", type=int, default=16, help="estados iniciales distintos usados para entrenar")
@@ -64,7 +65,7 @@ def main():
     from asrs.rl.entorno import EntornoAsignacion
     from asrs.rl.evaluacion import evaluar_agente, evaluar_politica_clasica
 
-    config = crear_config(argumentos.tareas)
+    config = crear_config(argumentos.tareas, argumentos.config)
     vector_pruebas = list(range(DESPLAZAMIENTO_PRUEBA, DESPLAZAMIENTO_PRUEBA + argumentos.pruebas))
     print(f"Estantería {[int(x) for x in config['vector_configuracion_estanteria']]}, {config['escalar_largo_secuencia']} tareas por episodio, "
           f"{argumentos.estados} estados de entrenamiento, {argumentos.pruebas} de prueba.\n")

@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) 
 import argparse
 import webbrowser
 
-from asrs.config import cargar_configuracion
+from asrs.config import cargar_configuracion, cargar_configuracion_archivo
 from asrs.utilidades import ruta_salida
 from asrs.visualizacion.generador import escribir_html, generar_datos
 
@@ -23,6 +23,7 @@ if __name__ == "__main__":
     analizador.add_argument("--semilla", type=int, default=None, help="semilla de la primera réplica (por defecto la de la configuración)")
     analizador.add_argument("--replicas", type=int, default=3, help="cantidad de réplicas a incluir (por defecto 3)")
     analizador.add_argument("--salida", default="visualizacion.html", help="archivo HTML de salida (un nombre suelto se guarda en salidas/)")
+    analizador.add_argument("--config", default="", help="experimento en JSON (ver experimentos/); sin él se usa asrs/config.py")
     analizador.add_argument("--abrir", action="store_true", help="abrir el resultado en el navegador")
     argumentos = analizador.parse_args()
 
@@ -30,7 +31,7 @@ if __name__ == "__main__":
         from asrs.visualizacion.servidor import servir
         servir(argumentos.puerto, booleano_abrir=not argumentos.sin_abrir)
     else:
-        config = cargar_configuracion()
+        config = cargar_configuracion_archivo(argumentos.config) if argumentos.config else cargar_configuracion()
         escalar_semilla = argumentos.semilla if argumentos.semilla is not None else config["escalar_semilla"]
         vector_semillas = [escalar_semilla + escalar_replica for escalar_replica in range(argumentos.replicas)]
 
