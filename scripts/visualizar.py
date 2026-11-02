@@ -3,8 +3,11 @@
 Sin opciones genera visualizacion.html con la carrera de políticas (archivo autónomo).
 Con --servir abre una herramienta interactiva: cambias los parámetros en el navegador, la simulación se ejecuta en esta máquina y ves el resultado.
 """
-import argparse
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # raíz del proyecto, para importar asrs
+import argparse
 import webbrowser
 
 from asrs.config import cargar_configuracion

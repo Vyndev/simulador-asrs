@@ -6,7 +6,7 @@ Simulación de un sistema automatizado de almacenamiento y recuperación (ASRS) 
 
 ```bash
 pip install -r requirements.txt
-python main.py
+python scripts/main.py
 ```
 
 Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica, política de asignación y política de recuperación. Los parámetros (tamaño de la estantería, velocidades, ocupación, demanda por clase, políticas, número de réplicas, semilla) están en `asrs/config.py`.
@@ -14,7 +14,7 @@ Genera `resultados_simulacion.csv` (separador `;`) con una fila por réplica, po
 ## Herramienta visual
 
 ```bash
-python visualizar.py --servir
+python scripts/visualizar.py --servir
 ```
 
 Abre en el navegador una herramienta interactiva (servidor local en `127.0.0.1`, sin dependencias nuevas). A la izquierda están **todos los parámetros de la simulación**, organizados en cuatro pestañas (Almacén, Demanda, Políticas y Ejecución) con un resumen siempre visible; a la derecha, la carrera de políticas en 3D (Three.js, incluido en `asrs/visualizacion/vendor/`, funciona sin internet) y la estadística. La cámara es la misma en todos los paneles: arrastra para girar, rueda para acercar, doble clic para restablecer, o usa los botones ISO, FRT, LAT y SUP (isométrica, frente, lateral y superior). Cada visor trae cotas del largo y la altura de la estantería y un triedro con los ejes de columnas, filas y profundidad. El punto E/S se dibuja como una placa frente a la grúa, con una zona de espera al lado para los ítems que aguardan su turno (el que llega mientras otro sale y los que se reubican temporalmente). Cuando la estantería es grande, un recuadro de detalle en la esquina del visor sigue a la grúa y muestra ampliados el carro, la horquilla y la carga; se oculta con el botón GRÚA de la barra o la tecla D. Con tiempo de carga y descarga 0 la grúa toma y entrega en el mismo instante, así que esas transferencias se dibujan con una animación breve que no altera los tiempos; con un tiempo mayor que 0 duran lo que dice el modelo. El botón de tema de la barra superior alterna entre automático, claro y oscuro. Si recargas la página mientras corre una simulación, se reconecta y sigue su progreso.
@@ -38,11 +38,11 @@ Los parámetros se validan antes de ejecutar y los errores se muestran junto al 
 - La carrera: todas las políticas ejecutan la misma lista de tareas sobre un mismo reloj. Cada una tiene su estantería y su grúa animadas, una tira con las tareas, un marcador en vivo y una tabla final de la réplica.
 - La estadística: promedio con intervalo de confianza del 95 %, desviación, mínimo, máximo y en cuántas réplicas gana cada política, para la métrica que elijas. Se puede descargar como CSV.
 
-La simulación se ejecuta en Python con el mismo código que `main.py`, así que los resultados coinciden con el CSV para las mismas semillas. Las réplicas de la estadística corren en paralelo y la página muestra su progreso, con opción de cancelar.
+La simulación se ejecuta en Python con el mismo código que `scripts/main.py`, así que los resultados coinciden con el CSV para las mismas semillas. Las réplicas de la estadística corren en paralelo y la página muestra su progreso, con opción de cancelar.
 
 Opciones: `--puerto N` (por defecto 8765) y `--sin-abrir` (no abre el navegador).
 
-**Archivo autónomo.** Sin `--servir`, `python visualizar.py --abrir` genera `visualizacion.html`, que reproduce la carrera con la configuración de `asrs/config.py` y no necesita servidor (opciones `--replicas`, `--semilla`, `--salida`). La versión 2D anterior está en `original/plantilla_visualizacion_2d.html`.
+**Archivo autónomo.** Sin `--servir`, `python scripts/visualizar.py --abrir` genera `visualizacion.html`, que reproduce la carrera con la configuración de `asrs/config.py` y no necesita servidor (opciones `--replicas`, `--semilla`, `--salida`). La versión 2D anterior está en `legado/plantilla_visualizacion_2d.html`.
 
 Pruebas:
 
@@ -93,7 +93,10 @@ Si no hay celda factible al reubicar, el ítem se lleva temporalmente al E/S y s
 ## Arquitectura
 
 ```
-main.py                         Punto de entrada
+scripts/
+  main.py                       Punto de entrada: ejecuta la simulación
+  visualizar.py                 Herramienta visual (--servir) o archivo autónomo
+  entrenar_rl.py  comparar_rl.py  Entrenamiento y comparación de los agentes de RL
 asrs/
   config.py                     Parámetros del modelo, con validación y conversión a JSON
   metricas.py                   Conteos y tiempos (Metricas)
@@ -129,10 +132,9 @@ asrs/
     entrenamiento.py              Creación de DQN y PPO y entrenamiento con entornos en paralelo
     entrenamiento_vivo.py         Proceso que entrena y emite su estado como JSON
     evaluacion.py  comparacion.py Evaluación y tabla comparativa con diferencias pareadas
-visualizar.py                   Herramienta visual (--servir) o archivo autónomo
-entrenar_rl.py  comparar_rl.py  Entrenamiento y comparación de los agentes de RL
 tests/                          Pruebas de regresión
-original/                       Versiones previas en un solo archivo
+docs/                           Planes de implementación con fecha
+legado/                         Versiones previas en un solo archivo
 ```
 
 Dependencias entre capas (solo hacia abajo): `simulacion` → `control` → `politicas` → `dominio` / `metricas`. Para añadir una política: crear una subclase de `PoliticaAsignacion` que implemente `matrizCriterio`, registrarla en `politicas/registro.py` y añadir su clave a `vector_politicas_asignacion`.
@@ -162,13 +164,13 @@ Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de
 
 | Para… | Comando |
 |---|---|
-| Entrenar y comparar de una vez | `python entrenar_rl.py --algoritmo ambos --pasos 20000` |
-| Entrenar viendo la red por dentro | `python visualizar.py --servir` y la vista **Entrenamiento** |
-| Comparar los modelos ya guardados (`modelos/`) con un número fiable de estados | `python comparar_rl.py --pruebas 30 --csv resultados_rl.csv` |
+| Entrenar y comparar de una vez | `python scripts/entrenar_rl.py --algoritmo ambos --pasos 20000` |
+| Entrenar viendo la red por dentro | `python scripts/visualizar.py --servir` y la vista **Entrenamiento** |
+| Comparar los modelos ya guardados (`modelos/`) con un número fiable de estados | `python scripts/comparar_rl.py --pruebas 30 --csv resultados_rl.csv` |
 
 El entrenamiento usa un entorno por núcleo (`--entornos`, por defecto los núcleos menos uno), porque lo más lento es la simulación y no las redes: con 7 entornos PPO pasó de 146 a unos 280 pasos por segundo y DQN llegó a unos 235. `--dispositivo cuda` entrena las redes en la tarjeta gráfica, pero hace falta PyTorch con CUDA (aquí se instaló el de CPU) y con redes tan pequeñas la ganancia es mínima.
 
-La tabla de `comparar_rl.py` da, para cada política, el tiempo medio, la **diferencia pareada** contra la mejor clásica con su intervalo de confianza del 95 %, en cuántos estados le gana y cuántas tareas omitió. Si el intervalo no incluye 0, la diferencia es real.
+La tabla de `scripts/comparar_rl.py` da, para cada política, el tiempo medio, la **diferencia pareada** contra la mejor clásica con su intervalo de confianza del 95 %, en cuántos estados le gana y cuántas tareas omitió. Si el intervalo no incluye 0, la diferencia es real.
 
 ### Dónde estamos
 
@@ -176,7 +178,7 @@ Con la formulación actual solo se probó una corrida corta (6 000 pasos, 18×20
 
 ### Siguientes pasos
 
-1. **Entrenar en serio** (200 000 pasos o más) y medir con `comparar_rl.py` en 30 o más estados.
+1. **Entrenar en serio** (200 000 pasos o más) y medir con `scripts/comparar_rl.py` en 30 o más estados.
 2. **Mejorar al agente antes de gastar más cómputo:** que arranque imitando a la mejor política clásica (así parte de su nivel y solo tiene que mejorarla), y una red que puntúe cada posición con los mismos pesos, que aprende mucho más rápido que mirar los más de 4000 números a la vez.
 3. **Unificar el protocolo con la carrera** (que el agente también llene su estantería) para poder ponerlo junto a las demás políticas en el visualizador.
 

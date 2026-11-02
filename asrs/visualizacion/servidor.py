@@ -267,7 +267,7 @@ def servir(escalar_puerto=8765, booleano_abrir=True):
         servidor = crear_servidor(escalar_puerto)
     except OSError:
         raise SystemExit(f'El puerto {escalar_puerto} ya está en uso, probablemente por otra herramienta abierta.\n'
-                         f'Ciérrala con Ctrl+C en su terminal, o usa otro puerto: python visualizar.py --servir --puerto {escalar_puerto + 1}')
+                         f'Ciérrala con Ctrl+C en su terminal, o usa otro puerto: python scripts/visualizar.py --servir --puerto {escalar_puerto + 1}')
     txt_url = f'http://127.0.0.1:{servidor.server_address[1]}/'
     print(f'Herramienta de simulación en {txt_url}  (Ctrl+C para detener)')
     if booleano_abrir:

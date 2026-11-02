@@ -1,4 +1,8 @@
 """Punto de entrada: ejecuta la simulación y guarda resultados_simulacion.csv."""
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # raíz del proyecto, para importar asrs
 import time
 
 from asrs.simulacion.simulacion import Simulacion

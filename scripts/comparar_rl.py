@@ -1,13 +1,16 @@
 """Compara los agentes ya entrenados (carpeta modelos/) con las políticas clásicas en estados de prueba nuevos.
 
 Uso:
-  python comparar_rl.py --pruebas 30
-  python comparar_rl.py --pruebas 50 --tareas 200 --csv resultados_rl.csv
+  python scripts/comparar_rl.py --pruebas 30
+  python scripts/comparar_rl.py --pruebas 50 --tareas 200 --csv resultados_rl.csv
 
 No entrena nada: usa modelos/dqn.zip y modelos/ppo.zip (o las versiones *_vivo.zip de la vista Entrenamiento) que ya existan.
 """
-import argparse
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # raíz del proyecto, para importar asrs
+import argparse
 
 from asrs.config import cargar_configuracion
 from asrs.rl import comparacion

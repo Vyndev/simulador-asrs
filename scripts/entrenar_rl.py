@@ -1,14 +1,17 @@
 """Entrena DQN y PPO para la asignación de almacenamiento y los compara con las políticas clásicas.
 
 Uso:
-  python entrenar_rl.py --algoritmo ppo --pasos 20000
-  python entrenar_rl.py --algoritmo ambos --pasos 50000 --pruebas 20
+  python scripts/entrenar_rl.py --algoritmo ppo --pasos 20000
+  python scripts/entrenar_rl.py --algoritmo ambos --pasos 50000 --pruebas 20
 
 Mide cuánto tarda el entrenamiento (pasos por segundo) y el desempeño en estados de prueba que el agente no vio.
 Requiere: pip install -r requirements-rl.txt
 """
-import argparse
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # raíz del proyecto, para importar asrs
+import argparse
 import time
 
 import numpy as np
