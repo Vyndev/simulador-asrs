@@ -156,42 +156,24 @@ class PruebasCandidatas(unittest.TestCase):
     def tiempos(self, E):
         return np.arange(E.matriz_contenedor_items.size, dtype=float).reshape(E.matriz_contenedor_items.shape)
 
-    def test_estanteria_vacia_restringido_una_por_canal_y_libre_todas(self):
+    def test_estanteria_vacia_ofrece_el_fondo_y_el_frente_de_cada_canal(self):
         E, _ = estanteria_con({})
-        self.assertEqual(int(mascara_candidatas(E, True).sum()), 6)      # 6 canales, el fondo de cada uno
-        self.assertEqual(int(mascara_candidatas(E, False).sum()), 12)    # el fondo y el frente de cada canal
-        self.assertTrue(np.all(np.argwhere(mascara_candidatas(E, True))[:, 2] == 0))
+        self.assertEqual(int(mascara_candidatas(E).sum()), 12)    # 6 canales, el fondo y el frente de cada uno
 
     def test_canal_con_el_fondo_ocupado_ofrece_el_frente(self):
         E, _ = estanteria_con({(0, 0, 0): 5})
-        for restringido in (True, False):
-            matriz = mascara_candidatas(E, restringido)
-            self.assertTrue(matriz[0, 0, 1])
-            self.assertFalse(matriz[0, 0, 0])
+        matriz = mascara_candidatas(E)
+        self.assertTrue(matriz[0, 0, 1])
+        self.assertFalse(matriz[0, 0, 0])
 
     def test_canal_con_el_frente_ocupado_no_ofrece_nada(self):
         E, _ = estanteria_con({(1, 1, 1): 7})        # el frente ocupado bloquea el fondo libre
-        for restringido in (True, False):
-            matriz = mascara_candidatas(E, restringido)
-            self.assertFalse(matriz[1, 1].any())
-
-    def test_el_modo_restringido_coincide_con_la_regla_del_fondo(self):
-        # La celda que una política elige con minimización de varianza está siempre entre las candidatas del modo restringido
-        import random
-        from asrs.politicas.registro import crear_politica
-        E, config = estanteria_con({(0, 0, 0): 5, (1, 0, 0): 6, (1, 0, 1): 6, (2, 1, 0): 9})
-        G, P = Simulacion(config).crearInstancias()[1:]
-        matriz_restringida = mascara_candidatas(E, True)
-        for txt_clave in ('aleatoria', 'mas_cercana_es', 'mas_cercana_grua'):
-            politica = crear_politica(txt_clave, E, G, P, config)
-            random.seed(1)
-            for _ in range(40):
-                self.assertTrue(matriz_restringida[politica.asignar(1)], txt_clave)
+        self.assertFalse(mascara_candidatas(E)[1, 1].any())
 
     def test_caracteristicas(self):
         E, _ = estanteria_con({(0, 0, 0): 2})
         matriz_perfil = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])        # SKU 1 y SKU 2
-        matriz_indices, matriz_caracteristicas = celdas_candidatas(E, self.tiempos(E), matriz_perfil, False)
+        matriz_indices, matriz_caracteristicas = celdas_candidatas(E, self.tiempos(E), matriz_perfil)
         self.assertEqual(matriz_caracteristicas.shape, (len(matriz_indices), 8))
         fila_frente_ocupado_atras = [i for i, t in enumerate(map(tuple, matriz_indices)) if t == (0, 0, 1)][0]
         self.assertEqual(matriz_caracteristicas[fila_frente_ocupado_atras, 3:5].tolist(), [0.0, 1.0])    # atrás ocupado: lo bloquearía
@@ -207,7 +189,7 @@ class PruebasCandidatas(unittest.TestCase):
 
     def test_estanteria_llena_no_tiene_candidatas(self):
         E, _ = estanteria_con({(f, c, k): 1 for f in range(3) for c in range(2) for k in range(2)})
-        matriz_indices, matriz_caracteristicas = celdas_candidatas(E, self.tiempos(E), np.zeros((1, 3)), False)
+        matriz_indices, matriz_caracteristicas = celdas_candidatas(E, self.tiempos(E), np.zeros((1, 3)))
         self.assertEqual(len(matriz_indices), 0)
         self.assertEqual(matriz_caracteristicas.shape[0], 0)
 

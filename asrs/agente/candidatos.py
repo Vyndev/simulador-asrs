@@ -5,21 +5,15 @@ from asrs.dominio.item import Item
 from asrs.politicas.restriccion import MatricesRestriccion
 
 
-def mascara_candidatas(instancia_estanteria, booleano_restringido):
+def mascara_candidatas(instancia_estanteria):
     # Celdas libres y accesibles, es decir, sin unidades delante
-    # Restringido: solo la más profunda de cada canal, que es la celda que elige la regla de minimización de varianza
-    # Libre: todas, de modo que el agente también decide si ocupa el frente de un canal con el fondo libre
+    # El agente es libre: puede elegir cualquiera de ellas, también el frente de un canal con el fondo libre
+    # No aplica la minimización de varianza, que es una regla interna de las políticas clásicas
     matriz_ocupacion = MatricesRestriccion().ocupacion(instancia_estanteria)
-    matriz_candidatas = np.logical_not(matriz_ocupacion) & MatricesRestriccion().accesibilidad(matriz_ocupacion)
-    if booleano_restringido:
-        escalar_capas = matriz_candidatas.shape[2]
-        matriz_capas = np.broadcast_to(np.arange(escalar_capas), matriz_candidatas.shape)
-        matriz_capa_minima = np.where(matriz_candidatas, matriz_capas, escalar_capas).min(axis=2, keepdims=True)
-        matriz_candidatas = matriz_candidatas & (matriz_capas == matriz_capa_minima)
-    return matriz_candidatas
+    return np.logical_not(matriz_ocupacion) & MatricesRestriccion().accesibilidad(matriz_ocupacion)
 
 
-def celdas_candidatas(instancia_estanteria, matriz_tiempos_es, matriz_perfil, booleano_restringido):
+def celdas_candidatas(instancia_estanteria, matriz_tiempos_es, matriz_perfil):
     # Devuelve (índices, características) de las celdas candidatas
     #   índices: matriz (M, 3) con la fila, la columna y la capa de cada celda
     #   características: matriz (M, 5 + d) con, por cada celda,
@@ -30,7 +24,7 @@ def celdas_candidatas(instancia_estanteria, matriz_tiempos_es, matriz_perfil, bo
     #     4  1 si la celda de atrás está ocupada: la unidad nueva la bloquearía
     #     5… perfil del SKU de la unidad de atrás (ceros si no hay), de largo d
     # matriz_perfil: perfil de cada SKU (una fila por SKU - 1), del que sale el perfil de la unidad vecina
-    matriz_candidatas = mascara_candidatas(instancia_estanteria, booleano_restringido)
+    matriz_candidatas = mascara_candidatas(instancia_estanteria)
     matriz_indices = np.argwhere(matriz_candidatas)
     matriz_ocupacion = MatricesRestriccion().ocupacion(instancia_estanteria)
     escalar_capas = matriz_ocupacion.shape[2]
