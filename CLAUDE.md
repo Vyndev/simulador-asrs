@@ -24,7 +24,7 @@ Dependencias solo hacia abajo: `simulacion` → `control` → `politicas` → `d
 
 - `asrs/config.py`: todos los parámetros (claves `escalar_*`, `vector_*`, `texto_*`), validación y carga desde JSON. Los experimentos reproducibles se guardan como JSON en `experimentos/` con solo las claves que cambian; se lanzan con `--config`.
 - `asrs/generacion/`: el generador produce un **escenario** (`EscenarioDemanda`: surtido abierto con curva de Bass, estacionalidad, reposición EOQ, techo de ocupación, calentamiento de 30 días) y las políticas solo ven la lista de tareas `(actividad, SKU)` más la popularidad móvil. El escenario es el mismo para todas las políticas de una réplica. Con datos reales (CSV `SKU`,`Task`) no hay escenario y las variantes replanificadas se comportan como las de plan fijo.
-- `asrs/politicas/`: subclases de `PoliticaAsignacion` que implementan `matrizCriterio`; se registran en `registro.py` y su clave se añade a `vector_politicas_asignacion`. Hay 7 políticas de asignación (basada en clases y full_turnover con variante de plan fijo y replanificada) y 2 de recuperación (FCFS estricto / entre accesibles). Reubicar es almacenar un ítem ya en la estantería.
+- `asrs/politicas/`: subclases de `PoliticaAsignacion` que implementan `matrizCriterio`; se registran en `registro.py` y su clave se añade a `vector_politicas_asignacion`. Hay 5 políticas de asignación (aleatoria, basada en clases, full_turnover, más cercana al E/S y más cercana a la grúa; las dos con zonas solo tienen plan fijo, no replanifican) y 2 de recuperación (FCFS estricto / entre accesibles). Reubicar es almacenar un ítem ya en la estantería.
 - `asrs/control/controlador_grua.py` ejecuta la secuencia con las políticas; `asrs/cinematica.py` da el perfil trapezoidal de la grúa.
 - `asrs/simulacion/`: réplicas (semilla `escalar_semilla + i`), ejecución en paralelo, estadística pareada (IC 95 % con t de Student) y CSV.
 - `asrs/agente/`: capa de observación para el agente de aprendizaje (perfil de SKU y celdas candidatas); no cambia la simulación.
@@ -32,7 +32,7 @@ Dependencias solo hacia abajo: `simulacion` → `control` → `politicas` → `d
 
 ## Reglas del modelo que no son evidentes
 
-- **Comparación pareada:** en cada réplica todas las políticas procesan la misma secuencia de llenado y de operación; cada política tiene semilla derivada de su política base en el registro (la replanificada usa la de la de plan fijo), no de su posición en la lista. No rompas esto al tocar semillas.
+- **Comparación pareada:** en cada réplica todas las políticas procesan la misma secuencia de llenado y de operación; cada política tiene semilla derivada de su posición en el registro, no de su posición en la lista de políticas evaluadas. No rompas esto al tocar semillas.
 - **Minimización de varianza** es fija en las políticas clásicas (primero la capa libre más profunda entre todas las candidatas, luego el criterio de la política y por último azar; llena los fondos de todos los canales antes que los frentes). El agente **no** está sujeto a ella: es libre de elegir cualquier celda libre y accesible.
 - La cercanía entre celdas es tiempo Chebyshev en el plano xy y ignora la profundidad.
 - Con la configuración por defecto, los resultados deben coincidir exactamente con corridas previas; cambios que alteren números requieren una entrada en `docs/decisiones.md`.
