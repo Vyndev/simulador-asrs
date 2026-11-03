@@ -76,6 +76,10 @@ class Simulacion:
             escalar_largo_secuencia_llenado = int(escalar_capacidad_total * cfg["escalar_nivel_ocupacion"])
 
             SA = GeneradorSecuencia(escalar_largo_secuencia_llenado, np.array([1, 1]), vector_prob_acum_inventario).generarSecuencia()
+            if cfg.get("vector_inventario_inicial") is not None:
+                # Reposición EOQ de una lista que solo trae demanda: el llenado inicial es la mitad del lote de cada SKU, en orden aleatorio
+                SA = [(0, escalar_sku + 1) for escalar_sku, escalar_unidades in enumerate(cfg["vector_inventario_inicial"]) for _ in range(escalar_unidades)]
+                rnd.shuffle(SA)
             S = [(int(escalar_actividad), int(escalar_sku)) for escalar_actividad, escalar_sku in cfg["secuencia_real"]]
             return SA, S
 

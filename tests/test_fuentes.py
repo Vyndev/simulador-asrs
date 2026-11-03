@@ -354,19 +354,44 @@ class TestModoDatosReales:
         assert recuperaciones_por_corrida(cargar_configuracion()) == RECUPERACIONES_POR_CORRIDA == TAREAS_POR_CORRIDA // 2 == 262_800
         assert 2 * RECUPERACIONES_POR_CORRIDA == TAREAS_POR_CORRIDA
 
-    def test_un_csv_de_solo_recuperaciones_se_completa_con_reposicion_uno_a_uno(self):
-        from asrs.generacion.datos_reales import leer_tareas_de_operacion
-        tareas = leer_tareas_de_operacion("SKU\nA\nB\nA\n")
-        assert tareas == [(1, "A"), (0, "A"), (1, "B"), (0, "B"), (1, "A"), (0, "A")]
-        with pytest.raises(ValueError, match="con su reposición"):
-            leer_tareas_de_operacion("SKU\nA\nB\nC\n", 5)
+    def test_la_reposicion_eoq_entra_en_lote_justo_despues_de_agotar_el_sku(self):
+        import math
+        from asrs.generacion.datos_reales import reponer_con_lotes_eoq
+        from asrs.generacion.reposicion import calibrar_kappa, lotes_eoq
+        recuperaciones = [(1, 1 + (i * 7) % 3) for i in range(600)]               # 3 SKU con demanda 1/3 cada uno
+        demanda = np.array([1 / 3] * 3)
+        operacion, inicial = reponer_con_lotes_eoq(recuperaciones, demanda, 720, 30)
+        nu = 720 * demanda
+        lote = lotes_eoq(nu, calibrar_kappa(nu, 30)).tolist()
+        assert inicial == [math.ceil(q / 2) for q in lote] and sum(inicial) <= 30 + 3
+        assert [t for t in operacion if t[0] == 1] == recuperaciones               # las recuperaciones, en el mismo orden
+        existencias = list(inicial)
+        i = 0
+        while i < len(operacion):
+            actividad, sku = operacion[i]
+            assert actividad == 1
+            existencias[sku - 1] -= 1
+            assert existencias[sku - 1] >= 0
+            i += 1
+            if existencias[sku - 1] == 0:                                           # agotó el SKU: entra justo después el lote completo
+                assert operacion[i:i + lote[sku - 1]] == [(0, sku)] * lote[sku - 1]
+                existencias[sku - 1] = lote[sku - 1]
+                i += lote[sku - 1]
+        assert abs(sum(1 for t in operacion if t[0] == 0) - 600) <= sum(lote)       # almacenamientos ~ recuperaciones: la estantería se mantiene
 
-    def test_un_csv_con_columna_task_se_usa_tal_cual(self):
-        from asrs.generacion.datos_reales import leer_tareas_de_operacion
-        assert leer_tareas_de_operacion("SKU;Task\nA;R\nB;R\nA;A\n") == [(1, "A"), (1, "B"), (0, "A")]
-        assert leer_tareas_de_operacion("SKU,Task\nA,R\n", 10) == [(1, "A")]
+    def test_un_csv_de_solo_demanda_genera_los_almacenamientos_con_lotes_en_config(self):
+        vector_skus = self.csv_demanda(2400)
+        config = self.config_datos("SKU\n" + "\n".join(vector_skus) + "\n")
+        operacion = config["secuencia_real"]
+        assert sum(1 for actividad, _ in operacion if actividad == 1) == len(vector_skus)
+        assert abs(sum(1 for actividad, _ in operacion if actividad == 0) - len(vector_skus)) < 100
+        assert config["vector_inventario_inicial"] is not None and sum(config["vector_inventario_inicial"]) > 0
 
-    def test_la_estanteria_no_se_vacia_y_se_ejecutan_2_x_recuperaciones(self, monkeypatch):
+    def test_un_csv_con_columna_task_se_usa_tal_cual_sin_inventario_inicial_propio(self):
+        config = self.config_datos("SKU;Task\nA;R\nB;R\nC;R\nA;A\n")
+        assert config["secuencia_real"] == [(1, 1), (1, 2), (1, 3), (0, 1)] and config["vector_inventario_inicial"] is None
+
+    def test_la_estanteria_no_se_vacia_con_la_reposicion_eoq(self, monkeypatch):
         from asrs.politicas import recuperacion
         from asrs.simulacion.simulacion import Simulacion
         vector_skus = self.csv_demanda()
@@ -380,10 +405,7 @@ class TestModoDatosReales:
             return elegido
         monkeypatch.setattr(recuperacion.PoliticaRecuperacionFCFS, "seleccionar", contando)
 
-        # Solo recuperaciones, con la reposición uno a uno: 2 x 1 200 tareas y casi ninguna recuperación se omite
         config = self.config_datos("SKU\n" + "\n".join(vector_skus) + "\n")
-        assert len(config["secuencia_real"]) == 2 * len(vector_skus)
-        assert sum(1 for actividad, _ in config["secuencia_real"] if actividad == 0) == len(vector_skus)
         Simulacion.cargarReplica((config, 1))
         assert omitidas["llamadas"] == len(vector_skus)
         vacias_con_reposicion = omitidas["vacias"]
@@ -391,7 +413,6 @@ class TestModoDatosReales:
         # El mismo CSV con columna Task (solo recuperaciones, sin almacenamientos): la estantería se vacía y se omiten muchas
         omitidas.update(vacias=0, llamadas=0)
         config_sin = self.config_datos("SKU;Task\n" + "\n".join(f"{sku};R" for sku in vector_skus) + "\n")
-        assert len(config_sin["secuencia_real"]) == len(vector_skus)
         Simulacion.cargarReplica((config_sin, 1))
         assert omitidas["vacias"] > 500 > vacias_con_reposicion
 

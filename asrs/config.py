@@ -1,7 +1,7 @@
 """Parámetros del modelo de simulación."""
 import numpy as np
 
-from asrs.generacion.datos_reales import leer_tareas_de_operacion, preparar_datos_reales
+from asrs.generacion.datos_reales import es_solo_demanda, leer_tareas, preparar_datos_reales, reponer_con_lotes_eoq
 from asrs.generacion.probabilidades import PERFILES_INVENTARIO, demanda_hausman
 
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
@@ -235,8 +235,14 @@ def config_desde_json(diccionario):
     personalizada = datos["vector_demanda_sku_personalizada"]
     if origen == "datos":
         # Con datos reales todo sale del archivo: la lista de tareas, los SKUs y la demanda que conocen las políticas
-        matriz_tareas = leer_tareas_de_operacion(config["texto_tareas_csv"], LIMITE_TAREAS)
+        matriz_tareas = leer_tareas(config["texto_tareas_csv"], LIMITE_TAREAS)
         matriz_secuencia, vector_demanda, vector_etiquetas = preparar_datos_reales(matriz_tareas, config["escalar_porcentaje_historial"])
+        config["vector_inventario_inicial"] = None
+        if es_solo_demanda(config["texto_tareas_csv"]):
+            # El archivo solo trae demanda: los almacenamientos se generan con la reposición por lotes EOQ del capítulo 8
+            matriz_secuencia, config["vector_inventario_inicial"] = reponer_con_lotes_eoq(
+                matriz_secuencia, vector_demanda, int(round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2)),
+                config["escalar_nivel_ocupacion"] * escalar_celdas, LIMITE_TAREAS)
         if len(vector_etiquetas) > LIMITE_SKUS:
             raise ValueError(f"Datos reales: hay {len(vector_etiquetas)} SKUs distintos, el máximo es {LIMITE_SKUS}.")
         config["escalar_numero_skus"] = len(vector_etiquetas)

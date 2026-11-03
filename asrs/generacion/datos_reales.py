@@ -92,25 +92,35 @@ def leer_tareas(txt_csv, escalar_limite_tareas=None):
     return matriz_tareas
 
 
-def intercalar_reposicion(matriz_tareas):
-    """Convierte una lista de recuperaciones (la demanda) en la lista de operación: tras cada recuperación se almacena un ítem del mismo SKU.
-    Es una reposición uno a uno, sin lotes: un supuesto del modelo, porque los datos solo traen demanda. Mantiene la estantería ocupada."""
+def es_solo_demanda(txt_csv):
+    """True si el CSV es de una sola columna SKU: trae solo la demanda (recuperaciones) y los almacenamientos hay que generarlos."""
+    return _es_una_columna([txt for txt in txt_csv.splitlines() if txt.strip()])
+
+
+def reponer_con_lotes_eoq(matriz_secuencia, vector_demanda, escalar_recuperaciones_diarias, escalar_inventario_esperado, escalar_limite_tareas=None):
+    """Genera los almacenamientos de una lista que solo trae demanda, con la reposición por lotes EOQ del modelo de suministro (capítulo 8).
+    `matriz_secuencia` son las recuperaciones (1, SKU) con el SKU numerado de 1 a n y `vector_demanda` la participación de cada SKU en el historial.
+    Demanda esperada ν = R ρ (R recuperaciones por día); lote Q = max(1, round(κ √ν)) con κ calibrada para que el inventario esperado
+    Σ (Q + 1) / 2 sea `escalar_inventario_esperado` (φ F C K); punto de pedido y plazo de entrega cero: cuando una recuperación deja al SKU sin
+    unidades, el lote entra justo después, unidad tras unidad. Cada SKU parte con la mitad de su lote, redondeada hacia arriba, que es el
+    llenado inicial. Devuelve la lista de operación y las unidades iniciales de cada SKU (posición i = SKU i + 1).
+    Supuestos de los datos reales: ν es constante (la participación del historial), sin ciclo de vida, cierres ni techo de ocupación."""
+    from asrs.generacion.reposicion import calibrar_kappa, lotes_eoq
+    vector_nu = escalar_recuperaciones_diarias * np.asarray(vector_demanda, dtype=float)
+    vector_lote = lotes_eoq(vector_nu, calibrar_kappa(vector_nu, escalar_inventario_esperado)).tolist()
+    vector_inicial = [(escalar_lote + 1) // 2 for escalar_lote in vector_lote]
+    vector_existencias = list(vector_inicial)
     matriz_operacion = []
-    for escalar_actividad, txt_sku in matriz_tareas:
-        matriz_operacion.append((escalar_actividad, txt_sku))
-        matriz_operacion.append((0, txt_sku))
-    return matriz_operacion
-
-
-def leer_tareas_de_operacion(txt_csv, escalar_limite_tareas=None):
-    """Lista de tareas que ejecuta el simulador con datos reales. Un CSV con actividad por fila (columna Task) se usa tal cual; un CSV de una
-    sola columna SKU trae solo recuperaciones y se completa con una reposición uno a uno (`intercalar_reposicion`): 2 x recuperaciones tareas."""
-    matriz_tareas = leer_tareas(txt_csv, escalar_limite_tareas)
-    if _es_una_columna([txt for txt in txt_csv.splitlines() if txt.strip()]):
-        matriz_tareas = intercalar_reposicion(matriz_tareas)
-        if escalar_limite_tareas is not None and len(matriz_tareas) > escalar_limite_tareas:
-            raise ValueError(f"Datos reales: con su reposición la lista tiene {len(matriz_tareas)} tareas, el máximo es {escalar_limite_tareas}.")
-    return matriz_tareas
+    for _, escalar_sku in matriz_secuencia:
+        escalar_i = escalar_sku - 1
+        matriz_operacion.append((1, escalar_sku))
+        vector_existencias[escalar_i] -= 1
+        if vector_existencias[escalar_i] <= 0:
+            matriz_operacion.extend([(0, escalar_sku)] * vector_lote[escalar_i])
+            vector_existencias[escalar_i] += vector_lote[escalar_i]
+        if escalar_limite_tareas is not None and len(matriz_operacion) > escalar_limite_tareas:
+            raise ValueError(f"Datos reales: con su reposición la lista tiene más de {escalar_limite_tareas} tareas, el máximo es {escalar_limite_tareas}.")
+    return matriz_operacion, vector_inicial
 
 
 def preparar_datos_reales(matriz_tareas, escalar_porcentaje_historial=100):
