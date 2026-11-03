@@ -90,12 +90,10 @@ class Simulacion:
 
     @staticmethod
     def indiceSemillaPolitica(txt_clave_politica):
-        # Índice que fija el azar de una política: el de su política base en el registro, así no depende de qué otras políticas se eligen
-        # Una variante replanificada comparte el índice de la de plan fijo: parten del mismo plan y sus desempates al azar son los mismos
+        # Índice que fija el azar de una política: el de su posición en el registro, así no depende de qué otras políticas se eligen
         # Una clave desconocida recibe el índice siguiente al último, crear_politica la rechaza con un mensaje claro
         vector_claves = list(POLITICAS_ASIGNACION)
-        txt_base = txt_clave_politica.removesuffix('_replanificada')
-        return vector_claves.index(txt_base) if txt_base in vector_claves else len(vector_claves)
+        return vector_claves.index(txt_clave_politica) if txt_clave_politica in vector_claves else len(vector_claves)
 
     @staticmethod
     def semillaDePolitica(escalar_semilla, txt_clave_politica):

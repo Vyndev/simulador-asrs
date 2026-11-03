@@ -89,11 +89,9 @@ def cargar_configuracion():
         "escalar_semilla": 2024, # Semilla base, la réplica i usa semilla + i, esto hace reproducibles los resultados
 
         # Políticas de asignación de almacenamiento a comparar, también gobiernan la reubicación
-        # Disponibles: 'aleatoria', 'basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover', 'full_turnover_replanificada', 'mas_cercana_es', 'mas_cercana_grua'
-        # Las dos con zonas tienen plan fijo (formado antes del llenado) y una variante '_replanificada' que rehace sus zonas cada escalar_dias_replanificacion días
-        "vector_politicas_asignacion": ('aleatoria', 'basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover', 'full_turnover_replanificada',
-                                        'mas_cercana_es', 'mas_cercana_grua'),
-        "escalar_dias_replanificacion": 30, # Periodo de las variantes que replanifican: la ventana de 30 días de la popularidad móvil (Manzini et al., 2015); la asignación se recalcula una vez por periodo (Roodbergen y Vis, 2009)
+        # Disponibles: 'aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'
+        # Las dos con zonas tienen plan fijo: se forma antes del llenado con la popularidad móvil del historial y no cambia (las heurísticas clásicas son estáticas)
+        "vector_politicas_asignacion": ('aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'),
 
         # Políticas de recuperación: cada política de asignación se ejecuta con cada una
         # 'fcfs': sale el ítem más antiguo del SKU aunque esté bloqueado (FCFS estricto; control de lote)
@@ -223,7 +221,6 @@ def config_desde_json(diccionario):
     escalar_techo = datos["escalar_techo_ocupacion"]
     if "escalar_techo_ocupacion" not in diccionario and config["escalar_nivel_ocupacion"] >= base["escalar_techo_ocupacion"]:
         escalar_techo = 1.0 # La herramienta web no tiene campo para el techo: con ocupaciones altas se sube a 1 en lugar de rechazar una configuración antes válida
-    config["escalar_dias_replanificacion"] = _numero(datos["escalar_dias_replanificacion"], "Periodo de replanificación (días)", entero=True, minimo=1, maximo=365)
     config["escalar_techo_ocupacion"] = _numero(escalar_techo, "Techo de ocupación", minimo=0, minimo_estricto=True, maximo=1)
     # Con datos reales no hay generador de escenario y el techo no interviene
     if datos["texto_origen_tareas"] == "generada" and config["escalar_techo_ocupacion"] <= config["escalar_nivel_ocupacion"]:

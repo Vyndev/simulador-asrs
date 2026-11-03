@@ -395,7 +395,6 @@ class EscenarioInvertido:
 
 class PruebasPoliticasConPopularidad(unittest.TestCase):
     CLAVES_CON_ZONAS = ('basada_en_clases', 'full_turnover')
-    CLAVES_REPLANIFICADAS = ('basada_en_clases_replanificada', 'full_turnover_replanificada')
 
     def crear(self, txt_clave, escenario="por_defecto", **dic_cambios):
         # Política sobre una estantería vacía, con el escenario mínimo (o ninguno) en la configuración
@@ -419,14 +418,13 @@ class PruebasPoliticasConPopularidad(unittest.TestCase):
         return politica.matriz_zonificacion.tobytes(), vector_clases.tobytes()
 
     def test_variantes_registradas(self):
-        self.assertEqual(set(POLITICAS_ASIGNACION), {'aleatoria', 'basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover',
-                                                     'full_turnover_replanificada', 'mas_cercana_es', 'mas_cercana_grua'})
+        self.assertEqual(set(POLITICAS_ASIGNACION), {'aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'})
         self.assertEqual(tuple(cargar_configuracion()["vector_politicas_asignacion"]), tuple(POLITICAS_ASIGNACION))
+        self.assertEqual(len(POLITICAS_ASIGNACION), 5)                                    # las heurísticas clásicas son estáticas: no hay variantes que replanifiquen
+        self.assertEqual(len(Simulacion.escenarios(dict(cargar_configuracion(), vector_politicas_recuperacion=("fcfs", "fcfs_accesible")))), 10)       # 5 de asignación x 2 reglas de recuperación
         for txt_clave in POLITICAS_ASIGNACION:
             for escenario in ("por_defecto", None):
                 self.assertTrue(self.crear(txt_clave, escenario).nombre, (txt_clave, escenario))
-        self.assertEqual({self.crear(txt_clave).nombre for txt_clave in self.CLAVES_REPLANIFICADAS},
-                         {'BasadaEnClasesReplanificada', 'FullTurnoverReplanificada'})
 
     def test_plan_fijo_no_cambia_sus_zonas(self):
         for txt_clave in self.CLAVES_CON_ZONAS:
@@ -440,66 +438,9 @@ class PruebasPoliticasConPopularidad(unittest.TestCase):
                 if vector_clases is not None:
                     self.assertTrue(np.array_equal(politica.vector_clase_de_sku, vector_clases), (txt_clave, escalar_dia))
 
-    def test_replanificada_cambia_sus_zonas_solo_cada_30_dias(self):
-        escalar_n = cargar_configuracion()["escalar_numero_skus"]
-        for txt_clave in self.CLAVES_REPLANIFICADAS:
-            politica = self.crear(txt_clave)
-            matriz_inicial = politica.matriz_zonificacion.copy()
-            # Plan inicial: la posición 1 es la más popular y tiene la zona más cercana al E/S
-            self.assertEqual(self.etiqueta_mas_cercana(politica), politica.etiquetaZona(1), txt_clave)
-            for escalar_dia in (0, 15, 29):
-                politica.iniciarDia(escalar_dia)
-                self.assertTrue(np.array_equal(politica.matriz_zonificacion, matriz_inicial), (txt_clave, escalar_dia))
-            politica.iniciarDia(30)
-            # Ahora la última posición es la más popular y su zona queda en la celda más cercana
-            self.assertEqual(self.etiqueta_mas_cercana(politica), politica.etiquetaZona(escalar_n), txt_clave)
-            if "clases" in txt_clave:
-                self.assertEqual((politica.etiquetaZona(escalar_n), politica.etiquetaZona(1)), (1, 3))
-                self.assertEqual(self.etiqueta_mas_cercana(politica), 1)
-            else:
-                self.assertEqual(self.etiqueta_mas_cercana(politica), escalar_n)
-                self.assertFalse(np.array_equal(politica.matriz_zonificacion, matriz_inicial))
-
-    def test_la_primera_replanificacion_ocurre_en_el_periodo_configurado(self):
-        escalar_n = cargar_configuracion()["escalar_numero_skus"]
-        for txt_clave in self.CLAVES_REPLANIFICADAS:
-            # Con un periodo de 10 días la popularidad se invierte en el día 10 y el plan cambia ahí, no en el 30
-            politica = self.crear(txt_clave, EscenarioInvertido(escalar_n, 10), escalar_dias_replanificacion=10)
-            tupla_antes = self.plan(politica)
-            for escalar_dia in (0, 5, 9):
-                politica.iniciarDia(escalar_dia)
-                self.assertEqual(self.plan(politica), tupla_antes, (txt_clave, escalar_dia))
-            politica.iniciarDia(10)
-            self.assertNotEqual(self.plan(politica), tupla_antes, txt_clave)
-            self.assertEqual(self.etiqueta_mas_cercana(politica), politica.etiquetaZona(escalar_n), txt_clave)
-
-    def test_un_dia_omitido_no_salta_la_replanificacion(self):
-        escalar_n = cargar_configuracion()["escalar_numero_skus"]
-        for txt_clave in self.CLAVES_REPLANIFICADAS:
-            politica = self.crear(txt_clave)
-            tupla_inicial = self.plan(politica)
-            politica.iniciarDia(29)
-            self.assertEqual(self.plan(politica), tupla_inicial, txt_clave)
-            # El día 30 no llega al controlador: el 31 ya pertenece al periodo siguiente y replanifica
-            politica.iniciarDia(31)
-            tupla_nueva = self.plan(politica)
-            self.assertNotEqual(tupla_nueva, tupla_inicial, txt_clave)
-            self.assertEqual(self.etiqueta_mas_cercana(politica), politica.etiquetaZona(escalar_n), txt_clave)
-            # Dentro del mismo periodo no vuelve a replanificar
-            politica.iniciarDia(32)
-            self.assertEqual(self.plan(politica), tupla_nueva, txt_clave)
-
-    def test_replanificada_sin_escenario_no_hace_nada(self):
-        for txt_clave in self.CLAVES_REPLANIFICADAS:
-            politica = self.crear(txt_clave, None)
-            matriz_inicial = politica.matriz_zonificacion.copy()
-            for escalar_dia in (0, 30, 60):
-                politica.iniciarDia(escalar_dia)
-            self.assertTrue(np.array_equal(politica.matriz_zonificacion, matriz_inicial), txt_clave)
-
     def test_planifica_con_la_popularidad_del_primer_dia(self):
         escenario = EscenarioInvertido(180)
-        for txt_clave in ('basada_en_clases', 'basada_en_clases_replanificada'):
+        for txt_clave in ('basada_en_clases',):
             politica = self.crear(txt_clave, escenario)
             self.assertTrue(np.array_equal(politica.vector_clase_de_sku, clasificar_skus(escenario.popularidad(0), politica.config)), txt_clave)
         # Sin escenario planifican con la demanda de la configuración, como antes
@@ -552,7 +493,7 @@ class PruebasPoliticasConCatalogo(unittest.TestCase):
         return crear_politica(txt_clave, E, G, P, config)
 
     def test_basada_en_clases_solo_agrupa_los_sku_que_existen(self):
-        for txt_clave in ('basada_en_clases', 'basada_en_clases_replanificada'):
+        for txt_clave in ('basada_en_clases',):
             politica = self.crear(txt_clave)
             self.assertTrue(np.all(politica.vector_clase_de_sku[-5:] == 0), txt_clave)
             self.assertTrue(np.all(politica.vector_clase_de_sku[:-5] > 0), txt_clave)
@@ -562,7 +503,7 @@ class PruebasPoliticasConCatalogo(unittest.TestCase):
             self.assertEqual(politica.etiquetaZona(1), 1, txt_clave)
 
     def test_full_turnover_solo_da_zona_a_los_sku_que_existen(self):
-        for txt_clave in ('full_turnover', 'full_turnover_replanificada'):
+        for txt_clave in ('full_turnover',):
             politica = self.crear(txt_clave)
             conjunto_zonas = set(np.unique(politica.matriz_zonificacion).tolist())
             self.assertEqual(conjunto_zonas, set(range(1, 176)), txt_clave)
@@ -571,55 +512,12 @@ class PruebasPoliticasConCatalogo(unittest.TestCase):
                 self.assertEqual(politica.etiquetaZona(escalar_sku), 175, (txt_clave, escalar_sku))
             self.assertEqual(politica.etiquetaZona(10), 10, txt_clave)
 
-    def test_la_replanificacion_incorpora_los_sku_nuevos(self):
-        politica = self.crear('full_turnover_replanificada')
-        politica.iniciarDia(30)
-        self.assertEqual(set(np.unique(politica.matriz_zonificacion).tolist()), set(range(1, 181)))
-        self.assertEqual(politica.etiquetaZona(180), 180)
-        politica = self.crear('basada_en_clases_replanificada')
-        politica.iniciarDia(30)
-        self.assertTrue(np.all(politica.vector_clase_de_sku > 0))
-        self.assertEqual(politica.etiquetaZona(180), int(politica.vector_clase_de_sku[179]))
-
     def test_el_plan_fijo_no_incorpora_los_sku_nuevos(self):
         for txt_clave in ('basada_en_clases', 'full_turnover'):
             politica = self.crear(txt_clave)
             matriz_inicial = politica.matriz_zonificacion.copy()
             politica.iniciarDia(30)
             self.assertTrue(np.array_equal(politica.matriz_zonificacion, matriz_inicial), txt_clave)
-
-
-class PruebasReplanificacionDeExtremoAExtremo(unittest.TestCase):
-    def test_un_escenario_generado_replanifica_en_el_dia_30_por_el_controlador(self):
-        import random
-        from asrs.control.controlador_grua import ControladorGrua
-        from asrs.politicas.basada_en_clases import PoliticaBasadaEnClasesReplanificada
-
-        class Espia(PoliticaBasadaEnClasesReplanificada):
-            # Anota el día de cada llamada a planificar, None es la del plan inicial
-            ultimo_dia = None
-
-            def planificar(self, *argumentos):
-                self.__dict__.setdefault("vector_dias_planificados", []).append(self.ultimo_dia)
-                super().planificar(*argumentos)
-
-            def iniciarDia(self, escalar_dia):
-                self.ultimo_dia = escalar_dia
-                super().iniciarDia(escalar_dia)
-
-        # Pocos ciclos por hora: unas 48 tareas por día, así 1 700 tareas cubren el día 30 pero no el 60
-        config = cargar_configuracion()
-        config.update(escalar_ciclos_por_hora=2, escalar_largo_secuencia=1_700)
-        simulacion = Simulacion(config)
-        random.seed(5)
-        SA, S = simulacion.generarSecuencias()
-        vector_dias = simulacion.escenario_demanda.vector_dia_de_tarea
-        self.assertTrue(30 <= max(vector_dias) < 60, max(vector_dias))
-        E, G, P = simulacion.crearInstancias()
-        politica = Espia(E, G, P, simulacion.configPolitica())
-        ControladorGrua(E, G, P, SA, politica).ejecutarSecuencia() # El llenado no avisa días
-        ControladorGrua(E, G, P, S, politica, **simulacion.argumentosOperacion(len(S))).ejecutarSecuencia()
-        self.assertEqual(politica.vector_dias_planificados, [None, 30])
 
 
 if __name__ == "__main__":

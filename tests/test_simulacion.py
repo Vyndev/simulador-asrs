@@ -41,7 +41,7 @@ class PruebasEscenarios(unittest.TestCase):
             self.assertEqual(np.count_nonzero(E.matriz_contenedor_items), len(simulacion.escenario_demanda.lista_llenado), clave)
 
     def test_politicas_con_zonas_respetan_su_zona(self):
-        for clave in ('basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover', 'full_turnover_replanificada'):
+        for clave in ('basada_en_clases', 'full_turnover'):
             _, E, _, _, politica = preparar_estado(clave)
             matriz_ocupacion = MatricesRestriccion().ocupacion(E)
             matriz_libres_accesibles = np.logical_not(matriz_ocupacion) & MatricesRestriccion().accesibilidad(matriz_ocupacion)
@@ -70,8 +70,7 @@ class PruebasEscenarios(unittest.TestCase):
         self.assertEqual(len(r1), len(config["vector_politicas_asignacion"]) * len(config["vector_politicas_recuperacion"]))
         self.assertEqual(len(r1[0]), 33)
         self.assertEqual([fila[0] for fila in r1[::2]],
-                         ['Aleatoria', 'BasadaEnClases', 'BasadaEnClasesReplanificada', 'FullTurnover', 'FullTurnoverReplanificada',
-                          'MasCercanaAlES', 'MasCercanaALaGrua'])
+                         ['Aleatoria', 'BasadaEnClases', 'FullTurnover', 'MasCercanaAlES', 'MasCercanaALaGrua'])
         self.assertEqual({(fila[1]) for fila in r1}, {'FCFS', 'FCFS-Accesible'})
 
     def test_resumen_de_escenario_por_replica(self):
@@ -112,8 +111,6 @@ class PruebasConfiguracion(unittest.TestCase):
         self.assertEqual(copia["escalar_largo_secuencia"], original["escalar_largo_secuencia"])
         self.assertEqual(copia["vector_politicas_asignacion"], original["vector_politicas_asignacion"])
         self.assertEqual(copia["texto_modelo_demanda"], original["texto_modelo_demanda"])
-        self.assertEqual(copia["escalar_dias_replanificacion"], original["escalar_dias_replanificacion"])
-        self.assertEqual(config_desde_json({**config_a_json(original), "escalar_dias_replanificacion": 7})["escalar_dias_replanificacion"], 7)
         self.assertEqual(copia["escalar_meses_ciclo_vida"], original["escalar_meses_ciclo_vida"])
         self.assertEqual(copia["vector_cuantiles_amplitud"].tolist(), original["vector_cuantiles_amplitud"].tolist())
 
@@ -228,8 +225,6 @@ class PruebasConfiguracion(unittest.TestCase):
             {"vector_reparto_mes_pico": [0, 0, 0]},
             {"escalar_dias_calentamiento": 10},                         # menor que la ventana
             {"escalar_dias_ventana_popularidad": 0},
-            {"escalar_dias_replanificacion": 0},
-            {"escalar_dias_replanificacion": 400},
             {"escalar_dias_ventana_popularidad": 400, "escalar_dias_calentamiento": 500},
             {"escalar_dias_calentamiento": 731},
             {"escalar_largo_secuencia": 600_001},

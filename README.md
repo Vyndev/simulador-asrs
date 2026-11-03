@@ -29,10 +29,10 @@ Los parámetros por defecto (`asrs/config.py`) son la instancia del capítulo 6 
 | Clases | 3, con el 20 %, 20 % y 60 % de los SKU |
 | Tareas por corrida | 525 600 (un año de 365 días a 1 440 tareas por día), tras un calentamiento de 30 días y un llenado inicial |
 | Ocupación | 85 % de media, con un techo del 95 % |
-| Políticas de asignación | 7 (la basada en clases y la dedicada, con plan fijo y replanificadas cada 30 días) |
+| Políticas de asignación | 5 (aleatoria, basada en clases, dedicada por SKU, posición libre más cercana al E/S y más cercana a la grúa), todas con plan estático |
 | Corridas | 1 por defecto |
 
-Un año completo (525 600 tareas) tarda unos 3,5 minutos por política en un solo proceso y hasta unos 6,5 minutos con varios procesos en paralelo (se midieron 352 a 387 s con siete), así que las siete políticas de una réplica suman unos 25 minutos en un solo núcleo; `main.py` reparte las réplicas entre los núcleos. La herramienta visual (`--servir`) arranca con una lista corta (el 10 % de las celdas) para que la primera ejecución sea ágil, y las pruebas usan 72 tareas.
+Un año completo (525 600 tareas) tarda unos 3,5 minutos por política en un solo proceso y hasta unos 6,5 minutos con varios procesos en paralelo (se midieron 352 a 387 s con siete), así que las siete políticas que había entonces (antes de retirar las replanificadas) sumaban unos 25 minutos en un solo núcleo; con las cinco actuales es menos; `main.py` reparte las réplicas entre los núcleos. La herramienta visual (`--servir`) arranca con una lista corta (el 10 % de las celdas) para que la primera ejecución sea ágil, y las pruebas usan 72 tareas.
 
 ## Modelo dinámico de suministro y demanda
 
@@ -47,7 +47,7 @@ La lista de tareas generada sigue el modelo de la sección 6.2.3 del capítulo 6
 - **Popularidad móvil.** Es lo único que las políticas ven de la demanda: las recuperaciones de cada SKU en los últimos 30 días, y qué SKU existen (el catálogo). La popularidad de un producto nuevo arranca en cero.
 - **Datos reales.** El camino de datos reales no cambia: sin escenario no hay avisos de día ni retiros.
 
-**Siete políticas de asignación.** La basada en clases y la dedicada por SKU (`full_turnover`) planifican con la popularidad móvil y se evalúan en dos variantes que solo difieren en cuándo planifican. El *plan fijo* (`basada_en_clases`, `full_turnover`) forma las clases o las zonas antes del llenado inicial y no las cambia en el año. La *replanificada* (`basada_en_clases_replanificada`, `full_turnover_replanificada`) parte del mismo plan y lo rehace al empezar cada día múltiplo de `escalar_dias_replanificacion` (30, la ventana de la popularidad móvil). Solo planifican los SKU que existen ese día. Un SKU que nace después de planificar no tiene zona hasta la próxima replanificación y se trata como el de menor demanda: la basada en clases lo pone en la clase de menor demanda y la dedicada, en la zona del SKU de menor demanda del plan. Las unidades ya guardadas no se mueven: las zonas nuevas rigen para los almacenamientos siguientes. El tamaño de cada zona es proporcional a la raíz de la popularidad (con el perfil EOQ el inventario medio crece con la raíz de la demanda) y, si la zona no tiene una celda libre accesible, se relaja la zonificación, así ninguna política descarta almacenamientos. Las otras tres políticas no usan la demanda y tienen una sola variante.
+**Cinco políticas de asignación.** Son heurísticas clásicas y estáticas: no se adaptan a la demanda que cambia (esa adaptación es lo que aporta el agente de aprendizaje). La basada en clases (`basada_en_clases`) y la dedicada por SKU (`full_turnover`) planifican una sola vez, antes del llenado inicial, con la popularidad móvil calculada con el historial (con datos reales, el primer tramo de la lista, que no se evalúa), y el plan no cambia durante el año. Solo planifican los SKU que existen en ese momento. Un SKU que nace después de planificar no tiene zona propia y se trata como el de menor demanda: la basada en clases lo pone en la clase de menor demanda y la dedicada, en la zona del SKU de menor demanda del plan. El tamaño de cada zona es proporcional a la raíz de la popularidad (con el perfil EOQ el inventario medio crece con la raíz de la demanda) y, si la zona no tiene una celda libre accesible, se relaja la zonificación, así ninguna política descarta almacenamientos. Las otras tres (`aleatoria`, `mas_cercana_es`, `mas_cercana_grua`) no usan la demanda. Con las dos reglas de recuperación (FCFS estricto y FCFS entre accesibles) son 10 combinaciones.
 
 **Claves nuevas de configuración** (`asrs/config.py`, valores por defecto de la instancia del capítulo 6):
 
@@ -63,7 +63,6 @@ La lista de tareas generada sigue el modelo de la sección 6.2.3 del capítulo 6
 | `escalar_dias_ventana_popularidad` | 30 | Ventana de la popularidad móvil |
 | `escalar_dias_calentamiento` | 30 | Días de prehistoria antes del año evaluado |
 | `escalar_techo_ocupacion` | 0,95 | Techo de ocupación de la estantería |
-| `escalar_dias_replanificacion` | 30 | Periodo de las políticas replanificadas |
 
 **Salidas nuevas.** `resultados_simulacion.csv` suma dos columnas, `Cant_RetirosFinCiclo` y `TiempoTotal_RetirosFinCiclo`: los retiros de fin de ciclo se cuentan además como recuperaciones, y su tiempo ya está incluido en el de recuperación. `resultados_escenario.csv` tiene una fila por réplica con `semilla`, `demanda_no_atendida`, `lotes_aplazados`, `retiros`, `lanzamientos`, `ocupacion_media`, `ocupacion_minima`, `ocupacion_maxima`, `participacion_top20_media`, `sigma_alturas`, `dias_operacion`, `productos` (SKU distintos que existen), `surtido_medio`, `surtido_minimo` y `surtido_maximo`. `retiros` cuenta tareas de retiro (una por unidad retirada), no productos; `lanzamientos` cuenta productos nacidos en la operación.
 
@@ -71,7 +70,6 @@ La lista de tareas generada sigue el modelo de la sección 6.2.3 del capítulo 6
 
 **Limitaciones conocidas**
 - El flujo diario R = 720 sale de los 60 ciclos por hora y no escala con la estantería. En estanterías muy pequeñas (por ejemplo 6×6×2 con 10 SKU) una parte grande de la demanda queda sin atender: hay que reducir `escalar_ciclos_por_hora`.
-- Con datos reales no hay escenario, así que las variantes replanificadas se comportan exactamente igual que las de plan fijo.
 - La página web envía siempre la clave del techo (0,95): con origen generado rechaza ocupaciones iguales o mayores al 95 %. Su lista de políticas sigue mostrando solo las cinco originales.
 - Con una lista generada, en la página el campo "% almacenar" se ignora (la mezcla es un resultado del modelo) y "Sesgo σ (Hausman)" es ahora la concentración objetivo 0,2^σ del 20 % de SKUs más demandados.
 
@@ -112,12 +110,12 @@ Si recargas la página mientras corre una simulación, se reconecta y sigue su p
 - Productos (SKU): cantidad (hasta 200), sesgo de la demanda según la curva de Hausman o una lista de demanda propia, con una vista previa de la demanda por SKU.
 - Clases de la política basada en clases (dentro de la propia política): la política agrupa los SKUs sola con la demanda definida en la pestaña Demanda (no la modifica) y solo se elige cómo formar las clases. *Misma demanda en cada clase* (de 1 a 8 clases, cada una con la misma parte de la demanda; es lo predeterminado, con 3 clases), *Pareto 80 / 15 / 5* (A con el 80 % de la demanda, B con el 15 % y C con el 5 %) o *a mano* con el porcentaje de SKUs de cada clase. Con los dos primeros no hace falta indicar cuántos SKUs tiene cada clase: salen de la curva de demanda acumulada (`agrupar_skus_por_demanda` en `asrs/politicas/zonificacion.py`), y la vista previa muestra el resultado.
 - Lista de tareas: cantidad (automática o fija) y porcentaje de almacenamientos.
-- Políticas a comparar: cualquier subconjunto de las cinco originales de asignación (la página aún no muestra las variantes replanificadas), combinadas con FCFS estricto, FCFS entre accesibles o las dos.
+- Políticas a comparar: cualquier subconjunto de las cinco políticas de asignación, combinadas con FCFS estricto, FCFS entre accesibles o las dos.
 - Semilla y réplicas para la estadística (hasta 2000). La carrera anima siempre una réplica, la primera.
 
 Los parámetros se validan antes de ejecutar y los errores se muestran junto al formulario. Se pueden guardar y cargar como archivo JSON, y el navegador recuerda los últimos usados.
 
-**Color de los ítems.** Depende de la política y cada panel trae su leyenda: en las políticas basadas en clases (de plan fijo o replanificada) es la clase del SKU (A, B, C), y en las demás es la rotación del SKU, en un degradado de amarillo (más rotación) a violeta (menos). Así, en `full_turnover` se ve cómo los SKUs más rotativos ocupan las posiciones más cercanas al E/S sin que aparezcan clases.
+**Color de los ítems.** Depende de la política y cada panel trae su leyenda: en la política basada en clases es la clase del SKU (A, B, C), y en las demás es la rotación del SKU, en un degradado de amarillo (más rotación) a violeta (menos). Así, en `full_turnover` se ve cómo los SKUs más rotativos ocupan las posiciones más cercanas al E/S sin que aparezcan clases.
 
 **Qué muestra**
 - La carrera: todas las políticas ejecutan la misma lista de tareas sobre un mismo reloj. Cada una tiene su estantería y su grúa animadas, una tira con las tareas, un marcador en vivo y una tabla final de la réplica.
@@ -152,9 +150,7 @@ Como los canales se llenan desde el fondo, con FCFS estricto la unidad más anti
 |---|---|---|
 | `aleatoria` | `Aleatoria` | Canal elegido al azar |
 | `basada_en_clases` | `BasadaEnClases` | La política agrupa los SKUs en clases por popularidad móvil (la clase A con los más demandados) y reserva una zona a cada clase; la clase A recibe las celdas más cercanas al E/S. Plan fijo: las clases se forman una vez, antes del llenado |
-| `basada_en_clases_replanificada` | `BasadaEnClasesReplanificada` | Igual que la anterior, pero rehace las clases y las zonas cada `escalar_dias_replanificacion` días |
 | `full_turnover` | `FullTurnover` | Se hace una lista de SKUs ordenada por rotación y se empareja con la lista de posiciones ordenada por cercanía al E/S: el SKU más rotativo recibe las posiciones más cercanas, el siguiente las que siguen, y así sucesivamente (Hausman, Graves y Schwarz, 1976). No hay clases. Plan fijo: la lista se ordena una vez, antes del llenado |
-| `full_turnover_replanificada` | `FullTurnoverReplanificada` | Igual que la anterior, pero rehace el orden y las zonas cada `escalar_dias_replanificacion` días |
 | `mas_cercana_es` | `MasCercanaAlES` | Celda libre más cercana al E/S |
 | `mas_cercana_grua` | `MasCercanaALaGrua` | Celda libre más cercana a la grúa: en reposo al almacenar, la celda del ítem que retira al reubicar |
 
@@ -207,7 +203,6 @@ asrs/
     aleatoria.py  basada_en_clases.py  full_turnover.py
     mas_cercana_es.py  mas_cercana_grua.py
     zonificacion.py               Zonas por canales completos y agrupación de SKUs en clases
-    (basada_en_clases.py y full_turnover.py incluyen también la variante replanificada)
     recuperacion.py               PoliticaRecuperacionFCFS (estricto) y PoliticaRecuperacionFCFSAccesible
     restriccion.py                Ocupación y accesibilidad
     registro.py                   Registro y fábrica de políticas
@@ -240,4 +235,4 @@ Dependencias entre capas (solo hacia abajo): `simulacion` → `control` → `pol
 
 ## Modelo de réplicas
 
-Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de llenado y una de operación (con el modelo `ciclo_vida`, un escenario de un año y su resumen). Cada política tiene una semilla derivada de su política base en el registro (la variante replanificada usa la de su variante de plan fijo, así parten con los mismos desempates al azar), no de su posición en la lista elegida. Cada política parte de una estantería vacía, la llena con esa misma secuencia bajo su propia lógica y procesa la secuencia de operación (comparación pareada). Las métricas del llenado se descartan.
+Cada réplica `i` usa la semilla `escalar_semilla + i` y genera una secuencia de llenado y una de operación (con el modelo `ciclo_vida`, un escenario de un año y su resumen). Cada política tiene una semilla derivada de su posición en el registro (no de su posición en la lista elegida). Cada política parte de una estantería vacía, la llena con esa misma secuencia bajo su propia lógica y procesa la secuencia de operación (comparación pareada). Las métricas del llenado se descartan.

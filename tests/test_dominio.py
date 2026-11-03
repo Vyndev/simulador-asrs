@@ -104,9 +104,8 @@ class PruebasGrua(unittest.TestCase):
         self.assertEqual((config["escalar_ciclos_por_hora"], config["escalar_horas_por_dia"]), (60, 24))
         self.assertEqual((config["escalar_dias_ventana_popularidad"], config["escalar_dias_calentamiento"]), (30, 30))
         self.assertEqual(config["escalar_techo_ocupacion"], 0.95)
-        self.assertEqual(config["escalar_dias_replanificacion"], 30)
-        self.assertEqual(config["vector_politicas_asignacion"], ('aleatoria', 'basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover',
-                                                                 'full_turnover_replanificada', 'mas_cercana_es', 'mas_cercana_grua'))
+        self.assertNotIn("escalar_dias_replanificacion", config)             # las heurísticas clásicas son estáticas: no replanifican
+        self.assertEqual(config["vector_politicas_asignacion"], ('aleatoria', 'basada_en_clases', 'full_turnover', 'mas_cercana_es', 'mas_cercana_grua'))
         # El E/S queda 1 m sobre la base de la estantería y 1 m antes de la primera columna, con el riel en la cara frontal
         E, G, P = Simulacion(_cargar_configuracion_instancia()).crearInstancias()
         self.assertEqual(E.vector_posicion.tolist(), [-1.0, 1.0, 0])

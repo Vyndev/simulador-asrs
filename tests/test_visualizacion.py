@@ -24,7 +24,8 @@ class PruebasVisualizacion(unittest.TestCase):
         from asrs.visualizacion.generador import generar_datos
         config = cargar_configuracion()
         vector_claves = config["vector_politicas_asignacion"]
-        self.assertIn('basada_en_clases_replanificada', vector_claves)
+        self.assertNotIn('basada_en_clases_replanificada', vector_claves)
+        self.assertEqual(len(vector_claves), 5)
         replica = generar_datos(config, [2024])["replicas"][0]
         for txt_clave, politica in zip(vector_claves, replica["politicas"]):
             txt_esperado = "clase" if txt_clave.startswith('basada_en_clases') else "sku"

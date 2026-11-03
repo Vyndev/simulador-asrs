@@ -176,28 +176,18 @@ class PruebasDatosReales(unittest.TestCase):
         datos.update(texto_origen_tareas="datos", texto_tareas_csv="\n".join(vector_filas), escalar_porcentaje_historial=50)
         return config_desde_json(datos)
 
-    def test_con_datos_reales_las_variantes_replanificadas_son_iguales_a_las_de_plan_fijo(self):
-        # Sin escenario no hay replanificación y ambas variantes comparten la semilla: deben dar exactamente lo mismo
-        config = self.config_real_larga()
-        config["vector_politicas_asignacion"] = ('basada_en_clases', 'basada_en_clases_replanificada', 'full_turnover', 'full_turnover_replanificada')
-        filas = Simulacion.cargarReplica((config, 3))
-        self.assertEqual(len(filas), 4)
-        for fija, replanificada in ((filas[0], filas[1]), (filas[2], filas[3])):
-            self.assertEqual(fija[2:], replanificada[2:], fija[0])
-
     def test_la_semilla_de_una_politica_no_depende_de_las_demas_elegidas(self):
         config = self.config_real_larga()
         config["vector_politicas_asignacion"] = tuple(POLITICAS_ASIGNACION)
         dic_completo = {fila[0]: fila for fila in Simulacion.cargarReplica((config, 3))}
-        for vector_subconjunto in (('full_turnover_replanificada', 'aleatoria'), ('mas_cercana_grua', 'basada_en_clases')):
+        for vector_subconjunto in (('full_turnover', 'aleatoria'), ('mas_cercana_grua', 'basada_en_clases')):
             config["vector_politicas_asignacion"] = vector_subconjunto
             for fila in Simulacion.cargarReplica((config, 3)):
                 self.assertEqual(fila, dic_completo[fila[0]], vector_subconjunto)
         # Es reproducible: repetir la réplica da lo mismo
         config["vector_politicas_asignacion"] = tuple(POLITICAS_ASIGNACION)
         self.assertEqual({fila[0]: fila for fila in Simulacion.cargarReplica((config, 3))}, dic_completo)
-        # La variante replanificada usa la semilla de su política base y las demás las suyas
-        self.assertEqual(Simulacion.semillaDePolitica(3, 'basada_en_clases_replanificada'), Simulacion.semillaDePolitica(3, 'basada_en_clases'))
+        # Cada política tiene la semilla de su posición en el registro
         self.assertEqual(len({Simulacion.semillaDePolitica(3, txt_clave) for txt_clave in ('aleatoria', 'basada_en_clases', 'full_turnover',
                                                                                               'mas_cercana_es', 'mas_cercana_grua')}), 5)
 

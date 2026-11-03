@@ -41,22 +41,3 @@ class PoliticaFullTurnover(PoliticaAsignacion):
     def matrizCriterio(self, vector_posicion_referencia = None):
         # Dentro de la zona del SKU se prefiere la celda más cercana al punto E/S
         return self.tiempoChebyshevXY(self.instancia_puntoES.vector_posicion)
-
-
-class PoliticaFullTurnoverReplanificada(PoliticaFullTurnover):
-    nombre = 'FullTurnoverReplanificada'
-
-    def __init__(self, instancia_estanteria, instancia_grua, instancia_puntoES, config):
-        super().__init__(instancia_estanteria, instancia_grua, instancia_puntoES, config)
-        # Último periodo de replanificación en que se rehizo el plan, el 0 es el plan inicial
-        self.escalar_ultimo_periodo_replanificado = 0
-
-    def iniciarDia(self, escalar_dia):
-        # Parte del plan inicial y rehace las zonas en el primer día de cada periodo nuevo (el día 0 ya tiene el plan inicial)
-        # Se compara el periodo del día con el último replanificado y no se exige un múltiplo exacto, así un día omitido no salta una replanificación
-        if self.config.get("escenario_demanda") is None or escalar_dia <= 0:
-            return
-        escalar_periodo = escalar_dia // self.config["escalar_dias_replanificacion"]
-        if escalar_periodo > self.escalar_ultimo_periodo_replanificado:
-            self.escalar_ultimo_periodo_replanificado = escalar_periodo
-            self.planificar(*self.demandaPlanificacion(escalar_dia))
