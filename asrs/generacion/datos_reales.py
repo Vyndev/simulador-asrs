@@ -102,17 +102,22 @@ def reponer_con_lotes_eoq(matriz_secuencia, vector_demanda, escalar_recuperacion
     `matriz_secuencia` son las recuperaciones (1, SKU) con el SKU numerado de 1 a n y `vector_demanda` la participación de cada SKU en el historial.
     Demanda esperada ν = R ρ (R recuperaciones por día); lote Q = max(1, round(κ √ν)) con κ calibrada para que el inventario esperado
     Σ (Q + 1) / 2 sea `escalar_inventario_esperado` (φ F C K); punto de pedido y plazo de entrega cero: cuando una recuperación deja al SKU sin
-    unidades, el lote entra justo después, unidad tras unidad. Cada SKU parte con la mitad de su lote, redondeada hacia arriba, que es el
-    llenado inicial. Devuelve la lista de operación y las unidades iniciales de cada SKU (posición i = SKU i + 1).
+    unidades, el lote entra justo después, unidad tras unidad. Cada SKU con demanda en el historial parte con la mitad de su lote, redondeada hacia arriba, que es el
+    llenado inicial; los demás nacen con su primer lote. Devuelve la lista de operación y las unidades iniciales de cada SKU (posición i = SKU i + 1).
     Supuestos de los datos reales: ν es constante (la participación del historial), sin ciclo de vida, cierres ni techo de ocupación."""
     from asrs.generacion.reposicion import calibrar_kappa, lotes_eoq
     vector_nu = escalar_recuperaciones_diarias * np.asarray(vector_demanda, dtype=float)
     vector_lote = lotes_eoq(vector_nu, calibrar_kappa(vector_nu, escalar_inventario_esperado)).tolist()
-    vector_inicial = [(escalar_lote + 1) // 2 for escalar_lote in vector_lote]
+    # Un SKU sin demanda en el historial (ν = 0) es un producto que todavía no existe: no parte con existencias y, como en el generador,
+    # su primer lote entra justo antes de su primera recuperación (el inventario precede a la demanda)
+    vector_inicial = [(escalar_lote + 1) // 2 if escalar_nu > 0 else 0 for escalar_lote, escalar_nu in zip(vector_lote, vector_nu.tolist())]
     vector_existencias = list(vector_inicial)
     matriz_operacion = []
     for _, escalar_sku in matriz_secuencia:
         escalar_i = escalar_sku - 1
+        if vector_existencias[escalar_i] <= 0:
+            matriz_operacion.extend([(0, escalar_sku)] * vector_lote[escalar_i])
+            vector_existencias[escalar_i] += vector_lote[escalar_i]
         matriz_operacion.append((1, escalar_sku))
         vector_existencias[escalar_i] -= 1
         if vector_existencias[escalar_i] <= 0:

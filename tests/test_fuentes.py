@@ -420,13 +420,15 @@ class TestModoDatosReales:
 
 
 class TestSoloElPasado:
-    def test_el_historial_por_defecto_es_30_dias_de_365_y_no_se_evalua(self):
-        from asrs.config import cargar_configuracion
+    def test_el_historial_por_defecto_es_30_dias_y_se_evalua_un_anio_exacto(self):
+        from asrs.config import cargar_configuracion, recuperaciones_con_historial, recuperaciones_por_corrida
         from asrs.generacion.datos_reales import tamano_historial
-        porcentaje = cargar_configuracion()["escalar_porcentaje_historial"]
-        assert porcentaje == pytest.approx(100 * 30 / 365)
-        assert tamano_historial(262_800, porcentaje) == 21_600 == 30 * 720                  # 30 días de recuperaciones, sin tarea de más por coma flotante
-        assert 262_800 - 21_600 == 241_200                                                   # lo que se evalúa: 335 días
+        config = cargar_configuracion()
+        porcentaje = config["escalar_porcentaje_historial"]
+        assert recuperaciones_con_historial(config) == 284_400 == 720 * (365 + 30)           # R (Y + B)
+        assert porcentaje == pytest.approx(100 * 30 / 395)                                   # 7,59 % de la lista
+        assert tamano_historial(284_400, porcentaje) == 21_600 == 30 * 720                   # 30 días de recuperaciones, sin tarea de más por coma flotante
+        assert 284_400 - 21_600 == recuperaciones_por_corrida(config) == 262_800             # lo que se evalúa: 365 días
 
     def test_la_demanda_que_ven_las_politicas_sale_solo_del_historial(self):
         from asrs.config import cargar_configuracion, config_a_json, config_desde_json
@@ -441,6 +443,8 @@ class TestSoloElPasado:
         assert list(config["vector_demanda_sku"]) == pytest.approx([0.6, 0.4, 0.0])         # participación de los primeros 100, no de toda la lista
         # Lo que se ejecuta empieza después del historial: las 100 primeras recuperaciones ya no están
         assert [sku for act, sku in config["secuencia_real"] if act == 1][:3] == [3, 3, 3]
+        assert config["vector_inventario_inicial"][2] == 0                                  # NUEVO no existe todavía: su primer lote entra antes de su primera recuperación
+        assert config["secuencia_real"][:2] == [(0, 3), (1, 3)] or config["secuencia_real"][0][0] == 0
         assert sum(1 for act, _ in config["secuencia_real"] if act == 1) == 400
         # Las políticas planifican con esa demanda (sin escenario, demandaPlanificacion usa la configuración)
         politica = PoliticaAsignacion.__new__(PoliticaAsignacion)

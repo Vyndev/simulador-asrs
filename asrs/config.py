@@ -14,12 +14,18 @@ LIMITE_REPLICAS_ESTADISTICA = 2000
 
 TAREAS_POR_CORRIDA = 525_600 # Cantidad de tareas evaluadas por corrida en la instancia del capítulo 6: un año de 365 días a 1 440 tareas por día
 DIAS_HORIZONTE = 365 # Horizonte evaluado de la instancia, en días
+DIAS_HISTORIAL = 30 # Días de historial de una lista real: los mismos del calentamiento y de la ventana de popularidad; no se evalúan
 RECUPERACIONES_POR_CORRIDA = TAREAS_POR_CORRIDA // 2 # Mitad de las tareas con la mezcla 50 % almacenamientos / 50 % recuperaciones: la demanda de un año (R x Y = 720 x 365)
 
 
 def recuperaciones_por_corrida(config):
     # Recuperaciones de demanda de un año evaluado: R = ciclos por hora x horas por día / 2 (mezcla 50 / 50) por día, durante el horizonte
     return int(round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2)) * DIAS_HORIZONTE
+
+
+def recuperaciones_con_historial(config):
+    # Largo de una lista de demanda real: el historial más el año evaluado, R x (Y + B) = 720 x 395 = 284 400 recuperaciones
+    return int(round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2)) * (DIAS_HORIZONTE + DIAS_HISTORIAL)
 
 
 def cargar_configuracion():
@@ -76,7 +82,7 @@ def cargar_configuracion():
         # Con datos reales la cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla salen del archivo
         "texto_origen_tareas": "generada",
         "texto_tareas_csv": "", # Contenido del CSV, con una tarea por fila: actividad (A o R) y SKU
-        "escalar_porcentaje_historial": 100 * 30 / 365, # Con datos reales, porcentaje inicial de la lista que sirve de historial (llenado y clases) y no se evalúa: 30 días de 365, como el calentamiento y la ventana de popularidad; las políticas no ven demanda posterior al momento actual
+        "escalar_porcentaje_historial": 100 * DIAS_HISTORIAL / (DIAS_HORIZONTE + DIAS_HISTORIAL), # Con datos reales, porcentaje inicial de la lista que sirve de historial (llenado y clases) y no se evalúa: 30 días de 395 (7,59 %), como el calentamiento y la ventana de popularidad; las políticas no ven demanda posterior al momento actual
         "escalar_largo_secuencia": 1,  # Valor inicial, se ajustará en la inicialización
         "escalar_cantidad_replicas": 1, # una corrida larga, como en la instancia del capítulo 6; con más corridas la estadística resume el promedio y el intervalo de confianza. Corrida de la instancia: # la simulación se repetira según la cantidad de replicas
         "escalar_replicas_animadas": 1, # la carrera muestra una réplica; la estadística usa escalar_cantidad_replicas
