@@ -58,6 +58,9 @@ class ResultadoExtraccion:
     dic_codigos: dict = field(default_factory=dict)    # SKU original -> código final de la salida; solo los SKU que quedan (vacío si no se codificó)
     dic_muestreo: dict = field(default_factory=dict)   # conteos del muestreo: individuales, cola, muestreados
     escalar_recuperaciones_antes: int = 0              # recuperaciones de la secuencia desagregada antes de reducir el surtido
+    escalar_recuperaciones_muestreadas: int = 0        # recuperaciones tras reducir el surtido y antes de escalar el volumen
+    escalar_total: object = None                       # volumen al que se escaló la secuencia (None si no se escaló)
+    set_sin_copias: set = field(default_factory=set)   # SKU que se quedaron sin ninguna copia al escalar a la baja
     escalar_lineas: int = 0                            # líneas con demanda tras filtrar (antes de desagregar)
     vector_lineas_mayores: list = field(default_factory=list)   # las líneas de mayor cantidad: (cantidad, SKU original, tiempo)
 
@@ -112,6 +115,23 @@ def muestrear_surtido(vector_skus, escalar_max_skus, escalar_semilla=0, escalar_
     return vector_reducida, dic_estrato, {"individuales": len(vector_individuales), "cola": len(vector_cola), "muestreados": len(vector_muestra)}
 
 
+def escalar_secuencia(vector_skus, escalar_total):
+    """Escala la secuencia a exactamente `escalar_total` recuperaciones, sin azar. La recuperación j (de n) se copia c(j+1) - c(j) veces
+    seguidas, con c(j) = (j * N + n // 2) // n en aritmética entera. El total es c(n) = N; con N < n cada recuperación aparece 0 o 1 veces
+    (adelgazamiento uniforme) y con N > n, floor(N / n) o ceil(N / n) veces. Conserva el orden, las proporciones de cada SKU (hasta una
+    unidad de redondeo) y las rachas proporcionalmente."""
+    escalar_n = len(vector_skus)
+    if escalar_n == 0:
+        raise ValueError("No hay recuperaciones que escalar.")
+    vector_escalada, escalar_previo = [], 0
+    for escalar_j, txt_sku in enumerate(vector_skus):
+        escalar_siguiente = ((escalar_j + 1) * escalar_total + escalar_n // 2) // escalar_n
+        if escalar_siguiente > escalar_previo:
+            vector_escalada.extend([txt_sku] * (escalar_siguiente - escalar_previo))
+        escalar_previo = escalar_siguiente
+    return vector_escalada
+
+
 def codificar_skus(vector_skus):
     """Sustituye cada etiqueta por un código SKU001, SKU002, ... en orden de demanda decreciente (a igual demanda, el que aparece antes).
     Devuelve la secuencia codificada y el diccionario etiqueta -> código."""
@@ -124,12 +144,13 @@ def codificar_skus(vector_skus):
     return [dic_codigo[txt_sku] for txt_sku in vector_skus], dic_codigo
 
 
-def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar_semilla=0, bool_codificar=False, escalar_tope=0.3):
+def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar_semilla=0, bool_codificar=False, escalar_tope=0.3, escalar_tareas=None):
     """Lee la fuente con el adaptador y devuelve la secuencia de SKU ordenada por tiempo.
     El orden es estable: las filas con el mismo tiempo conservan el orden que tenían en el archivo original.
     Si hay un máximo de SKU (por defecto el del adaptador; None lo desactiva) el surtido se reduce con muestreo estratificado después de
     filtrar, ordenar y desagregar (ver `muestrear_surtido`); `escalar_tope` (0,3 por defecto) fija el umbral de SKU individuales y
-    `escalar_semilla` la semilla del muestreo."""
+    `escalar_semilla` la semilla del muestreo. Si se da `escalar_tareas`, después se escala el volumen a exactamente esa cantidad de
+    recuperaciones (ver `escalar_secuencia`) y por último se codifica."""
     vector_validas, cuenta_motivos, escalar_leidas = [], Counter(), 0
     for escalar_posicion, fila in enumerate(adaptador.filas(txt_ruta)):
         escalar_leidas += 1
@@ -151,12 +172,18 @@ def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar
     else:
         dic_estratos = {t: "individual" for t in set(vector_skus)}
         dic_muestreo = {"individuales": len(dic_estratos), "cola": 0, "muestreados": 0}
+    escalar_muestreadas, set_sin_copias = len(vector_skus), set()
+    if escalar_tareas is not None:
+        vector_skus = escalar_secuencia(vector_skus, escalar_tareas)
+        set_sin_copias = set(dic_estratos) - set(vector_skus) - {t for t, e in dic_estratos.items() if e == "descartado"}
     dic_codigos = {}
     if bool_codificar:
         vector_skus, dic_codigo = codificar_skus(vector_skus)
         dic_codigos = dict(dic_codigo)       # los SKU originales que quedan son sus propias etiquetas
-    return ResultadoExtraccion(vector_skus, escalar_leidas, dict(cuenta_motivos), dic_estratos, dic_codigos, dic_muestreo, escalar_antes,
-                               escalar_lineas, vector_mayores)
+    return ResultadoExtraccion(vector_skus, escalar_leidas, dict(cuenta_motivos), dic_estratos, dic_codigos, dic_muestreo,
+                               escalar_recuperaciones_antes=escalar_antes, escalar_recuperaciones_muestreadas=escalar_muestreadas,
+                               escalar_total=escalar_tareas, set_sin_copias=set_sin_copias, escalar_lineas=escalar_lineas,
+                               vector_lineas_mayores=vector_mayores)
 
 
 def escribir_secuencia(vector_skus, txt_ruta):
@@ -168,15 +195,18 @@ def escribir_secuencia(vector_skus, txt_ruta):
             escritor.writerow([txt_sku])
 
 
-def escribir_codigos(dic_estratos, dic_codigos, txt_ruta):
+def escribir_codigos(dic_estratos, dic_codigos, txt_ruta, set_sin_copias=frozenset()):
     """Escribe la correspondencia de TODOS los SKU originales: SKU_original, SKU (el código; vacío si se descartó) y estrato.
-    Si no se codificó (`dic_codigos` vacío) la columna SKU repite el nombre original de los que quedan."""
+    Si no se codificó (`dic_codigos` vacío) la columna SKU repite el nombre original de los que quedan.
+    Un SKU que perdió todas sus copias al escalar el volumen (`set_sin_copias`) conserva su estrato, queda con SKU vacío y se marca
+    'sin_copias' en una cuarta columna, que solo existe si hay alguno."""
     def txt_final(txt_original):
-        if dic_estratos[txt_original] == "descartado":
+        if dic_estratos[txt_original] == "descartado" or txt_original in set_sin_copias:
             return ""
         return dic_codigos.get(txt_original, txt_original) if dic_codigos else txt_original
     with open(txt_ruta, "w", newline="", encoding="utf-8") as archivo:
         escritor = csv.writer(archivo, lineterminator="\n")
-        escritor.writerow(["SKU_original", "SKU", "estrato"])
+        escritor.writerow(["SKU_original", "SKU", "estrato"] + (["sin_copias"] if set_sin_copias else []))
         for txt_original in sorted(dic_estratos, key=lambda t: (txt_final(t) == "", txt_final(t), t)):
-            escritor.writerow([txt_original, txt_final(txt_original), dic_estratos[txt_original]])
+            escritor.writerow([txt_original, txt_final(txt_original), dic_estratos[txt_original]]
+                              + (["sin_copias" if txt_original in set_sin_copias else ""] if set_sin_copias else []))

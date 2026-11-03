@@ -6,7 +6,7 @@ from xml.sax.saxutils import escape
 import pytest
 
 from asrs.generacion.datos_reales import leer_tareas, preparar_datos_reales
-from asrs.generacion.fuentes import ADAPTADORES, Adaptador, Registro, codificar_skus, crear_adaptador, escribir_codigos, escribir_secuencia, extraer_secuencia, muestrear_surtido
+from asrs.generacion.fuentes import ADAPTADORES, Adaptador, Registro, codificar_skus, crear_adaptador, escribir_codigos, escribir_secuencia, escalar_secuencia, extraer_secuencia, muestrear_surtido
 from asrs.generacion.fuentes.calzado import ENCABEZADO as ENCABEZADO_CALZADO, AdaptadorCalzado
 from asrs.generacion.fuentes.ecommerce import ENCABEZADO as ENCABEZADO_ECOMMERCE, AdaptadorEcommerce
 
@@ -276,6 +276,64 @@ class TestCodificacion:
         assert {x[2] for x in lineas[1:]} <= {"individual", "muestra", "descartado"}
         assert all((x[1] == "") == (x[2] == "descartado") for x in lineas[1:])
         assert {x[1] for x in lineas[1:] if x[1]} == set(r.vector_skus) and len(set(r.vector_skus)) == 8
+
+
+class TestEscalado:
+    def test_total_exacto_para_muchos_n_y_N(self):
+        for n in (1, 2, 7, 10, 101, 997):
+            secuencia = [f"s{i % 5}" for i in range(n)]
+            for N in (1, 3, 10, 100, 1000, 1001):
+                assert len(escalar_secuencia(secuencia, N)) == N
+
+    def test_a_la_baja_cada_recuperacion_aparece_0_o_1_veces_y_conserva_el_orden(self):
+        secuencia = [f"s{i:03d}" for i in range(100)]
+        escalada = escalar_secuencia(secuencia, 40)
+        assert len(escalada) == 40 and escalada == sorted(set(escalada)) and set(escalada) <= set(secuencia)
+        posiciones = [secuencia.index(x) for x in escalada]
+        assert posiciones == sorted(posiciones)
+        assert max(posiciones[i + 1] - posiciones[i] for i in range(39)) <= 3          # adelgazamiento uniforme: sin huecos grandes
+
+    def test_al_alza_cada_recuperacion_aparece_floor_o_ceil_veces_seguidas(self):
+        secuencia = ["a", "a", "b", "c", "c", "c"]
+        escalada = escalar_secuencia(secuencia, 15)                                      # factor 2,5: cada una sale 2 o 3 veces
+        assert len(escalada) == 15
+        import itertools
+        rachas = [(k, len(list(g))) for k, g in itertools.groupby(escalada)]
+        assert [k for k, _ in rachas] == ["a", "b", "c"]                                 # el orden se conserva
+        assert {k: sum(q for kk, q in rachas if kk == k) for k, _ in rachas} == {"a": 5, "b": 3, "c": 7}
+        assert escalar_secuencia(["a", "b"], 6) == ["a"] * 3 + ["b"] * 3
+        assert escalar_secuencia(["a", "b", "c"], 3) == ["a", "b", "c"]
+
+    def test_conserva_las_proporciones_de_cada_sku_hasta_una_unidad_de_redondeo(self):
+        secuencia = ["a"] * 300 + ["b"] * 100 + ["c"] * 50 + ["a"] * 50
+        for N in (97, 450, 1000, 4321):
+            escalada = escalar_secuencia(secuencia, N)
+            for sku in "abc":
+                esperado = secuencia.count(sku) * N / len(secuencia)
+                assert abs(escalada.count(sku) - esperado) <= 1.5
+
+    def test_extraer_escala_despues_de_muestrear_y_antes_de_codificar(self, tmp_path):
+        filas = [("2015-11-03 10:%02d:00" % i, f"S{i}", 1) for i in range(20) for _ in range(i % 4 + 1)]
+        ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
+        r = extraer_secuencia(AdaptadorEcommerce(), ruta, 8, 0, True, 0.3, 100)
+        assert len(r.vector_skus) == 100 and r.escalar_total == 100 and r.escalar_recuperaciones_muestreadas < 50
+        assert set(r.vector_skus) <= {f"SKU{i:03d}" for i in range(1, 9)}
+        cuenta = {k: r.vector_skus.count(k) for k in set(r.vector_skus)}
+        assert cuenta["SKU001"] == max(cuenta.values())                                  # los códigos siguen la demanda de la secuencia final
+        assert len(extraer_secuencia(AdaptadorEcommerce(), ruta, 8, 0, True, 0.3, None).vector_skus) == r.escalar_recuperaciones_muestreadas
+
+    def test_un_sku_que_pierde_todas_sus_copias_se_marca_sin_copias(self, tmp_path):
+        filas = [("2015-11-03 10:00:00", "G", 100), ("2015-11-03 10:01:00", "mini", 1), ("2015-11-03 10:02:00", "H", 100)]
+        ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
+        r = extraer_secuencia(AdaptadorEcommerce(), ruta, None, 0, True, 0.3, 20)       # factor 0,1: la línea de 1 unidad se queda sin copias
+        assert r.set_sin_copias == {"mini"} and len(r.vector_skus) == 20
+        destino = tmp_path / "skus.csv"
+        escribir_codigos(r.dic_estratos, r.dic_codigos, str(destino), r.set_sin_copias)
+        import csv as _csv
+        lineas = list(_csv.reader(destino.open(encoding="utf-8")))
+        assert lineas[0] == ["SKU_original", "SKU", "estrato", "sin_copias"]
+        assert [x for x in lineas[1:] if x[0] == "mini"] == [["mini", "", "individual", "sin_copias"]]
+        assert all(x[3] == "" and x[1] != "" for x in lineas[1:] if x[0] != "mini")
 
 
 class TestSalida:
