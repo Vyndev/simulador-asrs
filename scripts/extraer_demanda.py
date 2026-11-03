@@ -37,6 +37,8 @@ if __name__ == "__main__":
         if resultado.dic_codigos:
             escribir_codigos(resultado.dic_codigos, os.path.join(argumentos.salida, f"{txt_fuente}_skus.csv"))
         print(f"{txt_fuente}: {resultado.escalar_filas_leidas} filas leídas, {resultado.escalar_descartadas} descartadas "
-              f"-> {len(resultado.vector_skus)} recuperaciones, {resultado.escalar_skus_distintos} SKU distintos ({txt_destino})")
+              f"-> {resultado.escalar_lineas} líneas -> {len(resultado.vector_skus)} recuperaciones (una por unidad), {resultado.escalar_skus_distintos} SKU distintos, "
+              f"{100 * resultado.escalar_repeticiones_consecutivas:.1f} % repite el SKU anterior ({txt_destino})")
+        print("    líneas más grandes: " + "; ".join(f"{q} u. {txt_sku} {tiempo}" for q, txt_sku, tiempo in resultado.vector_lineas_mayores))
         for txt_motivo, escalar in sorted(resultado.dic_descartes.items(), key=lambda p: -p[1]):
             print(f"    descartadas por {txt_motivo}: {escalar}")

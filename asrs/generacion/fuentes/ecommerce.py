@@ -1,6 +1,6 @@
 """Adaptador de ecommerce-roy-bansal-2020 (`E-Commerce DataSet.xlsx`): líneas de pedido de un minorista de comercio electrónico.
 
-Todas las filas son salidas. La demanda se ordena por la fecha del pedido (`order_date`); la de envío no interviene.
+Todas las filas son salidas; una línea de cantidad q (`prod_qty`) son q recuperaciones seguidas del SKU. La demanda se ordena por la fecha del pedido (`order_date`); la de envío no interviene.
 El surtido se agrupa en 180 etiquetas con k-means (ver `agrupar_surtido`). Se descartan las fechas fuera de la campaña (ventana configurable, por defecto agosto a diciembre de 2015), las cantidades cero y los SKU vacíos.
 El archivo es un .xlsx y se lee con la biblioteca estándar (zip + XML), sin openpyxl.
 """
@@ -9,7 +9,7 @@ import re
 import xml.etree.ElementTree as ET
 import zipfile
 
-from asrs.generacion.fuentes.base import Adaptador, Registro
+from asrs.generacion.fuentes.base import Adaptador, Registro, leer_cantidad
 
 ENCABEZADO = ["rec_id", "order_id", "order_date", "shipped_at", "prod_sku", "prod_qty"]
 ORIGEN_EXCEL = datetime.datetime(1899, 12, 30)
@@ -75,13 +75,10 @@ class AdaptadorEcommerce(Adaptador):
             return Registro(txt_motivo="fecha de pedido ilegible")
         if not self.fecha_minima <= tiempo < self.fecha_maxima:
             return Registro(txt_motivo="fecha de pedido fuera de la campaña")
-        try:
-            escalar_cantidad = float(fila["prod_qty"])
-        except ValueError:
-            return Registro(txt_motivo="cantidad ilegible")
-        if escalar_cantidad == 0:
-            return Registro(txt_motivo="cantidad igual a cero")
+        escalar_cantidad, txt_motivo = leer_cantidad(fila["prod_qty"])
+        if txt_motivo:
+            return Registro(txt_motivo=txt_motivo)
         txt_sku = fila["prod_sku"].strip()
         if not txt_sku:
             return Registro(txt_motivo="SKU vacío")
-        return Registro(txt_sku, tiempo)
+        return Registro(txt_sku, tiempo, escalar_cantidad=escalar_cantidad)

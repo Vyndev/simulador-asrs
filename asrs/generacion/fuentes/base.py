@@ -14,6 +14,25 @@ class Registro:
     txt_sku: str = ""
     tiempo: object = None       # cualquier valor comparable (datetime, número, texto ISO); solo sirve para ordenar
     txt_motivo: object = None
+    escalar_cantidad: int = 1   # unidades de la línea: la secuencia repite el SKU esta cantidad de veces seguidas
+
+
+def leer_cantidad(txt_valor):
+    """Interpreta la cantidad de una línea. Devuelve (cantidad entera positiva, None) o (None, motivo de descarte).
+    Una cantidad no entera es un error, no se redondea: la desagregación exige unidades enteras."""
+    try:
+        escalar = float(txt_valor)
+    except ValueError:
+        return None, "cantidad ilegible"
+    if escalar != escalar or escalar in (float("inf"), float("-inf")):
+        return None, "cantidad ilegible"
+    if escalar != int(escalar):
+        raise ValueError(f"Cantidad no entera '{txt_valor}': la desagregación necesita unidades enteras; no se redondea.")
+    if escalar == 0:
+        return None, "cantidad igual a cero"
+    if escalar < 0:
+        return None, "cantidad negativa"
+    return int(escalar), None
 
 
 class Adaptador:
@@ -25,22 +44,29 @@ class Adaptador:
         raise NotImplementedError
 
     def interpretar(self, fila):
-        """Devuelve un `Registro`: el SKU, el tiempo y, si la fila no es una recuperación válida, el motivo de descarte.
+        """Devuelve un `Registro`: el SKU, el tiempo, la cantidad (entera positiva, ver `leer_cantidad`) y, si la fila no es demanda, el motivo de descarte.
         Los filtros se evalúan en el orden en que el adaptador los escribe y solo se cuenta el primer motivo que se cumpla."""
         raise NotImplementedError
 
 
 @dataclass
 class ResultadoExtraccion:
-    vector_skus: list                                  # la secuencia, en orden de tiempo
+    vector_skus: list                                  # la secuencia desagregada (un SKU por unidad), en orden de tiempo
     escalar_filas_leidas: int = 0
     dic_descartes: dict = field(default_factory=dict)  # motivo -> número de filas
     dic_grupos: dict = field(default_factory=dict)     # SKU original -> grupo (vacío si no se agrupó)
     dic_codigos: dict = field(default_factory=dict)    # SKU original -> código final de la salida (vacío si no se codificó)
+    escalar_lineas: int = 0                            # líneas con demanda tras filtrar (antes de desagregar)
+    vector_lineas_mayores: list = field(default_factory=list)   # las líneas de mayor cantidad: (cantidad, SKU original, tiempo)
 
     @property
     def escalar_descartadas(self):
         return sum(self.dic_descartes.values())
+
+    @property
+    def escalar_repeticiones_consecutivas(self):
+        # Fracción de recuperaciones que repiten el SKU de la anterior
+        return sum(1 for a, b in zip(self.vector_skus, self.vector_skus[1:]) if a == b) / max(1, len(self.vector_skus) - 1)
 
     @property
     def escalar_skus_distintos(self):
@@ -178,9 +204,12 @@ def extraer_secuencia(adaptador, txt_ruta, escalar_grupos="adaptador", escalar_s
         if registro.txt_motivo is not None:
             cuenta_motivos[registro.txt_motivo] += 1
         else:
-            vector_validas.append((registro.tiempo, escalar_posicion, registro.txt_sku))
+            vector_validas.append((registro.tiempo, escalar_posicion, registro.txt_sku, registro.escalar_cantidad))
     vector_validas.sort(key=lambda t: (t[0], t[1]))
-    vector_skus = [txt_sku for _, _, txt_sku in vector_validas]
+    # Desagregación completa: una línea de cantidad q son q recuperaciones seguidas del SKU, en la posición de su línea
+    vector_skus = [txt_sku for _, _, txt_sku, escalar_q in vector_validas for _ in range(escalar_q)]
+    vector_mayores = [(q, txt_sku, tiempo) for tiempo, _, txt_sku, q in sorted(vector_validas, key=lambda t: (-t[3], t[0], t[1]))[:10]]
+    escalar_lineas = len(vector_validas)
     if escalar_grupos == "adaptador":
         escalar_grupos = adaptador.escalar_grupos
     dic_grupos = {}
@@ -192,7 +221,7 @@ def extraer_secuencia(adaptador, txt_ruta, escalar_grupos="adaptador", escalar_s
         vector_skus, dic_codigo = codificar_skus(vector_originales)
         # Cada SKU original apunta a su código final, pasando por su grupo si lo hubo
         dic_codigos = {txt_original: dic_codigo[txt_etiqueta] for txt_original, txt_etiqueta in (dic_grupos or {t: t for t in dic_codigo}).items()}
-    return ResultadoExtraccion(vector_skus, escalar_leidas, dict(cuenta_motivos), dic_grupos, dic_codigos)
+    return ResultadoExtraccion(vector_skus, escalar_leidas, dict(cuenta_motivos), dic_grupos, dic_codigos, escalar_lineas, vector_mayores)
 
 
 def escribir_secuencia(vector_skus, txt_ruta):

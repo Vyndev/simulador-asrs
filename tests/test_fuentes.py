@@ -140,6 +140,50 @@ class TestAgrupacion:
         assert extraer_secuencia(AdaptadorEcommerce(), ruta, None).vector_skus == list("AABACB")
 
 
+class TestDesagregacion:
+    def test_una_linea_de_cantidad_q_son_q_recuperaciones_seguidas_en_su_posicion(self, tmp_path):
+        ruta = escribir_calzado(tmp_path / "c.csv", [
+            ("B", "9", 3, "02/01/2023 07:00"),
+            ("A", "9", 2, "01/01/2023 07:00"),
+            ("C", "9", 1, "02/01/2023 07:00"),      # empate con B: B va antes por el archivo
+            ("A", "9", 1, "01/01/2023 07:00"),      # empate con la primera A
+        ])
+        resultado = extraer_secuencia(AdaptadorCalzado(), ruta, None)
+        assert resultado.vector_skus == ["A", "A", "A", "B", "B", "B", "C"]
+        assert (resultado.escalar_lineas, len(resultado.vector_skus)) == (4, 7)
+
+    def test_las_lineas_grandes_forman_rachas_y_se_reportan(self, tmp_path):
+        ruta = escribir_calzado(tmp_path / "c.csv", [("X", "9", 40, "01/01/2023 07:00"), ("Y", "9", 1, "01/01/2023 07:01"),
+                                                      ("X", "9", 2, "01/01/2023 07:02")])
+        resultado = extraer_secuencia(AdaptadorCalzado(), ruta, None)
+        assert resultado.vector_skus == ["X"] * 40 + ["Y"] + ["X"] * 2
+        assert resultado.vector_lineas_mayores[0] == (40, "X", datetime(2023, 1, 1, 7, 0))
+        assert [q for q, _, _ in resultado.vector_lineas_mayores] == [40, 2, 1]
+        assert resultado.escalar_repeticiones_consecutivas == pytest.approx(40 / 42)      # 39 repeticiones en la primera racha y 1 en la segunda, de 42 transiciones
+
+    def test_cantidad_cero_negativa_o_ilegible_se_descarta_con_su_motivo(self, tmp_path):
+        ruta = escribir_calzado(tmp_path / "c.csv", [("A", "9", 0, "01/01/2023 07:00"), ("B", "9", -2, "01/01/2023 07:00"),
+                                                      ("C", "9", "x", "01/01/2023 07:00"), ("D", "9", "3.0", "01/01/2023 07:00")])
+        resultado = extraer_secuencia(AdaptadorCalzado(), ruta, None)
+        assert resultado.vector_skus == ["D"] * 3
+        assert resultado.dic_descartes == {"cantidad igual a cero": 1, "cantidad negativa": 1, "cantidad ilegible": 1}
+
+    def test_una_cantidad_no_entera_es_un_error_y_no_se_redondea(self, tmp_path):
+        ruta = escribir_calzado(tmp_path / "c.csv", [("A", "9", "1.5", "01/01/2023 07:00")])
+        with pytest.raises(ValueError, match="no entera"):
+            extraer_secuencia(AdaptadorCalzado(), ruta, None)
+        from asrs.generacion.fuentes import leer_cantidad
+        assert leer_cantidad("12") == (12, None) and leer_cantidad("0") == (None, "cantidad igual a cero")
+
+    def test_la_condensacion_se_calcula_sobre_las_unidades(self, tmp_path):
+        # B tiene una sola línea de 50 unidades y A cinco líneas de 1: por unidades B pesa más y, con tope bajo, queda individual
+        filas = [("2015-11-03 10:0%d:00" % i, "A", 1) for i in range(5)] + [("2015-11-03 10:09:00", "B", 50)] + \
+                [("2015-11-03 11:%02d:00" % i, f"C{i}", 1) for i in range(10)]
+        ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
+        r = extraer_secuencia(AdaptadorEcommerce(), ruta, 4)
+        assert r.dic_grupos["B"] == "B" and len(r.vector_skus) == 65
+
+
 class TestCalzado:
     FILAS = [
         ("R1", "9", 2, "03/01/2023 07:00"),
@@ -151,13 +195,13 @@ class TestCalzado:
 
     def test_el_sku_por_defecto_es_la_referencia_y_filtra_cantidad_cero(self, tmp_path):
         resultado = extraer_secuencia(AdaptadorCalzado(), escribir_calzado(tmp_path / "c.csv", self.FILAS), None)
-        assert resultado.vector_skus == ["R1", "R1", "R2", "R1"]      # la talla vacía no excluye con SKU = referencia
+        assert resultado.vector_skus == ["R1"] * 3 + ["R2"] + ["R1"] * 5      # una recuperación por unidad; la talla vacía no excluye con SKU = referencia
         assert resultado.dic_descartes == {"cantidad igual a cero": 1}
         assert resultado.escalar_filas_leidas == 5
 
     def test_sku_con_talla_es_configurable_y_excluye_talla_vacia(self, tmp_path):
         resultado = extraer_secuencia(AdaptadorCalzado(bool_sku_con_talla=True), escribir_calzado(tmp_path / "c.csv", self.FILAS), None)
-        assert resultado.vector_skus == ["R1-9", "R1-10", "R1-9"]
+        assert resultado.vector_skus == ["R1-9", "R1-9", "R1-10"] + ["R1-9"] * 5
         assert resultado.dic_descartes == {"cantidad igual a cero": 1, "talla vacía (SKU con talla)": 1}
 
     def test_encabezado_inesperado_falla(self, tmp_path):
@@ -181,7 +225,7 @@ class TestEcommerce:
             ("NA", "SINFECHA", 1),
         ])
         resultado = extraer_secuencia(AdaptadorEcommerce(), ruta)
-        assert resultado.vector_skus == ["A", "B", "FIN"]
+        assert resultado.vector_skus == ["A", "A", "B", "FIN"]      # A tiene cantidad 2
         assert resultado.dic_descartes == {"fecha de pedido fuera de la campaña": 3, "cantidad igual a cero": 1, "SKU vacío": 1,
                                            "fecha de pedido ausente": 1}
 
@@ -212,9 +256,9 @@ class TestFuentesZip:
             fila("2024-01-02", "SKU_1", 5), fila("2024-01-01", "SKU_2", 7), fila("2024-01-01", "SKU_1", 0),
             fila("2024-01-01", "SKU_3", 3, "WH_2")])
         r = extraer_secuencia(AdaptadorInventarioSintetico(), ruta)
-        assert r.vector_skus == ["SKU_2", "SKU_3", "SKU_1"] and r.dic_descartes == {"sin ventas (unidades cero)": 1}
+        assert r.vector_skus == ["SKU_2"] * 7 + ["SKU_3"] * 3 + ["SKU_1"] * 5 and r.dic_descartes == {"sin ventas (unidades cero)": 1}
         r = extraer_secuencia(AdaptadorInventarioSintetico("WH_1"), ruta)
-        assert r.vector_skus == ["SKU_2", "SKU_1"] and r.dic_descartes["otro almacén"] == 1
+        assert r.vector_skus == ["SKU_2"] * 7 + ["SKU_1"] * 5 and r.dic_descartes["otro almacén"] == 1
 
 
 class TestSalida:

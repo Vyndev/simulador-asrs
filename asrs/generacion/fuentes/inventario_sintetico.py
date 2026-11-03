@@ -1,13 +1,13 @@
 """Adaptador de inventario-sintetico-ziya-2025 (`supply_chain_dataset1.csv` dentro de un .zip): ventas diarias de 50 SKU. DATOS SIMULADOS.
 
 Cada fila es la venta de un día de un SKU en un almacén (hay cinco almacenes por SKU y día), no una línea de pedido. Se toma cada fila con ventas
-como una recuperación, igual que una línea de pedido en las otras fuentes, y se ordena por fecha. La resolución es el día: dentro de un día
+como una línea de pedido de `Units_Sold` unidades (esa cantidad de recuperaciones seguidas del SKU), y se ordena por fecha. La resolución es el día: dentro de un día
 se conserva el orden del archivo, que va por SKU y luego por fecha. Se descartan las filas sin ventas (unidades cero). Opcionalmente se puede
 dejar un solo almacén. Según calidad.md todos los SKU tienen la misma demanda: sirve para probar el modelo, no como evidencia de realismo.
 """
 from datetime import datetime
 
-from asrs.generacion.fuentes.base import Adaptador, Registro, filas_csv_en_zip
+from asrs.generacion.fuentes.base import Adaptador, Registro, leer_cantidad, filas_csv_en_zip
 
 ENCABEZADO = ["Date", "SKU_ID", "Warehouse_ID", "Supplier_ID", "Region", "Units_Sold", "Inventory_Level", "Supplier_Lead_Time_Days", "Reorder_Point",
               "Order_Quantity", "Unit_Cost", "Unit_Price", "Promotion_Flag", "Stockout_Flag", "Demand_Forecast"]
@@ -32,13 +32,10 @@ class AdaptadorInventarioSintetico(Adaptador):
             tiempo = datetime.strptime(fila["Date"].strip(), "%Y-%m-%d")
         except ValueError:
             return Registro(txt_motivo="fecha ilegible")
-        try:
-            escalar_unidades = float(fila["Units_Sold"])
-        except ValueError:
-            return Registro(txt_motivo="unidades ilegibles")
-        if escalar_unidades <= 0:
-            return Registro(txt_motivo="sin ventas (unidades cero)")
+        escalar_unidades, txt_motivo = leer_cantidad(fila["Units_Sold"])
+        if txt_motivo:
+            return Registro(txt_motivo="sin ventas (unidades cero)" if txt_motivo == "cantidad igual a cero" else txt_motivo)
         txt_sku = fila["SKU_ID"].strip()
         if not txt_sku:
             return Registro(txt_motivo="SKU vacío")
-        return Registro(txt_sku, tiempo)
+        return Registro(txt_sku, tiempo, escalar_cantidad=escalar_unidades)

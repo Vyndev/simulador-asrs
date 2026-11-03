@@ -1,12 +1,12 @@
 """Adaptador de calzado-furlan-de-assis-2024 (`Customer_Order.csv`): líneas de picking de una fábrica de calzado.
 
 Todas las filas son salidas (líneas de pedido). Se descartan solo las de cantidad cero. La hora no es fiable (la fecha se registra por ola),
-así que habrá muchos empates y se resuelven por el orden del archivo. No se descartan filas repetidas: cada línea es una recuperación.
+así que habrá muchos empates y se resuelven por el orden del archivo. No se descartan filas repetidas. Una línea de cantidad q son q recuperaciones seguidas de la referencia (quantity (units)).
 """
 import csv
 from datetime import datetime
 
-from asrs.generacion.fuentes.base import Adaptador, Registro
+from asrs.generacion.fuentes.base import Adaptador, Registro, leer_cantidad
 
 ENCABEZADO = ["codCustomer", "orderNumber", "orderToCollect", "Reference", "Size (US)", "quantity (units)", "creationDate", "waveNumber", "operator"]
 
@@ -33,16 +33,13 @@ class AdaptadorCalzado(Adaptador):
         except ValueError:
             return Registro(txt_motivo="fecha de creación ilegible")
         txt_referencia, txt_talla = fila["Reference"].strip(), fila["Size (US)"].strip()
-        try:
-            escalar_cantidad = float(fila["quantity (units)"])
-        except ValueError:
-            return Registro(txt_motivo="cantidad ilegible")
-        if escalar_cantidad == 0:
-            return Registro(txt_motivo="cantidad igual a cero")
+        escalar_cantidad, txt_motivo = leer_cantidad(fila["quantity (units)"])
+        if txt_motivo:
+            return Registro(txt_motivo=txt_motivo)
         if not txt_referencia:
             return Registro(txt_motivo="referencia vacía")
         if self.bool_sku_con_talla:
             if not txt_talla:
                 return Registro(txt_motivo="talla vacía (SKU con talla)")
-            return Registro(f"{txt_referencia}-{txt_talla}", tiempo)
-        return Registro(txt_referencia, tiempo)
+            return Registro(f"{txt_referencia}-{txt_talla}", tiempo, escalar_cantidad=escalar_cantidad)
+        return Registro(txt_referencia, tiempo, escalar_cantidad=escalar_cantidad)
