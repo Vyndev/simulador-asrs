@@ -67,7 +67,7 @@ La lista de tareas generada sigue el modelo de la sección 6.2.3 del capítulo 6
 
 **Salidas nuevas.** `resultados_simulacion.csv` suma dos columnas, `Cant_RetirosFinCiclo` y `TiempoTotal_RetirosFinCiclo`: los retiros de fin de ciclo se cuentan además como recuperaciones, y su tiempo ya está incluido en el de recuperación. `resultados_escenario.csv` tiene una fila por réplica con `semilla`, `demanda_no_atendida`, `lotes_aplazados`, `retiros`, `lanzamientos`, `ocupacion_media`, `ocupacion_minima`, `ocupacion_maxima`, `participacion_top20_media`, `sigma_alturas`, `dias_operacion`, `productos` (SKU distintos que existen), `surtido_medio`, `surtido_minimo` y `surtido_maximo`. `retiros` cuenta tareas de retiro (una por unidad retirada), no productos; `lanzamientos` cuenta productos nacidos en la operación.
 
-**Límites.** `TAREAS_POR_CORRIDA` es ahora un año (525 600) y `LIMITE_TAREAS_GENERADAS` es 600 000 (para datos reales sigue `LIMITE_TAREAS` = 100 000).
+**Límites.** `TAREAS_POR_CORRIDA` es ahora un año (525 600) y `LIMITE_TAREAS_GENERADAS` es 600 000 (para datos reales `LIMITE_TAREAS` vale lo mismo; antes era 100 000, lo que dejaba fuera a calzado).
 
 **Limitaciones conocidas**
 - El flujo diario R = 720 sale de los 60 ciclos por hora y no escala con la estantería. En estanterías muy pequeñas (por ejemplo 6×6×2 con 10 SKU) una parte grande de la demanda queda sin atender: hay que reducir `escalar_ciclos_por_hora`.
@@ -217,7 +217,8 @@ asrs/
     ciclo_vida.py                 Surtido abierto: curva de Bass, estacionalidad y nacimientos de productos
     reposicion.py                 Lotes EOQ, techo, retiros de fin de ciclo y escenario de un año
     escenario.py                  EscenarioDemanda: listas de llenado y de operación, días, retiros y popularidad
-    datos_reales.py               Lista de tareas desde un CSV (SKU y Task)
+    datos_reales.py               Lista de tareas desde un CSV (SKU y Task, o una columna SKU de recuperaciones)
+    fuentes/                      Un adaptador por fuente real (calzado, ecommerce) y el núcleo que extrae la secuencia de SKU (`scripts/extraer_demanda.py`)
   control/
     controlador_grua.py         Ejecuta la secuencia usando las políticas
   simulacion/

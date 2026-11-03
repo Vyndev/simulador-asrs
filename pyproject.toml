@@ -9,6 +9,9 @@ description = "Simulador de un ASRS de grúa para comparar políticas de asignac
 requires-python = ">=3.10"
 dependencies = ["numpy", "pandas"]
 
+[project.optional-dependencies]
+pruebas = ["pytest"]
+
 [tool.setuptools.packages.find]
 include = ["asrs*"]
 

@@ -19,7 +19,7 @@ from asrs.simulacion.estadistica import resumir
 from asrs.simulacion.simulacion import Simulacion
 from asrs.visualizacion.generador import generar_datos, leer_plantilla
 
-LIMITE_CUERPO = LIMITE_TAREAS * 160   # bytes aceptados en una solicitud: un CSV con el máximo de tareas y códigos de SKU largos (unos 16 MB)
+LIMITE_CUERPO = LIMITE_TAREAS * 160   # bytes aceptados en una solicitud: un CSV con el máximo de tareas y códigos de SKU largos (unos 96 MB)
 TRABAJOS_GUARDADOS = 20            # trabajos terminados que se conservan en memoria
 
 

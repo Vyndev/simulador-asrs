@@ -1,4 +1,5 @@
-"""Lista de tareas a partir de datos reales: un archivo CSV con dos columnas, el SKU y la tarea (almacenar o recuperar), en orden."""
+"""Lista de tareas a partir de datos reales: un archivo CSV con dos columnas, el SKU y la tarea (almacenar o recuperar), en orden.
+También acepta un CSV de una sola columna con encabezado `SKU` (todas las tareas son recuperaciones): es la salida de `asrs/generacion/fuentes`."""
 import csv
 import math
 from collections import Counter
@@ -9,10 +10,27 @@ PALABRAS_ALMACENAR = {"a", "0", "almacenar", "almacenamiento", "entrada", "ingre
 PALABRAS_RECUPERAR = {"r", "1", "recuperar", "recuperacion", "recuperación", "salida", "despacho", "out", "retrieve", "pick", "get", "s"}
 NOMBRES_COLUMNA_ACTIVIDAD = ("task", "tarea", "act", "tipo", "oper", "movim", "type")
 NOMBRES_COLUMNA_SKU = ("sku", "art", "prod", "ref", "item", "cod", "cód")
+ENCABEZADOS_UNA_COLUMNA = {"sku", "articulo", "artículo", "producto", "referencia", "item", "codigo", "código"}   # nombre exacto de la columna única
 
 
 def _es_actividad(txt_valor):
     return txt_valor.strip().lower() in PALABRAS_ALMACENAR | PALABRAS_RECUPERAR
+
+
+def _leer_una_columna(vector_lineas, escalar_limite_tareas):
+    # Una columna con encabezado SKU: cada fila es la recuperación de ese SKU. Se lee con un delimitador que no aparece
+    # para respetar las comillas y que un SKU con comas, que el escritor de fuentes cita, no se parta en columnas
+    matriz_tareas = []
+    for escalar_fila, vector_fila in enumerate(csv.reader(vector_lineas[1:], delimiter="\x1f"), start=2):
+        txt_sku = vector_fila[0].strip()
+        if not txt_sku:
+            raise ValueError(f"Datos reales, fila {escalar_fila}: falta el SKU.")
+        matriz_tareas.append((1, txt_sku))
+        if escalar_limite_tareas is not None and len(matriz_tareas) > escalar_limite_tareas:
+            raise ValueError(f"Datos reales: hay más de {escalar_limite_tareas} tareas, el máximo es {escalar_limite_tareas}.")
+    if not matriz_tareas:
+        raise ValueError("Datos reales: el archivo no tiene tareas.")
+    return matriz_tareas
 
 
 def leer_tareas(txt_csv, escalar_limite_tareas=None):
@@ -23,6 +41,8 @@ def leer_tareas(txt_csv, escalar_limite_tareas=None):
     if not vector_lineas:
         raise ValueError("Datos reales: el archivo está vacío.")
     txt_separador = max(",;\t|", key=lambda s: vector_lineas[0].count(s))
+    if vector_lineas[0].count(txt_separador) == 0 and vector_lineas[0].strip().strip('"').lower() in ENCABEZADOS_UNA_COLUMNA:
+        return _leer_una_columna(vector_lineas, escalar_limite_tareas)
     if vector_lineas[0].count(txt_separador) == 0:
         raise ValueError("Datos reales: se esperan dos columnas, SKU y Task, separadas por coma, punto y coma o tabulación.")
     matriz_filas = list(csv.reader(vector_lineas, delimiter=txt_separador))

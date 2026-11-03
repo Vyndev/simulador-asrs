@@ -6,7 +6,7 @@ from asrs.generacion.probabilidades import PERFILES_INVENTARIO, demanda_hausman
 
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
 LIMITE_CELDAS = 6000
-LIMITE_TAREAS = 100_000 # Tareas de un archivo de datos reales
+LIMITE_TAREAS = 600_000 # Tareas de un archivo de datos reales: el mismo tope que una lista generada (un año de 525 600 tareas más margen)
 LIMITE_TAREAS_GENERADAS = 600_000 # Tareas de una lista generada: un año de 525 600 tareas más margen
 LIMITE_SKUS = 200
 LIMITE_CLASES = 8
