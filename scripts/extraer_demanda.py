@@ -17,7 +17,7 @@ if __name__ == "__main__":
     analizador.add_argument("--salida", default=os.path.join(RAIZ, "salidas", "demanda"), help="carpeta de salida")
     analizador.add_argument("--sku-con-talla", action="store_true", help="calzado: SKU = referencia-talla en vez de solo la referencia")
     analizador.add_argument("--grupos", type=int, default=None, help="agrupa los SKU en N grupos con k-means (0 = sin agrupar; por defecto el de cada fuente)")
-    analizador.add_argument("--tope", type=float, default=None, help="umbral de SKU individuales al agrupar, en veces la demanda media por etiqueta (por defecto el de cada fuente: 0,1 en calzado y ecommerce, 1,5 en almacén inteligente)")
+    analizador.add_argument("--tope", type=float, default=0.1, help="umbral de SKU individuales al agrupar, en veces la demanda media por etiqueta (por defecto 0,1)")
     analizador.add_argument("--sin-codificar", action="store_true", help="deja los nombres originales de los SKU en vez de SKU001, SKU002, ...")
     analizador.add_argument("--semilla", type=int, default=0, help="semilla del k-means")
     argumentos = analizador.parse_args()
@@ -28,7 +28,7 @@ if __name__ == "__main__":
         opciones = {"bool_sku_con_talla": True} if txt_fuente == "calzado" and argumentos.sku_con_talla else {}
         escalar_grupos = "adaptador" if argumentos.grupos is None else (argumentos.grupos or None)
         resultado = extraer_secuencia(crear_adaptador(txt_fuente, **opciones), os.path.join(argumentos.datos, txt_carpeta, "crudo", txt_archivo), escalar_grupos, argumentos.semilla, not argumentos.sin_codificar,
-                                      "adaptador" if argumentos.tope is None else argumentos.tope)
+                                      argumentos.tope)
         txt_destino = os.path.join(argumentos.salida, f"{txt_fuente}.csv")
         escribir_secuencia(resultado.vector_skus, txt_destino)
         # Experimento listo para el modelo: python scripts/main.py --config salidas/demanda/<fuente>_experimento.json

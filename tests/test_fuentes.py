@@ -78,7 +78,7 @@ class TestNucleo:
         assert (resultado.escalar_filas_leidas, resultado.escalar_descartadas, resultado.escalar_skus_distintos) == (4, 1, 3)
 
     def test_registro(self):
-        assert set(ADAPTADORES) == {"calzado", "ecommerce", "inventario_sintetico", "almacen_inteligente"}
+        assert set(ADAPTADORES) == {"calzado", "ecommerce", "inventario_sintetico"}
         assert isinstance(crear_adaptador("calzado"), AdaptadorCalzado)
         with pytest.raises(ValueError):
             crear_adaptador("inexistente")
@@ -88,7 +88,7 @@ class TestAgrupacion:
     def test_no_quita_recuperaciones_y_reduce_el_surtido(self):
         # 6 SKU en 2 familias claras: tres muy frecuentes al inicio y tres raros al final
         secuencia = ["a", "b", "c"] * 20 + ["x", "y", "z"]
-        grupos, dic = agrupar_surtido(secuencia, 2)
+        grupos, dic = agrupar_surtido(secuencia, 2, escalar_tope=1.5)      # tope alto: ningún SKU queda solo y se ve la estructura de familias
         assert len(grupos) == len(secuencia)
         assert set(grupos) == {"G001", "G002"} and len(set(dic.values())) == 2
         assert dic["a"] == dic["b"] == dic["c"] == "G001" and dic["x"] == dic["y"] == dic["z"] == "G002"
@@ -119,16 +119,12 @@ class TestAgrupacion:
         assert cuantos[0] == grupos_max - 1 and cuantos == sorted(cuantos, reverse=True)      # tope bajo: tantos como cupo deja a la cola
         assert cuantos[-1] < cuantos[0]
 
-    def test_cada_fuente_declara_su_tope_y_extraer_lo_pasa_a_la_agrupacion(self, tmp_path):
-        from asrs.generacion.fuentes.almacen_inteligente import AdaptadorAlmacenInteligente
-        assert (AdaptadorCalzado.escalar_tope, AdaptadorEcommerce.escalar_tope, AdaptadorAlmacenInteligente.escalar_tope) == (0.1, 0.1, 1.5)
+    def test_el_tope_por_defecto_es_0_1_y_extraer_lo_pasa_a_la_agrupacion(self, tmp_path):
         filas = [("2015-11-03 10:%02d:00" % i, f"S{i}", 1) for i in range(30) for _ in range(i % 5 + 1)]
         ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
-        con_bajo = extraer_secuencia(AdaptadorEcommerce(), ruta, 10, 0, False, 0.1)
-        con_alto = extraer_secuencia(AdaptadorEcommerce(), ruta, 10, 0, False, 1.5)
-        assert con_bajo.dic_grupos != con_alto.dic_grupos
-        sin_pasar = extraer_secuencia(AdaptadorEcommerce(), ruta, 10, 0, False)         # usa el del adaptador: 0,1
-        assert sin_pasar.vector_skus == con_bajo.vector_skus
+        por_defecto = extraer_secuencia(AdaptadorEcommerce(), ruta, 10)
+        assert por_defecto.vector_skus == extraer_secuencia(AdaptadorEcommerce(), ruta, 10, 0, False, 0.1).vector_skus
+        assert por_defecto.dic_grupos != extraer_secuencia(AdaptadorEcommerce(), ruta, 10, 0, False, 1.5).dic_grupos
 
     def test_es_reproducible_y_no_agrupa_si_ya_cabe(self):
         secuencia = [f"s{i % 17}" for i in range(300)] + [f"r{i}" for i in range(40)]
@@ -219,31 +215,6 @@ class TestFuentesZip:
         assert r.vector_skus == ["SKU_2", "SKU_3", "SKU_1"] and r.dic_descartes == {"sin ventas (unidades cero)": 1}
         r = extraer_secuencia(AdaptadorInventarioSintetico("WH_1"), ruta)
         assert r.vector_skus == ["SKU_2", "SKU_1"] and r.dic_descartes["otro almacén"] == 1
-
-    def test_almacen_inteligente_usa_solo_filas_con_salidas_y_agrupa(self, tmp_path):
-        from asrs.generacion.fuentes.almacen_inteligente import AdaptadorAlmacenInteligente
-        cols = ["record_id", "timestamp", "product_id", "incoming_items", "outgoing_items"]
-        filas = [["1", "2024-05-02 10:00:00", "P2", "5", "3"], ["2", "2024-05-01 10:00:00", "P1", "9", "0"],
-                 ["3", "2024-05-01 09:00:00", "P1", "0", "4"], ["4", "2024-05-03 09:00:00", "P3", "0", "1"]]
-        ruta = escribir_zip(tmp_path / "a.zip", "iot_warehouse_optimization_dataset.csv", cols, filas)
-        r = extraer_secuencia(AdaptadorAlmacenInteligente(), ruta)
-        assert r.vector_skus == ["P1", "P2", "P3"] and r.dic_descartes == {"sin salidas (outgoing_items cero)": 1}
-        assert AdaptadorAlmacenInteligente.escalar_grupos == 180
-
-
-class TestCodificacion:
-    def test_codigos_por_demanda_decreciente_y_orden_intacto(self):
-        secuencia = ["zeta", "x-9", "zeta", "q", "x-9", "zeta"]
-        codificada, dic = codificar_skus(secuencia)
-        assert dic == {"zeta": "SKU001", "x-9": "SKU002", "q": "SKU003"}
-        assert codificada == ["SKU001", "SKU002", "SKU001", "SKU003", "SKU002", "SKU001"]
-
-    def test_extraer_codifica_y_da_la_correspondencia_original_a_codigo(self, tmp_path):
-        ruta = escribir_xlsx(tmp_path / "e.xlsx", [("2015-11-03 10:0%d:00" % i, s, 1) for i, s in enumerate("ABAC")])
-        r = extraer_secuencia(AdaptadorEcommerce(), ruta, None, 0, True)
-        assert r.vector_skus == ["SKU001", "SKU002", "SKU001", "SKU003"] and r.dic_codigos == {"A": "SKU001", "B": "SKU002", "C": "SKU003"}
-        r = extraer_secuencia(AdaptadorEcommerce(), ruta, 2, 0, True)             # con agrupación: original -> grupo -> código
-        assert set(r.dic_codigos) == {"A", "B", "C"} and set(r.vector_skus) <= {"SKU001", "SKU002"}
 
 
 class TestSalida:

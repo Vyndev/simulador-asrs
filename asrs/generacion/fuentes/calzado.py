@@ -12,8 +12,6 @@ ENCABEZADO = ["codCustomer", "orderNumber", "orderToCollect", "Reference", "Size
 
 
 class AdaptadorCalzado(Adaptador):
-    texto_nombre = "calzado"
-    escalar_tope = 0.1       # la cabeza de la demanda queda individual y solo se agrupa la cola
     escalar_grupos = 180     # 208 referencias: se condensan a las 180 etiquetas del surtido del modelo sin quitar recuperaciones
 
     def __init__(self, bool_sku_con_talla=False):

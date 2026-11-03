@@ -49,9 +49,7 @@ def _fecha_excel(txt_valor):
 
 
 class AdaptadorEcommerce(Adaptador):
-    texto_nombre = "ecommerce"
     # Miles de SKU no caben en la estantería: se agrupan en 180 etiquetas con k-means (surtido de 180 SKU del modelo) sin quitar recuperaciones
-    escalar_tope = 0.1       # 142 SKU individuales y 38 grupos; el grupo mayor reúne el 1,9 % de las tareas
     escalar_grupos = 180
 
     def __init__(self, txt_fecha_minima="2015-08-01", txt_fecha_maxima="2016-01-01"):

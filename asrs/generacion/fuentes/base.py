@@ -17,9 +17,7 @@ class Registro:
 
 
 class Adaptador:
-    """Contrato de una fuente. Las subclases definen `texto_nombre`, `filas` y `interpretar`."""
-    texto_nombre = ""
-    escalar_tope = 1.5          # Umbral de SKU individuales al agrupar: veces la demanda media por etiqueta (ver agrupar_surtido). Cada fuente fija el suyo
+    """Contrato de una fuente. Las subclases definen `filas` e `interpretar`."""
     escalar_grupos = None       # Máximo de etiquetas de SKU tras condensar el surtido con k-means (None = sin agrupar). Todas las fuentes usan 180
 
     def filas(self, txt_ruta):
@@ -82,10 +80,10 @@ def _kmeans(matriz, escalar_k, escalar_semilla, escalar_iteraciones=100):
     return vector_etiquetas
 
 
-def agrupar_surtido(vector_skus, escalar_grupos, escalar_semilla=0, escalar_tope=1.5):
+def agrupar_surtido(vector_skus, escalar_grupos, escalar_semilla=0, escalar_tope=0.1):
     """Agrupa los SKU en a lo sumo `escalar_grupos` etiquetas sin eliminar ninguna recuperación y sin crear una "masa gris".
     1. Los SKU que por sí solos superan el tope de demanda (`escalar_tope` veces la demanda media por etiqueta, n / grupos) quedan individuales;
-       con un tope bajo (0,1) la cabeza de la demanda queda individual y solo se agrupa la cola; con uno alto (1,5) quedan pocos individuales
+       con el tope por defecto (0,1) la cabeza de la demanda queda individual y solo se agrupa la cola; con uno alto quedan pocos individuales
        y conservan su nombre: agruparlos con otros borraría justo la concentración que se quiere conservar.
     2. El resto (la cola) se agrupa con k-means sobre log(1 + frecuencia) y la primera, la última y la posición media de aparición
        (fracción del largo, estandarizadas): un grupo reúne SKU de popularidad y ciclo de vida parecidos.
@@ -168,10 +166,10 @@ def codificar_skus(vector_skus):
     return [dic_codigo[txt_sku] for txt_sku in vector_skus], dic_codigo
 
 
-def extraer_secuencia(adaptador, txt_ruta, escalar_grupos="adaptador", escalar_semilla=0, bool_codificar=False, escalar_tope="adaptador"):
+def extraer_secuencia(adaptador, txt_ruta, escalar_grupos="adaptador", escalar_semilla=0, bool_codificar=False, escalar_tope=0.1):
     """Lee la fuente con el adaptador y devuelve la secuencia de SKU ordenada por tiempo.
     El orden es estable: las filas con el mismo tiempo conservan el orden que tenían en el archivo original.
-    `escalar_tope` (por defecto el del adaptador) fija el umbral de SKU individuales de la agrupación.
+    `escalar_tope` (0,1 por defecto) fija el umbral de SKU individuales de la agrupación (ver `agrupar_surtido`).
     Si hay un número de grupos (por defecto el del adaptador; None lo desactiva) se agrupa el surtido con k-means después de filtrar y ordenar."""
     vector_validas, cuenta_motivos, escalar_leidas = [], Counter(), 0
     for escalar_posicion, fila in enumerate(adaptador.filas(txt_ruta)):
@@ -183,8 +181,6 @@ def extraer_secuencia(adaptador, txt_ruta, escalar_grupos="adaptador", escalar_s
             vector_validas.append((registro.tiempo, escalar_posicion, registro.txt_sku))
     vector_validas.sort(key=lambda t: (t[0], t[1]))
     vector_skus = [txt_sku for _, _, txt_sku in vector_validas]
-    if escalar_tope == "adaptador":
-        escalar_tope = adaptador.escalar_tope
     if escalar_grupos == "adaptador":
         escalar_grupos = adaptador.escalar_grupos
     dic_grupos = {}

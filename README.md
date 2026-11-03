@@ -218,7 +218,7 @@ asrs/
     reposicion.py                 Lotes EOQ, techo, retiros de fin de ciclo y escenario de un año
     escenario.py                  EscenarioDemanda: listas de llenado y de operación, días, retiros y popularidad
     datos_reales.py               Lista de tareas desde un CSV (SKU y Task, o una columna SKU de recuperaciones)
-    fuentes/                      Un adaptador por fuente real (calzado, ecommerce) y el núcleo que extrae la secuencia de SKU (`scripts/extraer_demanda.py`)
+    fuentes/                      Un adaptador por fuente (calzado, ecommerce e inventario sintético) y el núcleo que extrae la secuencia de SKU (`scripts/extraer_demanda.py`)
   control/
     controlador_grua.py         Ejecuta la secuencia usando las políticas
   simulacion/

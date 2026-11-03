@@ -14,7 +14,6 @@ ENCABEZADO = ["Date", "SKU_ID", "Warehouse_ID", "Supplier_ID", "Region", "Units_
 
 
 class AdaptadorInventarioSintetico(Adaptador):
-    texto_nombre = "inventario_sintetico"
     txt_archivo_interno = "supply_chain_dataset1.csv"
 
     def __init__(self, txt_almacen=None):
