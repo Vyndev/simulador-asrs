@@ -6,7 +6,7 @@ from xml.sax.saxutils import escape
 import pytest
 
 from asrs.generacion.datos_reales import leer_tareas, preparar_datos_reales
-from asrs.generacion.fuentes import ADAPTADORES, Adaptador, Registro, agrupar_surtido, codificar_skus, crear_adaptador, escribir_secuencia, extraer_secuencia
+from asrs.generacion.fuentes import ADAPTADORES, Adaptador, Registro, codificar_skus, crear_adaptador, escribir_codigos, escribir_secuencia, extraer_secuencia, muestrear_surtido
 from asrs.generacion.fuentes.calzado import ENCABEZADO as ENCABEZADO_CALZADO, AdaptadorCalzado
 from asrs.generacion.fuentes.ecommerce import ENCABEZADO as ENCABEZADO_ECOMMERCE, AdaptadorEcommerce
 
@@ -84,60 +84,55 @@ class TestNucleo:
             crear_adaptador("inexistente")
 
 
-class TestAgrupacion:
-    def test_no_quita_recuperaciones_y_reduce_el_surtido(self):
-        # 6 SKU en 2 familias claras: tres muy frecuentes al inicio y tres raros al final
-        secuencia = ["a", "b", "c"] * 20 + ["x", "y", "z"]
-        grupos, dic = agrupar_surtido(secuencia, 2, escalar_tope=1.5)      # tope alto: ningún SKU queda solo y se ve la estructura de familias
-        assert len(grupos) == len(secuencia)
-        assert set(grupos) == {"G001", "G002"} and len(set(dic.values())) == 2
-        assert dic["a"] == dic["b"] == dic["c"] == "G001" and dic["x"] == dic["y"] == dic["z"] == "G002"
-        assert grupos[:3] == ["G001"] * 3 and grupos[-3:] == ["G002"] * 3
+def secuencia_sintetica():
+    # 3 SKU pesados (60, 50, 40 tareas) y una cola de 30 SKU de 1 a 3 tareas; 6 etiquetas como máximo
+    pesados = ["P1"] * 60 + ["P2"] * 50 + ["P3"] * 40
+    cola = [f"c{i:02d}" for i in range(30) for _ in range(1 + i % 3)]
+    return [x for par in zip(pesados, pesados[::-1]) for x in par][:0] + pesados + cola
 
-    def test_los_sku_pesados_quedan_individuales_y_ningun_grupo_pasa_del_tope(self):
-        pesados = ["P1"] * 300 + ["P2"] * 200
-        cola = [f"c{i}" for i in range(60) for _ in range(2)] + [f"u{i}" for i in range(100)]
-        secuencia = [x for par in zip(pesados, pesados[::-1]) for x in par] + cola
-        grupos, dic = agrupar_surtido(secuencia, 12, escalar_tope=1.5)
-        assert len(grupos) == len(secuencia) and len(set(grupos)) <= 12
-        assert dic["P1"] == "P1" and dic["P2"] == "P2"                # individuales: conservan su nombre
-        tope = 1.5 * len(secuencia) / 12
-        demanda = {g: grupos.count(g) for g in set(grupos)}
-        assert all(d <= tope for g, d in demanda.items() if g.startswith("G"))
 
-    def test_un_tope_bajo_deja_individual_la_cabeza_y_uno_alto_la_agrupa(self):
-        # 12 SKU con demanda decreciente (12, 11, ..., 1 tareas): el tope fija cuántos quedan solos
-        secuencia = [f"s{i}" for i in range(12) for _ in range(12 - i)]
-        n, grupos_max = len(secuencia), 6
-        cuantos = []
-        for tope in (0.1, 0.8, 1.5):
-            etiquetas, dic = agrupar_surtido(secuencia, grupos_max, 0, tope)
-            individuales = {k for k, v in dic.items() if not v.startswith("G")}
-            assert len(etiquetas) == n and len(set(etiquetas)) <= grupos_max
-            assert all(secuencia.count(k) > tope * n / grupos_max for k in individuales)      # solo quedan solos los que pasan del tope
-            cuantos.append(len(individuales))
-        assert cuantos[0] == grupos_max - 1 and cuantos == sorted(cuantos, reverse=True)      # tope bajo: tantos como cupo deja a la cola
-        assert cuantos[-1] < cuantos[0]
+class TestMuestreo:
+    def test_individuales_cabeza_y_muestra_de_la_cola_hasta_completar_el_maximo(self):
+        secuencia = secuencia_sintetica()
+        reducida, dic, conteos = muestrear_surtido(secuencia, 6, 0, 0.3)       # umbral: 0,3 x 210 / 6 = 10,5 tareas
+        assert [k for k, v in dic.items() if v == "individual"] == ["P1", "P2", "P3"]
+        assert conteos == {"individuales": 3, "cola": 30, "muestreados": 3}
+        muestra = {k for k, v in dic.items() if v == "muestra"}
+        assert len(muestra) == 3 and set(reducida) == {"P1", "P2", "P3"} | muestra
+        assert all(dic[k] == "descartado" for k in dic if k not in muestra and not k.startswith("P"))
 
-    def test_el_tope_por_defecto_es_0_1_y_extraer_lo_pasa_a_la_agrupacion(self, tmp_path):
-        filas = [("2015-11-03 10:%02d:00" % i, f"S{i}", 1) for i in range(30) for _ in range(i % 5 + 1)]
+    def test_conserva_el_orden_relativo_y_las_rachas_de_los_elegidos(self):
+        secuencia = ["A"] * 5 + ["x"] + ["B"] * 4 + ["y", "y"] + ["A"] * 3
+        reducida, dic, _ = muestrear_surtido(secuencia, 2, 0, 0.1)
+        assert dic["A"] == "individual" and dic["B"] == "individual" or dic["A"] == "individual"       # A manda; el otro cupo es de la cola
+        elegidos = [k for k, v in dic.items() if v != "descartado"]
+        assert reducida == [x for x in secuencia if x in elegidos]
+        assert "AAAAA" in "".join(reducida) and "AAA" in "".join(reducida)
+
+    def test_es_reproducible_con_la_misma_semilla_y_cambia_con_otra(self):
+        secuencia = secuencia_sintetica()
+        assert muestrear_surtido(secuencia, 6, 7) == muestrear_surtido(secuencia, 6, 7)
+        muestras = {tuple(sorted(k for k, v in muestrear_surtido(secuencia, 6, sem)[1].items() if v == "muestra")) for sem in range(8)}
+        assert len(muestras) > 1
+
+    def test_no_muestrea_si_el_surtido_ya_cabe(self):
+        secuencia = ["a", "b", "a", "c"]
+        assert muestrear_surtido(secuencia, 5) == (secuencia, {"a": "individual", "b": "individual", "c": "individual"},
+                                                   {"individuales": 3, "cola": 0, "muestreados": 0})
+
+    def test_a_lo_sumo_maximo_menos_uno_individuales_y_siempre_queda_cupo_para_la_cola(self):
+        secuencia = [f"s{i}" for i in range(10) for _ in range(10)]               # todos superan cualquier umbral bajo
+        reducida, dic, conteos = muestrear_surtido(secuencia, 4, 0, 0.01)
+        assert conteos["individuales"] == 3 and conteos["muestreados"] == 1 and len(set(reducida)) == 4
+
+    def test_extraer_reduce_en_calzado_y_ecommerce_pero_no_con_none(self, tmp_path):
+        assert AdaptadorEcommerce.escalar_max_skus == 180 and AdaptadorCalzado.escalar_max_skus == 180
+        filas = [("2015-11-03 10:%02d:00" % i, f"S{i}", 1) for i in range(20) for _ in range(i % 4 + 1)]
         ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
-        por_defecto = extraer_secuencia(AdaptadorEcommerce(), ruta, 10)
-        assert por_defecto.vector_skus == extraer_secuencia(AdaptadorEcommerce(), ruta, 10, 0, False, 0.1).vector_skus
-        assert por_defecto.dic_grupos != extraer_secuencia(AdaptadorEcommerce(), ruta, 10, 0, False, 1.5).dic_grupos
-
-    def test_es_reproducible_y_no_agrupa_si_ya_cabe(self):
-        secuencia = [f"s{i % 17}" for i in range(300)] + [f"r{i}" for i in range(40)]
-        assert agrupar_surtido(secuencia, 5, 3) == agrupar_surtido(secuencia, 5, 3)
-        assert agrupar_surtido(["a", "b", "a"], 5) == (["a", "b", "a"], {"a": "a", "b": "b"})
-
-    def test_extraer_agrupa_por_defecto_en_ecommerce_y_no_en_calzado(self, tmp_path):
-        assert AdaptadorEcommerce.escalar_grupos == 180 and AdaptadorCalzado.escalar_grupos == 180
-        ruta = escribir_xlsx(tmp_path / "e.xlsx", [("2015-11-03 10:0%d:00" % i, s, 1) for i, s in enumerate("AABACB")])
-        resultado = extraer_secuencia(AdaptadorEcommerce(), ruta, 2)
-        assert len(resultado.vector_skus) == 6 and len(set(resultado.vector_skus)) == 2
-        assert set(resultado.dic_grupos) == {"A", "B", "C"}
-        assert extraer_secuencia(AdaptadorEcommerce(), ruta, None).vector_skus == list("AABACB")
+        r = extraer_secuencia(AdaptadorEcommerce(), ruta, 8)
+        assert len(set(r.vector_skus)) == 8 and set(r.dic_estratos) == {f"S{i}" for i in range(20)}
+        assert r.escalar_recuperaciones_antes == 50 and len(r.vector_skus) < 50
+        assert len(extraer_secuencia(AdaptadorEcommerce(), ruta, None).vector_skus) == 50
 
 
 class TestDesagregacion:
@@ -175,13 +170,13 @@ class TestDesagregacion:
         from asrs.generacion.fuentes import leer_cantidad
         assert leer_cantidad("12") == (12, None) and leer_cantidad("0") == (None, "cantidad igual a cero")
 
-    def test_la_condensacion_se_calcula_sobre_las_unidades(self, tmp_path):
-        # B tiene una sola línea de 50 unidades y A cinco líneas de 1: por unidades B pesa más y, con tope bajo, queda individual
+    def test_el_muestreo_se_calcula_sobre_las_unidades(self, tmp_path):
+        # B tiene una sola línea de 50 unidades y A cinco líneas de 1: por unidades B pesa más y con el tope por defecto queda individual
         filas = [("2015-11-03 10:0%d:00" % i, "A", 1) for i in range(5)] + [("2015-11-03 10:09:00", "B", 50)] + \
                 [("2015-11-03 11:%02d:00" % i, f"C{i}", 1) for i in range(10)]
         ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
         r = extraer_secuencia(AdaptadorEcommerce(), ruta, 4)
-        assert r.dic_grupos["B"] == "B" and len(r.vector_skus) == 65
+        assert r.dic_estratos["B"] == "individual" and r.vector_skus.count("B") == 50
 
 
 class TestCalzado:
@@ -259,6 +254,28 @@ class TestFuentesZip:
         assert r.vector_skus == ["SKU_2"] * 7 + ["SKU_3"] * 3 + ["SKU_1"] * 5 and r.dic_descartes == {"sin ventas (unidades cero)": 1}
         r = extraer_secuencia(AdaptadorInventarioSintetico("WH_1"), ruta)
         assert r.vector_skus == ["SKU_2"] * 7 + ["SKU_1"] * 5 and r.dic_descartes["otro almacén"] == 1
+
+
+class TestCodificacion:
+    def test_codigos_por_demanda_decreciente_y_orden_intacto(self):
+        secuencia = ["zeta", "x-9", "zeta", "q", "x-9", "zeta"]
+        codificada, dic = codificar_skus(secuencia)
+        assert dic == {"zeta": "SKU001", "x-9": "SKU002", "q": "SKU003"}
+        assert codificada == ["SKU001", "SKU002", "SKU001", "SKU003", "SKU002", "SKU001"]
+
+    def test_la_correspondencia_cubre_todos_los_sku_originales_con_su_estrato(self, tmp_path):
+        filas = [("2015-11-03 10:%02d:00" % i, f"S{i}", 1) for i in range(20) for _ in range(i % 4 + 1)]
+        ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
+        r = extraer_secuencia(AdaptadorEcommerce(), ruta, 8, 0, True)
+        destino = tmp_path / "skus.csv"
+        escribir_codigos(r.dic_estratos, r.dic_codigos, str(destino))
+        import csv as _csv
+        lineas = list(_csv.reader(destino.open(encoding="utf-8")))
+        assert lineas[0] == ["SKU_original", "SKU", "estrato"] and len(lineas) == 21
+        assert {x[0] for x in lineas[1:]} == {f"S{i}" for i in range(20)}
+        assert {x[2] for x in lineas[1:]} <= {"individual", "muestra", "descartado"}
+        assert all((x[1] == "") == (x[2] == "descartado") for x in lineas[1:])
+        assert {x[1] for x in lineas[1:] if x[1]} == set(r.vector_skus) and len(set(r.vector_skus)) == 8
 
 
 class TestSalida:

@@ -1,7 +1,7 @@
 """Adaptador de ecommerce-roy-bansal-2020 (`E-Commerce DataSet.xlsx`): líneas de pedido de un minorista de comercio electrónico.
 
 Todas las filas son salidas; una línea de cantidad q (`prod_qty`) son q recuperaciones seguidas del SKU. La demanda se ordena por la fecha del pedido (`order_date`); la de envío no interviene.
-El surtido se agrupa en 180 etiquetas con k-means (ver `agrupar_surtido`). Se descartan las fechas fuera de la campaña (ventana configurable, por defecto agosto a diciembre de 2015), las cantidades cero y los SKU vacíos.
+El surtido se reduce a 180 SKU con muestreo estratificado (ver `muestrear_surtido`). Se descartan las fechas fuera de la campaña (ventana configurable, por defecto agosto a diciembre de 2015), las cantidades cero y los SKU vacíos.
 El archivo es un .xlsx y se lee con la biblioteca estándar (zip + XML), sin openpyxl.
 """
 import datetime
@@ -49,8 +49,8 @@ def _fecha_excel(txt_valor):
 
 
 class AdaptadorEcommerce(Adaptador):
-    # Miles de SKU no caben en la estantería: se agrupan en 180 etiquetas con k-means (surtido de 180 SKU del modelo) sin quitar recuperaciones
-    escalar_grupos = 180
+    # Miles de SKU no caben en la estantería: se queda una muestra estratificada de 180 SKU (el surtido del modelo)
+    escalar_max_skus = 180
 
     def __init__(self, txt_fecha_minima="2015-08-01", txt_fecha_maxima="2016-01-01"):
         # Ventana [mínima, máxima) de fechas de pedido aceptadas, en ISO. Según calidad.md la campaña va de agosto a diciembre de 2015
