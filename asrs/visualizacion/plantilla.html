@@ -2115,7 +2115,7 @@ function leerFormulario() {
   if (origenDatos()) {
     // Con datos reales los campos de la demanda generada no se usan y no deben bloquear la simulación
     if (!cfg.texto_tareas_csv.trim()) { el('textoTareas').classList.add('invalido'); primerError = primerError || 'Datos reales: elige un archivo o pega las filas.'; }
-    if (!(cfg.escalar_porcentaje_historial > 0 && cfg.escalar_porcentaje_historial <= 100)) { el('pctHistorial').classList.add('invalido'); primerError = primerError || 'Historial: debe estar entre 1 y 100.'; }
+    if (!(cfg.escalar_porcentaje_historial > 0 && cfg.escalar_porcentaje_historial < 100)) { el('pctHistorial').classList.add('invalido'); primerError = primerError || 'Historial: debe estar entre 1 y 100.'; }
     if (RESUMEN_DATOS === null && cfg.texto_tareas_csv.trim()) primerError = primerError || 'Datos reales: revisa el mensaje de error del archivo.';
     asignarClases(cfg);
     cfg.escalar_largo_secuencia = RESUMEN_DATOS ? RESUMEN_DATOS.tareas : 1;

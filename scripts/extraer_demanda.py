@@ -57,7 +57,7 @@ if __name__ == "__main__":
         datos_config.update(texto_origen_tareas="datos", texto_tareas_csv=open(txt_destino, encoding="utf-8").read())
         try:
             config = config_desde_json(datos_config)
-            print(f"    config: carga OK; lista de operación de {len(config['secuencia_real'])} tareas ({len(resultado.vector_skus)} recuperaciones + reposición por lotes EOQ), {config['escalar_numero_skus']} SKU")
+            print(f"    config: carga OK; historial de {config['escalar_tareas_historial']} recuperaciones (no se evalúan) y {len(resultado.vector_skus) - config['escalar_tareas_historial']} evaluadas; lista de operación de {len(config['secuencia_real'])} tareas (con la reposición por lotes EOQ), {config['escalar_numero_skus']} SKU")
         except ValueError as error:
             print(f"    config: NO carga: {error}")
         print("    líneas más grandes: " + "; ".join(f"{q} u. {txt_sku} {tiempo}" for q, txt_sku, tiempo in resultado.vector_lineas_mayores))

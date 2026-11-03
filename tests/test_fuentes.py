@@ -345,7 +345,7 @@ class TestModoDatosReales:
     def config_datos(self, texto_csv):
         from asrs.config import cargar_configuracion, config_a_json, config_desde_json
         datos = config_a_json(cargar_configuracion())
-        datos.update(texto_origen_tareas="datos", texto_tareas_csv=texto_csv, escalar_porcentaje_historial=100, escalar_cantidad_replicas=1,
+        datos.update(texto_origen_tareas="datos", texto_tareas_csv=texto_csv, escalar_porcentaje_historial=10, escalar_cantidad_replicas=1,
                      vector_politicas_asignacion=["mas_cercana_grua"])
         return config_desde_json(datos)
 
@@ -383,13 +383,15 @@ class TestModoDatosReales:
         vector_skus = self.csv_demanda(2400)
         config = self.config_datos("SKU\n" + "\n".join(vector_skus) + "\n")
         operacion = config["secuencia_real"]
-        assert sum(1 for actividad, _ in operacion if actividad == 1) == len(vector_skus)
-        assert abs(sum(1 for actividad, _ in operacion if actividad == 0) - len(vector_skus)) < 100
+        evaluadas = len(vector_skus) - config["escalar_tareas_historial"]               # el 10 % inicial es historial y no se evalúa
+        assert config["escalar_tareas_historial"] == 240 and evaluadas == 2160
+        assert sum(1 for actividad, _ in operacion if actividad == 1) == evaluadas
+        assert abs(sum(1 for actividad, _ in operacion if actividad == 0) - evaluadas) <= 2 * sum(config["vector_inventario_inicial"])      # a lo sumo un lote por SKU de diferencia
         assert config["vector_inventario_inicial"] is not None and sum(config["vector_inventario_inicial"]) > 0
 
     def test_un_csv_con_columna_task_se_usa_tal_cual_sin_inventario_inicial_propio(self):
         config = self.config_datos("SKU;Task\nA;R\nB;R\nC;R\nA;A\n")
-        assert config["secuencia_real"] == [(1, 1), (1, 2), (1, 3), (0, 1)] and config["vector_inventario_inicial"] is None
+        assert config["secuencia_real"] == [(1, 2), (1, 3), (0, 1)] and config["vector_inventario_inicial"] is None
 
     def test_la_estanteria_no_se_vacia_con_la_reposicion_eoq(self, monkeypatch):
         from asrs.politicas import recuperacion
@@ -407,14 +409,57 @@ class TestModoDatosReales:
 
         config = self.config_datos("SKU\n" + "\n".join(vector_skus) + "\n")
         Simulacion.cargarReplica((config, 1))
-        assert omitidas["llamadas"] == len(vector_skus)
+        assert omitidas["llamadas"] == len(vector_skus) - 120                           # historial del 10 %: 120 de 1 200 no se evalúan
         vacias_con_reposicion = omitidas["vacias"]
 
         # El mismo CSV con columna Task (solo recuperaciones, sin almacenamientos): la estantería se vacía y se omiten muchas
         omitidas.update(vacias=0, llamadas=0)
         config_sin = self.config_datos("SKU;Task\n" + "\n".join(f"{sku};R" for sku in vector_skus) + "\n")
         Simulacion.cargarReplica((config_sin, 1))
-        assert omitidas["vacias"] > 500 > vacias_con_reposicion
+        assert omitidas["vacias"] > 400 > vacias_con_reposicion
+
+
+class TestSoloElPasado:
+    def test_el_historial_por_defecto_es_30_dias_de_365_y_no_se_evalua(self):
+        from asrs.config import cargar_configuracion
+        from asrs.generacion.datos_reales import tamano_historial
+        porcentaje = cargar_configuracion()["escalar_porcentaje_historial"]
+        assert porcentaje == pytest.approx(100 * 30 / 365)
+        assert tamano_historial(262_800, porcentaje) == 21_600 == 30 * 720                  # 30 días de recuperaciones, sin tarea de más por coma flotante
+        assert 262_800 - 21_600 == 241_200                                                   # lo que se evalúa: 335 días
+
+    def test_la_demanda_que_ven_las_politicas_sale_solo_del_historial(self):
+        from asrs.config import cargar_configuracion, config_a_json, config_desde_json
+        from asrs.politicas.asignacion import PoliticaAsignacion
+        recuperaciones = ["A"] * 60 + ["B"] * 40 + ["NUEVO"] * 300 + ["A"] * 100             # NUEVO solo aparece después del historial
+        datos = config_a_json(cargar_configuracion())
+        datos.update(texto_origen_tareas="datos", texto_tareas_csv="SKU\n" + "\n".join(recuperaciones) + "\n", escalar_porcentaje_historial=20,
+                     vector_politicas_asignacion=["full_turnover"])
+        config = config_desde_json(datos)
+        assert config["escalar_tareas_historial"] == 100
+        assert config["etiquetas_sku"] == ["A", "B", "NUEVO"]                                # NUEVO queda al final: sin demanda conocida
+        assert list(config["vector_demanda_sku"]) == pytest.approx([0.6, 0.4, 0.0])         # participación de los primeros 100, no de toda la lista
+        # Lo que se ejecuta empieza después del historial: las 100 primeras recuperaciones ya no están
+        assert [sku for act, sku in config["secuencia_real"] if act == 1][:3] == [3, 3, 3]
+        assert sum(1 for act, _ in config["secuencia_real"] if act == 1) == 400
+        # Las políticas planifican con esa demanda (sin escenario, demandaPlanificacion usa la configuración)
+        politica = PoliticaAsignacion.__new__(PoliticaAsignacion)
+        politica.config = dict(config, escenario_demanda=None)
+        demanda, activos = politica.demandaPlanificacion(0)
+        assert list(demanda) == pytest.approx([0.6, 0.4, 0.0]) and activos.all()
+
+    def test_el_historial_del_100_por_ciento_no_deja_nada_por_evaluar(self):
+        from asrs.config import cargar_configuracion, config_a_json, config_desde_json
+        datos = config_a_json(cargar_configuracion())
+        datos.update(texto_origen_tareas="datos", texto_tareas_csv="SKU\nA\nB\nA\n", escalar_porcentaje_historial=100)
+        with pytest.raises(ValueError, match="no deja tareas por evaluar"):
+            config_desde_json(datos)
+
+    def test_los_sku_sin_demanda_en_el_historial_se_ordenan_por_aparicion_no_por_frecuencia_posterior(self):
+        from asrs.generacion.datos_reales import preparar_datos_reales
+        tareas = [(1, "A")] * 10 + [(1, "Z")] * 1 + [(1, "Y")] * 50                          # Y es mucho más frecuente después, pero Z apareció antes
+        _, demanda, etiquetas = preparar_datos_reales(tareas, 16)                            # historial: 10 de A y la primera Z... ceil(61*0.16)=10
+        assert etiquetas == ["A", "Z", "Y"] and demanda[1] == 0.0 and demanda[2] == 0.0
 
 
 class TestSalida:

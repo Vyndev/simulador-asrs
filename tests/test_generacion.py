@@ -143,7 +143,7 @@ class PruebasDatosReales(unittest.TestCase):
         datos = config_a_json(cargar_configuracion())
         datos.update(texto_origen_tareas="datos", texto_tareas_csv=self.CSV, escalar_porcentaje_historial=50)
         cfg = config_desde_json(datos)
-        self.assertEqual(cfg["escalar_largo_secuencia"], 7)
+        self.assertEqual(cfg["escalar_largo_secuencia"], 3)          # 7 tareas, historial del 50 % (4): se evalúan las 3 siguientes
         self.assertEqual(cfg["escalar_numero_skus"], 3)
         random.seed(1)
         _, tareas = Simulacion(cfg).generarSecuencias()
@@ -173,7 +173,7 @@ class PruebasDatosReales(unittest.TestCase):
         generador = np.random.default_rng(3)
         vector_filas = ["SKU;Task"] + [f"P{generador.integers(1, 13)};{'A' if i % 2 == 0 else 'R'}" for i in range(400)]
         datos = config_a_json(cargar_configuracion())
-        datos.update(texto_origen_tareas="datos", texto_tareas_csv="\n".join(vector_filas), escalar_porcentaje_historial=100)
+        datos.update(texto_origen_tareas="datos", texto_tareas_csv="\n".join(vector_filas), escalar_porcentaje_historial=50)
         return config_desde_json(datos)
 
     def test_con_datos_reales_las_variantes_replanificadas_son_iguales_a_las_de_plan_fijo(self):

@@ -58,7 +58,7 @@ class PruebasVisualizacion(unittest.TestCase):
         from asrs.politicas.zonificacion import clasificar_skus
         from asrs.visualizacion.generador import generar_datos
         datos_config = config_a_json(cargar_configuracion())
-        datos_config.update(texto_origen_tareas="datos", texto_tareas_csv=test_generacion.PruebasDatosReales.CSV, escalar_porcentaje_historial=100)
+        datos_config.update(texto_origen_tareas="datos", texto_tareas_csv=test_generacion.PruebasDatosReales.CSV, escalar_porcentaje_historial=50)
         config = config_desde_json(datos_config)
         datos = generar_datos(config, [1])
         self.assertEqual(datos["clase_sku"], clasificar_skus(config["vector_demanda_sku"], config).tolist())

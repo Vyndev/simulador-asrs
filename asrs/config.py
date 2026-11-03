@@ -1,7 +1,7 @@
 """Parámetros del modelo de simulación."""
 import numpy as np
 
-from asrs.generacion.datos_reales import es_solo_demanda, leer_tareas, preparar_datos_reales, reponer_con_lotes_eoq
+from asrs.generacion.datos_reales import es_solo_demanda, leer_tareas, preparar_datos_reales, reponer_con_lotes_eoq, tamano_historial
 from asrs.generacion.probabilidades import PERFILES_INVENTARIO, demanda_hausman
 
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
@@ -76,7 +76,7 @@ def cargar_configuracion():
         # Con datos reales la cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla salen del archivo
         "texto_origen_tareas": "generada",
         "texto_tareas_csv": "", # Contenido del CSV, con una tarea por fila: actividad (A o R) y SKU
-        "escalar_porcentaje_historial": 100, # Con datos reales, porcentaje inicial de la lista con el que las políticas conocen la demanda (llenado y clases)
+        "escalar_porcentaje_historial": 100 * 30 / 365, # Con datos reales, porcentaje inicial de la lista que sirve de historial (llenado y clases) y no se evalúa: 30 días de 365, como el calentamiento y la ventana de popularidad; las políticas no ven demanda posterior al momento actual
         "escalar_largo_secuencia": 1,  # Valor inicial, se ajustará en la inicialización
         "escalar_cantidad_replicas": 1, # una corrida larga, como en la instancia del capítulo 6; con más corridas la estadística resume el promedio y el intervalo de confianza. Corrida de la instancia: # la simulación se repetira según la cantidad de replicas
         "escalar_replicas_animadas": 1, # la carrera muestra una réplica; la estadística usa escalar_cantidad_replicas
@@ -237,6 +237,12 @@ def config_desde_json(diccionario):
         # Con datos reales todo sale del archivo: la lista de tareas, los SKUs y la demanda que conocen las políticas
         matriz_tareas = leer_tareas(config["texto_tareas_csv"], LIMITE_TAREAS)
         matriz_secuencia, vector_demanda, vector_etiquetas = preparar_datos_reales(matriz_tareas, config["escalar_porcentaje_historial"])
+        # El historial es un tramo inicial anterior a lo que se evalúa: las políticas planifican con él y la lista que se ejecuta empieza después
+        # Así ninguna política conoce demanda posterior al momento actual
+        config["escalar_tareas_historial"] = tamano_historial(len(matriz_tareas), config["escalar_porcentaje_historial"])
+        if config["escalar_tareas_historial"] >= len(matriz_secuencia):
+            raise ValueError(f"Datos reales: el historial ({config['escalar_tareas_historial']} de {len(matriz_secuencia)} tareas) no deja tareas por evaluar; usa un porcentaje menor que 100.")
+        matriz_secuencia = matriz_secuencia[config["escalar_tareas_historial"]:]
         config["vector_inventario_inicial"] = None
         if es_solo_demanda(config["texto_tareas_csv"]):
             # El archivo solo trae demanda: los almacenamientos se generan con la reposición por lotes EOQ del capítulo 8

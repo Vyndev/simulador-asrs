@@ -123,19 +123,25 @@ def reponer_con_lotes_eoq(matriz_secuencia, vector_demanda, escalar_recuperacion
     return matriz_operacion, vector_inicial
 
 
-def preparar_datos_reales(matriz_tareas, escalar_porcentaje_historial=100):
+def tamano_historial(escalar_tareas, escalar_porcentaje_historial):
+    # Tareas del tramo inicial de la lista que sirve de historial: ese tramo es anterior a lo que se evalúa y no se ejecuta
+    # La resta evita que un error de coma flotante en el producto agregue una tarea de más (8,219...% de 262 800 son 21 600 y no 21 601)
+    return max(1, math.ceil(escalar_tareas * escalar_porcentaje_historial / 100 - 1e-9))
+
+
+def preparar_datos_reales(matriz_tareas, escalar_porcentaje_historial=50):
     # Convierte las etiquetas de SKU en números y calcula la demanda que conocen las políticas
-    # Las políticas planifican con el historial, es decir, con el primer porcentaje de la lista (con 100 usan toda la lista):
-    # el llenado inicial y la clasificación se hacen con esa demanda. Después se ejecuta la lista completa
+    # Las políticas solo conocen el pasado: planifican (llenado inicial, clases y zonas) con el historial, el primer porcentaje de la lista,
+    # y lo que se evalúa es lo que viene después (la configuración descarta el historial de la lista que se ejecuta)
     # El SKU 1 es el más frecuente en el historial, a igual frecuencia el que aparece primero; los que no aparecen en el historial
-    # van al final (con demanda cero para las políticas), por frecuencia total
-    escalar_historial = max(1, math.ceil(len(matriz_tareas) * escalar_porcentaje_historial / 100))
+    # van al final (con demanda cero para las políticas), por orden de aparición: no se usa la frecuencia posterior al historial
+    escalar_historial = tamano_historial(len(matriz_tareas), escalar_porcentaje_historial)
     cuenta_historial = Counter(txt_sku for _, txt_sku in matriz_tareas[:escalar_historial])
     cuenta_total = Counter(txt_sku for _, txt_sku in matriz_tareas)
     primera_aparicion = {}
     for escalar_indice, (_, txt_sku) in enumerate(matriz_tareas):
         primera_aparicion.setdefault(txt_sku, escalar_indice)
-    vector_etiquetas = sorted(cuenta_total, key=lambda s: (-cuenta_historial.get(s, 0), -cuenta_total[s], primera_aparicion[s]))
+    vector_etiquetas = sorted(cuenta_total, key=lambda s: (-cuenta_historial.get(s, 0), primera_aparicion[s]))
     dic_numero = {txt_sku: escalar_indice + 1 for escalar_indice, txt_sku in enumerate(vector_etiquetas)}
 
     vector_demanda = np.array([cuenta_historial.get(txt_sku, 0) for txt_sku in vector_etiquetas], dtype=float)
@@ -144,7 +150,7 @@ def preparar_datos_reales(matriz_tareas, escalar_porcentaje_historial=100):
     return matriz_secuencia, vector_demanda, vector_etiquetas
 
 
-def resumir_tareas(matriz_tareas, escalar_porcentaje_historial=100):
+def resumir_tareas(matriz_tareas, escalar_porcentaje_historial=50):
     # Resumen para mostrar al usuario antes de simular
     matriz_secuencia, vector_demanda, vector_etiquetas = preparar_datos_reales(matriz_tareas, escalar_porcentaje_historial)
     escalar_almacenar = sum(1 for escalar_actividad, _ in matriz_tareas if escalar_actividad == 0)
@@ -152,7 +158,8 @@ def resumir_tareas(matriz_tareas, escalar_porcentaje_historial=100):
         "tareas": len(matriz_tareas),
         "skus": len(vector_etiquetas),
         "pct_almacenar": round(100 * escalar_almacenar / len(matriz_tareas), 1),
-        "historial": max(1, math.ceil(len(matriz_tareas) * escalar_porcentaje_historial / 100)),
+        "historial": tamano_historial(len(matriz_tareas), escalar_porcentaje_historial),
+        "evaluadas": len(matriz_tareas) - tamano_historial(len(matriz_tareas), escalar_porcentaje_historial),
         "sin_historial": int((vector_demanda == 0).sum()),
         "principales": [[vector_etiquetas[i], round(float(vector_demanda[i]) * 100, 1)] for i in range(min(5, len(vector_etiquetas)))],
     }
