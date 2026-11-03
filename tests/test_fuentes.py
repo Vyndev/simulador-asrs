@@ -3,6 +3,7 @@ import zipfile
 from datetime import datetime
 from xml.sax.saxutils import escape
 
+import numpy as np
 import pytest
 
 from asrs.generacion.datos_reales import leer_tareas, preparar_datos_reales
@@ -334,6 +335,65 @@ class TestEscalado:
         assert lineas[0] == ["SKU_original", "SKU", "estrato", "sin_copias"]
         assert [x for x in lineas[1:] if x[0] == "mini"] == [["mini", "", "individual", "sin_copias"]]
         assert all(x[3] == "" and x[1] != "" for x in lineas[1:] if x[0] != "mini")
+
+
+class TestModoDatosReales:
+    def csv_demanda(self, n=1200, skus=12):
+        generador = np.random.default_rng(5)
+        return [f"P{generador.integers(1, skus + 1)}" for _ in range(n)]
+
+    def config_datos(self, texto_csv):
+        from asrs.config import cargar_configuracion, config_a_json, config_desde_json
+        datos = config_a_json(cargar_configuracion())
+        datos.update(texto_origen_tareas="datos", texto_tareas_csv=texto_csv, escalar_porcentaje_historial=100, escalar_cantidad_replicas=1,
+                     vector_politicas_asignacion=["mas_cercana_grua"])
+        return config_desde_json(datos)
+
+    def test_constantes_de_la_instancia(self):
+        from asrs.config import RECUPERACIONES_POR_CORRIDA, TAREAS_POR_CORRIDA, cargar_configuracion, recuperaciones_por_corrida
+        assert recuperaciones_por_corrida(cargar_configuracion()) == RECUPERACIONES_POR_CORRIDA == TAREAS_POR_CORRIDA // 2 == 262_800
+        assert 2 * RECUPERACIONES_POR_CORRIDA == TAREAS_POR_CORRIDA
+
+    def test_un_csv_de_solo_recuperaciones_se_completa_con_reposicion_uno_a_uno(self):
+        from asrs.generacion.datos_reales import leer_tareas_de_operacion
+        tareas = leer_tareas_de_operacion("SKU\nA\nB\nA\n")
+        assert tareas == [(1, "A"), (0, "A"), (1, "B"), (0, "B"), (1, "A"), (0, "A")]
+        with pytest.raises(ValueError, match="con su reposición"):
+            leer_tareas_de_operacion("SKU\nA\nB\nC\n", 5)
+
+    def test_un_csv_con_columna_task_se_usa_tal_cual(self):
+        from asrs.generacion.datos_reales import leer_tareas_de_operacion
+        assert leer_tareas_de_operacion("SKU;Task\nA;R\nB;R\nA;A\n") == [(1, "A"), (1, "B"), (0, "A")]
+        assert leer_tareas_de_operacion("SKU,Task\nA,R\n", 10) == [(1, "A")]
+
+    def test_la_estanteria_no_se_vacia_y_se_ejecutan_2_x_recuperaciones(self, monkeypatch):
+        from asrs.politicas import recuperacion
+        from asrs.simulacion.simulacion import Simulacion
+        vector_skus = self.csv_demanda()
+        omitidas = {"vacias": 0, "llamadas": 0}
+        original = recuperacion.PoliticaRecuperacionFCFS.seleccionar
+
+        def contando(self, estanteria, sku):
+            elegido = original(self, estanteria, sku)
+            omitidas["llamadas"] += 1
+            omitidas["vacias"] += 0 if len(elegido) else 1
+            return elegido
+        monkeypatch.setattr(recuperacion.PoliticaRecuperacionFCFS, "seleccionar", contando)
+
+        # Solo recuperaciones, con la reposición uno a uno: 2 x 1 200 tareas y casi ninguna recuperación se omite
+        config = self.config_datos("SKU\n" + "\n".join(vector_skus) + "\n")
+        assert len(config["secuencia_real"]) == 2 * len(vector_skus)
+        assert sum(1 for actividad, _ in config["secuencia_real"] if actividad == 0) == len(vector_skus)
+        Simulacion.cargarReplica((config, 1))
+        assert omitidas["llamadas"] == len(vector_skus)
+        vacias_con_reposicion = omitidas["vacias"]
+
+        # El mismo CSV con columna Task (solo recuperaciones, sin almacenamientos): la estantería se vacía y se omiten muchas
+        omitidas.update(vacias=0, llamadas=0)
+        config_sin = self.config_datos("SKU;Task\n" + "\n".join(f"{sku};R" for sku in vector_skus) + "\n")
+        assert len(config_sin["secuencia_real"]) == len(vector_skus)
+        Simulacion.cargarReplica((config_sin, 1))
+        assert omitidas["vacias"] > 500 > vacias_con_reposicion
 
 
 class TestSalida:

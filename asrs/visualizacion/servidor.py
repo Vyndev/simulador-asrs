@@ -14,7 +14,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import numpy as np
 
 from asrs.config import LIMITE_SKUS, LIMITE_TAREAS, cargar_configuracion, config_a_json, config_desde_json
-from asrs.generacion.datos_reales import leer_tareas, resumir_tareas
+from asrs.generacion.datos_reales import leer_tareas_de_operacion, resumir_tareas
 from asrs.simulacion.estadistica import resumir
 from asrs.simulacion.simulacion import Simulacion
 from asrs.visualizacion.generador import generar_datos, leer_plantilla
@@ -192,7 +192,7 @@ def crear_manejador(estado):
                     if escalar_largo <= 0 or escalar_largo > LIMITE_CUERPO:
                         raise ValueError('La solicitud está vacía o es demasiado grande.')
                     solicitud = json.loads(self.rfile.read(escalar_largo).decode('utf-8'))
-                    matriz_tareas = leer_tareas(str(solicitud.get('texto', '')), LIMITE_TAREAS)
+                    matriz_tareas = leer_tareas_de_operacion(str(solicitud.get('texto', '')), LIMITE_TAREAS)
                     resumen = resumir_tareas(matriz_tareas, float(solicitud.get('porcentaje', 100)))
                     if resumen["skus"] > LIMITE_SKUS:
                         raise ValueError(f'Datos reales: hay {resumen["skus"]} SKUs distintos, el máximo es {LIMITE_SKUS}.')

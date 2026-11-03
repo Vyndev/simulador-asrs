@@ -1,7 +1,7 @@
 """Parámetros del modelo de simulación."""
 import numpy as np
 
-from asrs.generacion.datos_reales import leer_tareas, preparar_datos_reales
+from asrs.generacion.datos_reales import leer_tareas_de_operacion, preparar_datos_reales
 from asrs.generacion.probabilidades import PERFILES_INVENTARIO, demanda_hausman
 
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
@@ -13,6 +13,13 @@ LIMITE_CLASES = 8
 LIMITE_REPLICAS_ESTADISTICA = 2000
 
 TAREAS_POR_CORRIDA = 525_600 # Cantidad de tareas evaluadas por corrida en la instancia del capítulo 6: un año de 365 días a 1 440 tareas por día
+DIAS_HORIZONTE = 365 # Horizonte evaluado de la instancia, en días
+RECUPERACIONES_POR_CORRIDA = TAREAS_POR_CORRIDA // 2 # Mitad de las tareas con la mezcla 50 % almacenamientos / 50 % recuperaciones: la demanda de un año (R x Y = 720 x 365)
+
+
+def recuperaciones_por_corrida(config):
+    # Recuperaciones de demanda de un año evaluado: R = ciclos por hora x horas por día / 2 (mezcla 50 / 50) por día, durante el horizonte
+    return int(round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2)) * DIAS_HORIZONTE
 
 
 def cargar_configuracion():
@@ -228,7 +235,7 @@ def config_desde_json(diccionario):
     personalizada = datos["vector_demanda_sku_personalizada"]
     if origen == "datos":
         # Con datos reales todo sale del archivo: la lista de tareas, los SKUs y la demanda que conocen las políticas
-        matriz_tareas = leer_tareas(config["texto_tareas_csv"], LIMITE_TAREAS)
+        matriz_tareas = leer_tareas_de_operacion(config["texto_tareas_csv"], LIMITE_TAREAS)
         matriz_secuencia, vector_demanda, vector_etiquetas = preparar_datos_reales(matriz_tareas, config["escalar_porcentaje_historial"])
         if len(vector_etiquetas) > LIMITE_SKUS:
             raise ValueError(f"Datos reales: hay {len(vector_etiquetas)} SKUs distintos, el máximo es {LIMITE_SKUS}.")

@@ -74,6 +74,15 @@ class ResultadoExtraccion:
         return sum(1 for a, b in zip(self.vector_skus, self.vector_skus[1:]) if a == b) / max(1, len(self.vector_skus) - 1)
 
     @property
+    def escalar_racha_maxima(self):
+        # Largo de la racha más larga de un mismo SKU seguido
+        escalar_maxima = escalar_actual = 1 if self.vector_skus else 0
+        for a, b in zip(self.vector_skus, self.vector_skus[1:]):
+            escalar_actual = escalar_actual + 1 if a == b else 1
+            escalar_maxima = max(escalar_maxima, escalar_actual)
+        return escalar_maxima
+
+    @property
     def escalar_skus_distintos(self):
         return len(set(self.vector_skus))
 

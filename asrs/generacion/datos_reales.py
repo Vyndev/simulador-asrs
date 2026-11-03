@@ -13,6 +13,14 @@ NOMBRES_COLUMNA_SKU = ("sku", "art", "prod", "ref", "item", "cod", "cód")
 ENCABEZADOS_UNA_COLUMNA = {"sku", "articulo", "artículo", "producto", "referencia", "item", "codigo", "código"}   # nombre exacto de la columna única
 
 
+def _es_una_columna(vector_lineas):
+    # Un CSV de una sola columna con encabezado SKU: solo trae la demanda (recuperaciones)
+    if not vector_lineas:
+        return False
+    txt_separador = max(",;\t|", key=lambda s: vector_lineas[0].count(s))
+    return vector_lineas[0].count(txt_separador) == 0 and vector_lineas[0].strip().strip('"').lower() in ENCABEZADOS_UNA_COLUMNA
+
+
 def _es_actividad(txt_valor):
     return txt_valor.strip().lower() in PALABRAS_ALMACENAR | PALABRAS_RECUPERAR
 
@@ -41,7 +49,7 @@ def leer_tareas(txt_csv, escalar_limite_tareas=None):
     if not vector_lineas:
         raise ValueError("Datos reales: el archivo está vacío.")
     txt_separador = max(",;\t|", key=lambda s: vector_lineas[0].count(s))
-    if vector_lineas[0].count(txt_separador) == 0 and vector_lineas[0].strip().strip('"').lower() in ENCABEZADOS_UNA_COLUMNA:
+    if _es_una_columna(vector_lineas):
         return _leer_una_columna(vector_lineas, escalar_limite_tareas)
     if vector_lineas[0].count(txt_separador) == 0:
         raise ValueError("Datos reales: se esperan dos columnas, SKU y Task, separadas por coma, punto y coma o tabulación.")
@@ -81,6 +89,27 @@ def leer_tareas(txt_csv, escalar_limite_tareas=None):
             raise ValueError(f"Datos reales: hay más de {escalar_limite_tareas} tareas, el máximo es {escalar_limite_tareas}.")
     if not matriz_tareas:
         raise ValueError("Datos reales: el archivo no tiene tareas.")
+    return matriz_tareas
+
+
+def intercalar_reposicion(matriz_tareas):
+    """Convierte una lista de recuperaciones (la demanda) en la lista de operación: tras cada recuperación se almacena un ítem del mismo SKU.
+    Es una reposición uno a uno, sin lotes: un supuesto del modelo, porque los datos solo traen demanda. Mantiene la estantería ocupada."""
+    matriz_operacion = []
+    for escalar_actividad, txt_sku in matriz_tareas:
+        matriz_operacion.append((escalar_actividad, txt_sku))
+        matriz_operacion.append((0, txt_sku))
+    return matriz_operacion
+
+
+def leer_tareas_de_operacion(txt_csv, escalar_limite_tareas=None):
+    """Lista de tareas que ejecuta el simulador con datos reales. Un CSV con actividad por fila (columna Task) se usa tal cual; un CSV de una
+    sola columna SKU trae solo recuperaciones y se completa con una reposición uno a uno (`intercalar_reposicion`): 2 x recuperaciones tareas."""
+    matriz_tareas = leer_tareas(txt_csv, escalar_limite_tareas)
+    if _es_una_columna([txt for txt in txt_csv.splitlines() if txt.strip()]):
+        matriz_tareas = intercalar_reposicion(matriz_tareas)
+        if escalar_limite_tareas is not None and len(matriz_tareas) > escalar_limite_tareas:
+            raise ValueError(f"Datos reales: con su reposición la lista tiene {len(matriz_tareas)} tareas, el máximo es {escalar_limite_tareas}.")
     return matriz_tareas
 
 
