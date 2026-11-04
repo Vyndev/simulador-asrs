@@ -1,3 +1,4 @@
+from collections import Counter
 """Pruebas (pytest) del tratamiento de fuentes: orden, empates, filtros, salida y lectura de la salida con `leer_tareas`."""
 import zipfile
 from datetime import datetime
@@ -7,6 +8,7 @@ import numpy as np
 import pytest
 
 from asrs.generacion.datos_reales import leer_tareas, preparar_datos_reales
+from asrs.generacion.fuentes.base import ampliar_surtido
 from asrs.generacion.fuentes import ADAPTADORES, Adaptador, Registro, codificar_skus, crear_adaptador, escribir_codigos, escribir_secuencia, escalar_secuencia, extraer_secuencia, muestrear_surtido
 from asrs.generacion.fuentes.calzado import ENCABEZADO as ENCABEZADO_CALZADO, AdaptadorCalzado
 from asrs.generacion.fuentes.ecommerce import ENCABEZADO as ENCABEZADO_ECOMMERCE, AdaptadorEcommerce
@@ -93,22 +95,18 @@ def secuencia_sintetica():
 
 
 class TestMuestreo:
-    def test_individuales_cabeza_y_muestra_de_la_cola_hasta_completar_el_maximo(self):
+    def test_elige_exactamente_el_maximo_y_descarta_el_resto(self):
         secuencia = secuencia_sintetica()
-        reducida, dic, conteos = muestrear_surtido(secuencia, 6, 0, 0.3)       # umbral: 0,3 x 210 / 6 = 10,5 tareas
-        assert [k for k, v in dic.items() if v == "individual"] == ["P1", "P2", "P3"]
-        assert conteos == {"individuales": 3, "cola": 30, "muestreados": 3}
-        muestra = {k for k, v in dic.items() if v == "muestra"}
-        assert len(muestra) == 3 and set(reducida) == {"P1", "P2", "P3"} | muestra
-        assert all(dic[k] == "descartado" for k in dic if k not in muestra and not k.startswith("P"))
+        reducida, dic, conteos = muestrear_surtido(secuencia, 6, 0)
+        elegidos = {k for k, v in dic.items() if v == "muestra"}
+        assert conteos == {"skus": 33, "muestreados": 6} and len(elegidos) == 6
+        assert set(reducida) == elegidos and all(v in ("muestra", "descartado") for v in dic.values())
 
     def test_conserva_el_orden_relativo_y_las_rachas_de_los_elegidos(self):
         secuencia = ["A"] * 5 + ["x"] + ["B"] * 4 + ["y", "y"] + ["A"] * 3
-        reducida, dic, _ = muestrear_surtido(secuencia, 2, 0, 0.1)
-        assert dic["A"] == "individual" and dic["B"] == "individual" or dic["A"] == "individual"       # A manda; el otro cupo es de la cola
-        elegidos = [k for k, v in dic.items() if v != "descartado"]
-        assert reducida == [x for x in secuencia if x in elegidos]
-        assert "AAAAA" in "".join(reducida) and "AAA" in "".join(reducida)
+        reducida, dic, _ = muestrear_surtido(secuencia, 2, 0)
+        elegidos = [k for k, v in dic.items() if v == "muestra"]
+        assert len(elegidos) == 2 and reducida == [x for x in secuencia if x in elegidos]
 
     def test_es_reproducible_con_la_misma_semilla_y_cambia_con_otra(self):
         secuencia = secuencia_sintetica()
@@ -118,13 +116,20 @@ class TestMuestreo:
 
     def test_no_muestrea_si_el_surtido_ya_cabe(self):
         secuencia = ["a", "b", "a", "c"]
-        assert muestrear_surtido(secuencia, 5) == (secuencia, {"a": "individual", "b": "individual", "c": "individual"},
-                                                   {"individuales": 3, "cola": 0, "muestreados": 0})
+        assert muestrear_surtido(secuencia, 5) == (secuencia, {"a": "muestra", "b": "muestra", "c": "muestra"}, {"skus": 3, "muestreados": 3})
 
-    def test_a_lo_sumo_maximo_menos_uno_individuales_y_siempre_queda_cupo_para_la_cola(self):
-        secuencia = [f"s{i}" for i in range(10) for _ in range(10)]               # todos superan cualquier umbral bajo
-        reducida, dic, conteos = muestrear_surtido(secuencia, 4, 0, 0.01)
-        assert conteos["individuales"] == 3 and conteos["muestreados"] == 1 and len(set(reducida)) == 4
+    def test_la_probabilidad_de_salir_crece_con_la_demanda(self):
+        secuencia = ["P"] * 60 + [f"c{i:02d}" for i in range(40)]                 # P pesa 60 de 100; cada cola pesa 1
+        veces = {k: 0 for k in ("P", "c00")}
+        for sem in range(200):
+            _, dic, _ = muestrear_surtido(secuencia, 5, sem)
+            for k in veces: veces[k] += dic[k] == "muestra"
+        assert veces["P"] > 190 and veces["c00"] < 40                             # P casi siempre; una de la cola, unas 4 de cada 40 (10 %)
+
+    def test_un_sku_muy_demandado_casi_siempre_sale_pero_no_esta_garantizado(self):
+        secuencia = ["P"] * 3 + [f"c{i:02d}" for i in range(40)]                  # P apenas pesa 3 frente a 1 de cada SKU de la cola
+        salidas = [muestrear_surtido(secuencia, 5, sem)[1]["P"] == "muestra" for sem in range(200)]
+        assert 0 < sum(salidas) < 200
 
     def test_extraer_reduce_en_calzado_y_ecommerce_pero_no_con_none(self, tmp_path):
         assert AdaptadorEcommerce.escalar_max_skus == 180 and AdaptadorCalzado.escalar_max_skus == 180
@@ -172,12 +177,12 @@ class TestDesagregacion:
         assert leer_cantidad("12") == (12, None) and leer_cantidad("0") == (None, "cantidad igual a cero")
 
     def test_el_muestreo_se_calcula_sobre_las_unidades(self, tmp_path):
-        # B tiene una sola línea de 50 unidades y A cinco líneas de 1: por unidades B pesa más y con el tope por defecto queda individual
+        # B tiene una sola línea de 50 unidades y A cinco líneas de 1: por unidades B pesa 50 y casi siempre es elegido
         filas = [("2015-11-03 10:0%d:00" % i, "A", 1) for i in range(5)] + [("2015-11-03 10:09:00", "B", 50)] + \
                 [("2015-11-03 11:%02d:00" % i, f"C{i}", 1) for i in range(10)]
         ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
         r = extraer_secuencia(AdaptadorEcommerce(), ruta, 4)
-        assert r.dic_estratos["B"] == "individual" and r.vector_skus.count("B") == 50
+        assert r.dic_estratos["B"] == "muestra" and r.vector_skus.count("B") == 50
 
 
 class TestCalzado:
@@ -251,10 +256,68 @@ class TestFuentesZip:
         ruta = escribir_zip(tmp_path / "i.zip", "supply_chain_dataset1.csv", ENCABEZADO, [
             fila("2024-01-02", "SKU_1", 5), fila("2024-01-01", "SKU_2", 7), fila("2024-01-01", "SKU_1", 0),
             fila("2024-01-01", "SKU_3", 3, "WH_2")])
-        r = extraer_secuencia(AdaptadorInventarioSintetico(), ruta)
+        r = extraer_secuencia(AdaptadorInventarioSintetico(), ruta, None)
         assert r.vector_skus == ["SKU_2"] * 7 + ["SKU_3"] * 3 + ["SKU_1"] * 5 and r.dic_descartes == {"sin ventas (unidades cero)": 1}
-        r = extraer_secuencia(AdaptadorInventarioSintetico("WH_1"), ruta)
+        r = extraer_secuencia(AdaptadorInventarioSintetico("WH_1"), ruta, None)
         assert r.vector_skus == ["SKU_2"] * 7 + ["SKU_1"] * 5 and r.dic_descartes["otro almacén"] == 1
+
+
+class TestAmpliacion:
+    def lineas(self):
+        # 3 SKU durante 10 días: A pesa el doble que B y C
+        L = []
+        for d in range(10):
+            fecha = datetime(2024, 1, 1 + d)
+            L += [(fecha, 3 * d, "A", 4), (fecha, 3 * d + 1, "B", 2), (fecha, 3 * d + 2, "C", 2)]
+        return L
+
+    def test_completa_exactamente_el_maximo_y_no_toca_a_los_originales(self):
+        L = self.lineas()
+        nuevas, dic, conteos = ampliar_surtido(L, 8, 0)
+        assert conteos == {"skus": 3, "agregados": 5} and len(dic) == 8
+        assert [k for k, v in dic.items() if v == "original"] == ["A", "B", "C"]
+        assert all("#" in k for k, v in dic.items() if v == "agregado")
+        assert [x for x in nuevas if x[2] in ("A", "B", "C")] == L
+
+    def test_un_agregado_copia_la_serie_de_su_origen_desplazada_y_circular(self):
+        L = self.lineas()
+        nuevas, dic, _ = ampliar_surtido(L, 6, 3)
+        for k, v in dic.items():
+            if v != "agregado": continue
+            origen = k.split("#")[0]
+            propias = [(t, q) for t, _, s, q in nuevas if s == k]
+            assert len(propias) == 10 and sorted(q for _, q in propias) == sorted(q for _, _, s, q in L if s == origen)
+            assert all(datetime(2024, 1, 1) <= t <= datetime(2024, 1, 10) for t, _ in propias)
+            assert sorted(t for t, _ in propias) == [datetime(2024, 1, 1 + d) for d in range(10)]
+
+    def test_queda_ordenado_en_el_tiempo_y_es_reproducible(self):
+        L = self.lineas()
+        a = ampliar_surtido(L, 9, 5)
+        assert a == ampliar_surtido(L, 9, 5) and a != ampliar_surtido(L, 9, 6)
+        tiempos = [t for t, _, _, _ in a[0]]
+        assert tiempos == sorted(tiempos)
+
+    def test_el_origen_se_elige_con_probabilidad_proporcional_a_la_demanda(self):
+        L = self.lineas()
+        veces = Counter()
+        for sem in range(1000):
+            _, dic, _ = ampliar_surtido(L, 4, sem)
+            veces[[k for k in dic if "#" in k][0].split("#")[0]] += 1
+        assert veces["A"] > 1.5 * veces["B"] and veces["A"] > 1.5 * veces["C"]       # A pesa 40 de 80: la mitad
+
+    def test_no_agrega_si_el_surtido_ya_cabe(self):
+        L = self.lineas()
+        assert ampliar_surtido(L, 3, 0) == (L, {"A": "original", "B": "original", "C": "original"}, {"skus": 3, "agregados": 0})
+
+    def test_la_fuente_sintetica_llega_a_180_sku_y_las_demas_no_se_amplian(self, tmp_path):
+        from asrs.generacion.fuentes.inventario_sintetico import ENCABEZADO, AdaptadorInventarioSintetico
+        base = ["SUP_1", "West", "{u}", "500", "10", "300", "100", "10", "15", "0", "0", "9"]
+        filas = [[f"2024-01-{1 + d:02d}", f"SKU_{i}", "WH_1"] + [x.format(u=2 + i % 3) for x in base[1:]] for i in range(5) for d in range(6)]
+        ruta = escribir_zip(tmp_path / "i.zip", "supply_chain_dataset1.csv", ENCABEZADO, filas)
+        r = extraer_secuencia(AdaptadorInventarioSintetico(), ruta, 12, 0, True)
+        assert len(set(r.vector_skus)) == 12 and sorted(set(r.dic_estratos.values())) == ["agregado", "original"]
+        assert r.dic_muestreo == {"skus": 5, "agregados": 7} and r.escalar_lineas == 30
+        assert AdaptadorInventarioSintetico.escalar_max_skus == 180 and not AdaptadorEcommerce.bool_ampliar_surtido and not AdaptadorCalzado.bool_ampliar_surtido
 
 
 class TestCodificacion:
@@ -274,7 +337,7 @@ class TestCodificacion:
         lineas = list(_csv.reader(destino.open(encoding="utf-8")))
         assert lineas[0] == ["SKU_original", "SKU", "estrato"] and len(lineas) == 21
         assert {x[0] for x in lineas[1:]} == {f"S{i}" for i in range(20)}
-        assert {x[2] for x in lineas[1:]} <= {"individual", "muestra", "descartado"}
+        assert {x[2] for x in lineas[1:]} <= {"muestra", "descartado"}
         assert all((x[1] == "") == (x[2] == "descartado") for x in lineas[1:])
         assert {x[1] for x in lineas[1:] if x[1]} == set(r.vector_skus) and len(set(r.vector_skus)) == 8
 
@@ -316,24 +379,24 @@ class TestEscalado:
     def test_extraer_escala_despues_de_muestrear_y_antes_de_codificar(self, tmp_path):
         filas = [("2015-11-03 10:%02d:00" % i, f"S{i}", 1) for i in range(20) for _ in range(i % 4 + 1)]
         ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
-        r = extraer_secuencia(AdaptadorEcommerce(), ruta, 8, 0, True, 0.3, 100)
+        r = extraer_secuencia(AdaptadorEcommerce(), ruta, 8, 0, True, 100)
         assert len(r.vector_skus) == 100 and r.escalar_total == 100 and r.escalar_recuperaciones_muestreadas < 50
         assert set(r.vector_skus) <= {f"SKU{i:03d}" for i in range(1, 9)}
         cuenta = {k: r.vector_skus.count(k) for k in set(r.vector_skus)}
         assert cuenta["SKU001"] == max(cuenta.values())                                  # los códigos siguen la demanda de la secuencia final
-        assert len(extraer_secuencia(AdaptadorEcommerce(), ruta, 8, 0, True, 0.3, None).vector_skus) == r.escalar_recuperaciones_muestreadas
+        assert len(extraer_secuencia(AdaptadorEcommerce(), ruta, 8, 0, True, None).vector_skus) == r.escalar_recuperaciones_muestreadas
 
     def test_un_sku_que_pierde_todas_sus_copias_se_marca_sin_copias(self, tmp_path):
         filas = [("2015-11-03 10:00:00", "G", 100), ("2015-11-03 10:01:00", "mini", 1), ("2015-11-03 10:02:00", "H", 100)]
         ruta = escribir_xlsx(tmp_path / "e.xlsx", filas)
-        r = extraer_secuencia(AdaptadorEcommerce(), ruta, None, 0, True, 0.3, 20)       # factor 0,1: la línea de 1 unidad se queda sin copias
+        r = extraer_secuencia(AdaptadorEcommerce(), ruta, None, 0, True, 20)       # factor 0,1: la línea de 1 unidad se queda sin copias
         assert r.set_sin_copias == {"mini"} and len(r.vector_skus) == 20
         destino = tmp_path / "skus.csv"
         escribir_codigos(r.dic_estratos, r.dic_codigos, str(destino), r.set_sin_copias)
         import csv as _csv
         lineas = list(_csv.reader(destino.open(encoding="utf-8")))
         assert lineas[0] == ["SKU_original", "SKU", "estrato", "sin_copias"]
-        assert [x for x in lineas[1:] if x[0] == "mini"] == [["mini", "", "individual", "sin_copias"]]
+        assert [x for x in lineas[1:] if x[0] == "mini"] == [["mini", "", "muestra", "sin_copias"]]
         assert all(x[3] == "" and x[1] != "" for x in lineas[1:] if x[0] != "mini")
 
 

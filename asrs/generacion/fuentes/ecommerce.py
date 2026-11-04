@@ -1,7 +1,7 @@
 """Adaptador de ecommerce-roy-bansal-2020 (`E-Commerce DataSet.xlsx`): líneas de pedido de un minorista de comercio electrónico.
 
 Todas las filas son salidas; una línea de cantidad q (`prod_qty`) son q recuperaciones seguidas del SKU. La demanda se ordena por la fecha del pedido (`order_date`); la de envío no interviene.
-El surtido se reduce a 180 SKU con muestreo estratificado (ver `muestrear_surtido`). Se descartan las fechas fuera de la campaña (ventana configurable, por defecto agosto a diciembre de 2015), las cantidades cero y los SKU vacíos.
+El surtido se reduce a 180 SKU con muestreo ponderado por la demanda (ver `muestrear_surtido`). Se descartan las fechas fuera de la campaña (ventana configurable, por defecto agosto a diciembre de 2015), las cantidades cero y los SKU vacíos.
 El archivo es un .xlsx y se lee con la biblioteca estándar (zip + XML), sin openpyxl.
 """
 import datetime

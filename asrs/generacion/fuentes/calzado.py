@@ -12,7 +12,7 @@ ENCABEZADO = ["codCustomer", "orderNumber", "orderToCollect", "Reference", "Size
 
 
 class AdaptadorCalzado(Adaptador):
-    escalar_max_skus = 180   # 208 referencias: el surtido se reduce a 180 SKU con muestreo estratificado
+    escalar_max_skus = 180   # 208 referencias: el surtido se reduce a 180 SKU con muestreo ponderado por la demanda
 
     def __init__(self, bool_sku_con_talla=False):
         # Por defecto el SKU es la referencia (208 SKU); con talla es referencia-talla (2517 SKU, como `preparar.py`)

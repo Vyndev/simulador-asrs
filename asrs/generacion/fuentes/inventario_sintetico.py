@@ -1,9 +1,10 @@
-"""Adaptador de inventario-sintetico-ziya-2025 (`supply_chain_dataset1.csv` dentro de un .zip): ventas diarias de 50 SKU. DATOS SIMULADOS.
+"""Adaptador de inventario-sintetico-ziya-2025 (`supply_chain_dataset1.csv` dentro de un .zip): ventas diarias de 50 SKU, que se amplían a 180 por muestreo. DATOS SIMULADOS.
 
 Cada fila es la venta de un día de un SKU en un almacén (hay cinco almacenes por SKU y día), no una línea de pedido. Se toma cada fila con ventas
 como una línea de pedido de `Units_Sold` unidades (esa cantidad de recuperaciones seguidas del SKU), y se ordena por fecha. La resolución es el día: dentro de un día
 se conserva el orden del archivo, que va por SKU y luego por fecha. Se descartan las filas sin ventas (unidades cero). Opcionalmente se puede
 dejar un solo almacén. Según calidad.md todos los SKU tienen la misma demanda: sirve para probar el modelo, no como evidencia de realismo.
+El surtido de 50 SKU se completa a 180 agregando SKU por muestreo (ver `ampliar_surtido`).
 """
 from datetime import datetime
 
@@ -15,6 +16,8 @@ ENCABEZADO = ["Date", "SKU_ID", "Warehouse_ID", "Supplier_ID", "Region", "Units_
 
 class AdaptadorInventarioSintetico(Adaptador):
     txt_archivo_interno = "supply_chain_dataset1.csv"
+    escalar_max_skus = 180
+    bool_ampliar_surtido = True
 
     def __init__(self, txt_almacen=None):
         self.txt_almacen = txt_almacen      # p. ej. "WH_1" para tratar un solo almacén; None conserva los cinco

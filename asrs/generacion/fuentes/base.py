@@ -4,6 +4,7 @@ import io
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 
 import numpy as np
 
@@ -37,7 +38,8 @@ def leer_cantidad(txt_valor):
 
 class Adaptador:
     """Contrato de una fuente. Las subclases definen `filas` e `interpretar`."""
-    escalar_max_skus = None     # Máximo de SKU tras reducir el surtido con muestreo estratificado (None = sin reducir). Calzado y ecommerce usan 180
+    escalar_max_skus = None     # Máximo de SKU tras reducir el surtido con muestreo ponderado por la demanda (None = sin reducir). Calzado y ecommerce usan 180
+    bool_ampliar_surtido = False  # True: si la fuente tiene menos SKU que `escalar_max_skus`, se agregan SKU por muestreo hasta completarlos (ver `ampliar_surtido`)
 
     def filas(self, txt_ruta):
         """Itera las filas del archivo crudo en su orden original, cada una como lo que `interpretar` espere (p. ej. un dict)."""
@@ -54,9 +56,9 @@ class ResultadoExtraccion:
     vector_skus: list                                  # la secuencia desagregada (un SKU por unidad), en orden de tiempo
     escalar_filas_leidas: int = 0
     dic_descartes: dict = field(default_factory=dict)  # motivo -> número de filas
-    dic_estratos: dict = field(default_factory=dict)   # SKU original -> estrato: "individual", "muestra" o "descartado"
+    dic_estratos: dict = field(default_factory=dict)   # SKU original -> estrato: "muestra" o "descartado"
     dic_codigos: dict = field(default_factory=dict)    # SKU original -> código final de la salida; solo los SKU que quedan (vacío si no se codificó)
-    dic_muestreo: dict = field(default_factory=dict)   # conteos del muestreo: individuales, cola, muestreados
+    dic_muestreo: dict = field(default_factory=dict)   # conteos del muestreo: skus (originales), muestreados
     escalar_recuperaciones_antes: int = 0              # recuperaciones de la secuencia desagregada antes de reducir el surtido
     escalar_recuperaciones_muestreadas: int = 0        # recuperaciones tras reducir el surtido y antes de escalar el volumen
     escalar_total: object = None                       # volumen al que se escaló la secuencia (None si no se escaló)
@@ -94,34 +96,74 @@ def filas_csv_en_zip(txt_ruta, txt_nombre_interno, txt_delimitador=","):
     yield from csv.DictReader(io.StringIO(txt_contenido, newline=""), delimiter=txt_delimitador)
 
 
-def muestrear_surtido(vector_skus, escalar_max_skus, escalar_semilla=0, escalar_tope=0.3):
-    """Reduce el surtido a `escalar_max_skus` SKU reales con muestreo estratificado. Cada etiqueta que queda es un SKU original; no hay grupos.
+def muestrear_surtido(vector_skus, escalar_max_skus, escalar_semilla=0):
+    """Reduce el surtido a `escalar_max_skus` SKU reales con muestreo aleatorio ponderado por la demanda. Cada etiqueta que queda es un SKU original; no hay grupos.
     Entrada: la secuencia desagregada (una recuperación por unidad), en orden de tiempo.
-    1. Estrato individual (la cabeza): los SKU con demanda mayor que `escalar_tope` x n / `escalar_max_skus` (n = recuperaciones de la secuencia),
-       de mayor a menor demanda (a igual demanda, el que aparece antes) y como mucho `escalar_max_skus` - 1.
-    2. Estrato de muestra (la cola): del resto se eligen al azar, sin reemplazo, exactamente `escalar_max_skus` - (individuales) SKU. Para que sea
-       reproducible la cola se ordena por primera aparición y se muestrea con `numpy.random.default_rng(escalar_semilla).choice(..., replace=False)`.
-       Si el surtido ya cabe (la cola cabría entera en el cupo) no se muestrea.
-    3. Las recuperaciones de los SKU no elegidos se descartan. Las demás conservan su orden relativo y sus repeticiones seguidas.
-    Devuelve la secuencia reducida, el diccionario SKU -> estrato ("individual", "muestra" o "descartado") y un diccionario con
-    los conteos (`individuales`, `cola`, `muestreados`)."""
+    1. Cada SKU se elige con probabilidad proporcional a su demanda (sus recuperaciones en la secuencia), sin reemplazo y hasta completar exactamente
+       `escalar_max_skus`. Se usa el método de las claves exponenciales (Efraimidis y Spirakis): a cada SKU se le asigna la clave ln(u) / demanda, con u uniforme
+       en (0, 1], y se eligen los de clave mayor. No hay estrato garantizado: un SKU muy demandado casi siempre sale, pero no siempre.
+       Para que sea reproducible los SKU se ordenan por primera aparición y se sortea con `numpy.random.default_rng(escalar_semilla)`.
+       Si el surtido ya cabe no se muestrea.
+    2. Las recuperaciones de los SKU no elegidos se descartan. Las demás conservan su orden relativo y sus repeticiones seguidas.
+    Devuelve la secuencia reducida, el diccionario SKU -> estrato ("muestra" o "descartado") y un diccionario con los conteos (`skus`, `muestreados`)."""
     cuenta, primera = Counter(vector_skus), {}
     for escalar_indice, txt_sku in enumerate(vector_skus):
         primera.setdefault(txt_sku, escalar_indice)
     if len(cuenta) <= escalar_max_skus:
-        return list(vector_skus), {txt_sku: "individual" for txt_sku in cuenta}, {"individuales": len(cuenta), "cola": 0, "muestreados": 0}
-    escalar_maximo = escalar_tope * len(vector_skus) / escalar_max_skus
-    vector_individuales = sorted((t for t, v in cuenta.items() if v > escalar_maximo), key=lambda t: (-cuenta[t], primera[t]))[:escalar_max_skus - 1]
-    set_individuales = set(vector_individuales)
-    vector_cola = sorted((t for t in cuenta if t not in set_individuales), key=lambda t: primera[t])
-    escalar_cupo = escalar_max_skus - len(vector_individuales)
-    # Aquí la cola siempre supera el cupo (si el surtido cupiera, ya se devolvió arriba), así que siempre se muestrea
-    vector_indices = np.random.default_rng(escalar_semilla).choice(len(vector_cola), size=escalar_cupo, replace=False)
-    vector_muestra = [vector_cola[i] for i in sorted(vector_indices.tolist())]
-    set_muestra = set(vector_muestra)
-    dic_estrato = {t: "individual" if t in set_individuales else "muestra" if t in set_muestra else "descartado" for t in cuenta}
+        return list(vector_skus), {txt_sku: "muestra" for txt_sku in cuenta}, {"skus": len(cuenta), "muestreados": len(cuenta)}
+    vector_orden = sorted(cuenta, key=lambda t: primera[t])
+    vector_pesos = np.array([cuenta[t] for t in vector_orden], dtype=float)
+    vector_claves = np.log(1.0 - np.random.default_rng(escalar_semilla).random(len(vector_orden))) / vector_pesos
+    vector_elegidos = np.argsort(-vector_claves, kind="stable")[:escalar_max_skus]
+    set_muestra = {vector_orden[i] for i in vector_elegidos.tolist()}
+    dic_estrato = {t: "muestra" if t in set_muestra else "descartado" for t in cuenta}
     vector_reducida = [t for t in vector_skus if dic_estrato[t] != "descartado"]
-    return vector_reducida, dic_estrato, {"individuales": len(vector_individuales), "cola": len(vector_cola), "muestreados": len(vector_muestra)}
+    return vector_reducida, dic_estrato, {"skus": len(cuenta), "muestreados": len(set_muestra)}
+
+
+def ampliar_surtido(vector_lineas, escalar_max_skus, escalar_semilla=0):
+    """Completa el surtido hasta `escalar_max_skus` SKU agregando SKU por muestreo. Es el caso contrario de `muestrear_surtido`: la fuente tiene menos SKU de los que pide el modelo.
+    Entrada: las líneas válidas `(tiempo, posicion, sku, cantidad)` ya ordenadas, con `tiempo` de tipo `datetime`. Cada SKU agregado copia la serie de líneas de un SKU de origen:
+    1. El SKU de origen se elige con reemplazo y con probabilidad proporcional a su demanda (unidades en las líneas), con `numpy.random.default_rng(escalar_semilla)`.
+       Los SKU se ordenan por primera aparición antes de sortear.
+    2. La serie del SKU agregado se desplaza circularmente un número de días al azar (uniforme entre 1 y L - 1, con L los días del periodo de la fuente), de modo que
+       no repite día a día a su origen y conserva su nivel y su forma de demanda. La hora del día no cambia.
+    3. El SKU agregado se llama `<origen>#<n>`, con n = 1, 2, ... por origen. Los originales no cambian.
+    Si el surtido ya tiene `escalar_max_skus` o más SKU, devuelve las líneas sin cambios.
+    Devuelve las líneas ordenadas por (tiempo, posición, original antes que agregado), el diccionario SKU -> "original" o "agregado" y un diccionario con los conteos
+    (`skus`, `agregados`)."""
+    vector_orden, dic_demanda = [], Counter()
+    for _, _, txt_sku, escalar_q in vector_lineas:
+        if txt_sku not in dic_demanda:
+            vector_orden.append(txt_sku)
+        dic_demanda[txt_sku] += escalar_q
+    escalar_faltan = escalar_max_skus - len(vector_orden)
+    dic_estrato = {t: "original" for t in vector_orden}
+    if escalar_faltan <= 0:
+        return list(vector_lineas), dic_estrato, {"skus": len(vector_orden), "agregados": 0}
+    generador = np.random.default_rng(escalar_semilla)
+    vector_pesos = np.array([dic_demanda[t] for t in vector_orden], dtype=float)
+    vector_origenes = generador.choice(len(vector_orden), size=escalar_faltan, replace=True, p=vector_pesos / vector_pesos.sum())
+    fecha_primera, fecha_ultima = vector_lineas[0][0].date(), vector_lineas[-1][0].date()
+    escalar_dias = (fecha_ultima - fecha_primera).days + 1
+    if escalar_dias < 2:
+        raise ValueError("La fuente cubre un solo día: no se puede desplazar la serie de un SKU agregado.")
+    vector_desplazamientos = generador.integers(1, escalar_dias, size=escalar_faltan)
+    dic_lineas_de = {}
+    for tiempo, escalar_posicion, txt_sku, escalar_q in vector_lineas:
+        dic_lineas_de.setdefault(txt_sku, []).append((tiempo, escalar_posicion, escalar_q))
+    vector_todas = [(tiempo, escalar_posicion, 0, txt_sku, escalar_q) for tiempo, escalar_posicion, txt_sku, escalar_q in vector_lineas]
+    dic_copias = Counter()
+    for escalar_j, (escalar_o, escalar_d) in enumerate(zip(vector_origenes.tolist(), vector_desplazamientos.tolist()), 1):
+        txt_origen = vector_orden[escalar_o]
+        dic_copias[txt_origen] += 1
+        txt_nuevo = f"{txt_origen}#{dic_copias[txt_origen]}"
+        dic_estrato[txt_nuevo] = "agregado"
+        for tiempo, escalar_posicion, escalar_q in dic_lineas_de[txt_origen]:
+            escalar_dia = ((tiempo.date() - fecha_primera).days + escalar_d) % escalar_dias
+            vector_todas.append((datetime.combine(fecha_primera + timedelta(days=escalar_dia), tiempo.time()), escalar_posicion, escalar_j, txt_nuevo, escalar_q))
+    vector_todas.sort(key=lambda t: (t[0], t[1], t[2]))
+    return [(t, p, k, q) for t, p, _, k, q in vector_todas], dic_estrato, {"skus": len(vector_orden), "agregados": escalar_faltan}
 
 
 def escalar_secuencia(vector_skus, escalar_total):
@@ -153,12 +195,11 @@ def codificar_skus(vector_skus):
     return [dic_codigo[txt_sku] for txt_sku in vector_skus], dic_codigo
 
 
-def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar_semilla=0, bool_codificar=False, escalar_tope=0.3, escalar_tareas=None):
+def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar_semilla=0, bool_codificar=False, escalar_tareas=None):
     """Lee la fuente con el adaptador y devuelve la secuencia de SKU ordenada por tiempo.
     El orden es estable: las filas con el mismo tiempo conservan el orden que tenían en el archivo original.
-    Si hay un máximo de SKU (por defecto el del adaptador; None lo desactiva) el surtido se reduce con muestreo estratificado después de
-    filtrar, ordenar y desagregar (ver `muestrear_surtido`); `escalar_tope` (0,3 por defecto) fija el umbral de SKU individuales y
-    `escalar_semilla` la semilla del muestreo. Si se da `escalar_tareas`, después se escala el volumen a exactamente esa cantidad de
+    Si hay un máximo de SKU (por defecto el del adaptador; None lo desactiva) el surtido se reduce con muestreo ponderado por la demanda después de
+    filtrar, ordenar y desagregar (ver `muestrear_surtido`); `escalar_semilla` es la semilla del muestreo. Si se da `escalar_tareas`, después se escala el volumen a exactamente esa cantidad de
     recuperaciones (ver `escalar_secuencia`) y por último se codifica."""
     vector_validas, cuenta_motivos, escalar_leidas = [], Counter(), 0
     for escalar_posicion, fila in enumerate(adaptador.filas(txt_ruta)):
@@ -169,18 +210,24 @@ def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar
         else:
             vector_validas.append((registro.tiempo, escalar_posicion, registro.txt_sku, registro.escalar_cantidad))
     vector_validas.sort(key=lambda t: (t[0], t[1]))
-    # Desagregación completa: una línea de cantidad q son q recuperaciones seguidas del SKU, en la posición de su línea
-    vector_skus = [txt_sku for _, _, txt_sku, escalar_q in vector_validas for _ in range(escalar_q)]
     vector_mayores = [(q, txt_sku, tiempo) for tiempo, _, txt_sku, q in sorted(vector_validas, key=lambda t: (-t[3], t[0], t[1]))[:10]]
-    escalar_lineas = len(vector_validas)
-    escalar_antes = len(vector_skus)
+    escalar_lineas = len(vector_validas)       # líneas de la fuente, antes de agregar SKU
+    escalar_antes = sum(t[3] for t in vector_validas)       # recuperaciones de la fuente, antes de reducir o agregar SKU
     if escalar_max_skus == "adaptador":
         escalar_max_skus = adaptador.escalar_max_skus
-    if escalar_max_skus is not None:
-        vector_skus, dic_estratos, dic_muestreo = muestrear_surtido(vector_skus, escalar_max_skus, escalar_semilla, escalar_tope)
+    dic_estratos, dic_muestreo, bool_ampliado = None, None, False
+    if escalar_max_skus is not None and adaptador.bool_ampliar_surtido and vector_validas and len({t[2] for t in vector_validas}) < escalar_max_skus:
+        vector_validas, dic_estratos, dic_muestreo = ampliar_surtido(vector_validas, escalar_max_skus, escalar_semilla)
+        bool_ampliado = True
+    # Desagregación completa: una línea de cantidad q son q recuperaciones seguidas del SKU, en la posición de su línea
+    vector_skus = [txt_sku for _, _, txt_sku, escalar_q in vector_validas for _ in range(escalar_q)]
+    if bool_ampliado:
+        pass
+    elif escalar_max_skus is not None:
+        vector_skus, dic_estratos, dic_muestreo = muestrear_surtido(vector_skus, escalar_max_skus, escalar_semilla)
     else:
-        dic_estratos = {t: "individual" for t in set(vector_skus)}
-        dic_muestreo = {"individuales": len(dic_estratos), "cola": 0, "muestreados": 0}
+        dic_estratos = {t: "muestra" for t in set(vector_skus)}
+        dic_muestreo = {"skus": len(dic_estratos), "muestreados": len(dic_estratos)}
     escalar_muestreadas, set_sin_copias = len(vector_skus), set()
     if escalar_tareas is not None:
         vector_skus = escalar_secuencia(vector_skus, escalar_tareas)
