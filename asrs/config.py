@@ -1,7 +1,7 @@
 """Parámetros del modelo de simulación."""
 import numpy as np
 
-from asrs.generacion.datos_reales import es_solo_demanda, leer_tareas, preparar_datos_reales, reponer_con_lotes_eoq, tamano_historial
+from asrs.generacion.datos_reales import derivar_lista_demanda, es_solo_demanda, leer_dias, leer_tareas
 from asrs.generacion.probabilidades import PERFILES_INVENTARIO, demanda_hausman
 
 # Límites que protegen contra configuraciones que tardarían demasiado o no tienen sentido
@@ -26,6 +26,68 @@ def recuperaciones_por_corrida(config):
 def recuperaciones_con_historial(config):
     # Largo de una lista de demanda real: el historial más el año evaluado, R x (Y + B) = 720 x 395 = 284 400 recuperaciones
     return int(round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2)) * (DIAS_HORIZONTE + DIAS_HISTORIAL)
+
+
+def dias_lista_real(config):
+    # Días del modelo de una lista real con días: el año evaluado más el historial, Y + B = 395
+    return DIAS_HORIZONTE + int(config["escalar_dias_calentamiento"])
+
+
+def demanda_varia_por_replica(config):
+    # True si cada réplica tiene su propia demanda: la fuente se trata con la semilla de la réplica o la mezcla diaria se sortea con ella
+    return config.get("texto_origen_tareas") == "fuente" or (config.get("texto_origen_tareas") == "datos" and config.get("texto_variabilidad", "ninguna") != "ninguna")
+
+
+def lista_real_de_replica(config, escalar_semilla):
+    """Claves de la configuración que salen de la lista real de una réplica: la secuencia de operación con su reposición, la demanda del historial,
+    los SKU, los días y el resumen de la demanda. Con origen 'fuente' la fuente se trata con la semilla; con días y un nivel de variabilidad la mezcla
+    diaria se sortea con ella. `config` ya está validada."""
+    from asrs.generacion.demanda_replica import demanda_de_replica, omega_de_fuente, secuencia_de_fuente
+    from asrs.generacion.variabilidad import estimar_omega, recuperaciones_por_dia
+    dic_resumen = {}
+    escalar_recuperaciones = int(round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2)) * dias_lista_real(config)
+    # ω̂ de la fuente: el fijado a mano o uno por fuente, estimado una vez (ver `omega_de_fuente`); con un CSV, el de la lista del archivo
+    escalar_omega_fuente = config["escalar_omega_fuente"]
+    if config["texto_origen_tareas"] == "fuente":
+        resultado = secuencia_de_fuente(config["texto_fuente_demanda"], config["texto_carpeta_datos"], escalar_semilla,
+                                        escalar_recuperaciones, dias_lista_real(config))
+        if escalar_omega_fuente is None:
+            escalar_omega_fuente = omega_de_fuente(config["texto_fuente_demanda"], config["texto_carpeta_datos"], escalar_recuperaciones,
+                                                   dias_lista_real(config), int(config["escalar_dias_ventana_popularidad"]))
+        matriz_tareas, vector_dias, bool_solo_demanda = [(1, txt_sku) for txt_sku in resultado.vector_skus], resultado.vector_dias, True
+        dic_resumen.update(fuente=config["texto_fuente_demanda"], skus_fuente=resultado.dic_muestreo["skus"],
+                           desplazamiento_dias=resultado.escalar_desplazamiento, dias_fuente=resultado.escalar_dias_fuente)
+    else:
+        matriz_tareas = leer_tareas(config["texto_tareas_csv"], LIMITE_TAREAS)
+        vector_dias = leer_dias(config["texto_tareas_csv"], LIMITE_TAREAS)
+        bool_solo_demanda = es_solo_demanda(config["texto_tareas_csv"])
+        if vector_dias is not None and escalar_omega_fuente is None:
+            escalar_omega_fuente = estimar_omega(recuperaciones_por_dia([txt_sku for _, txt_sku in matriz_tareas], vector_dias)[0],
+                                                 config["escalar_dias_ventana_popularidad"])
+    if vector_dias is None and config["texto_variabilidad"] != "ninguna":
+        raise ValueError("Variabilidad: la Dirichlet necesita el día de cada recuperación; usa un CSV con columnas SKU y Dia o el origen 'fuente'.")
+    if vector_dias is not None:
+        vector_skus, vector_dias, dic_variabilidad = demanda_de_replica([txt_sku for _, txt_sku in matriz_tareas], vector_dias, config["texto_variabilidad"],
+                                                                        config["escalar_dias_ventana_popularidad"], escalar_semilla, escalar_omega_fuente)
+        matriz_tareas = [(1, txt_sku) for txt_sku in vector_skus]
+        dic_resumen.update(dic_variabilidad)
+    escalar_celdas = int(np.prod(config["vector_configuracion_estanteria"]))
+    # Con días, el historial son las primeras R·B recuperaciones (R por día durante los B días de historial), 21 600 en la instancia
+    escalar_recuperaciones_historial = int(round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2)) * int(config["escalar_dias_calentamiento"])
+    dic = derivar_lista_demanda(matriz_tareas, vector_dias, bool_solo_demanda, config["escalar_porcentaje_historial"], escalar_recuperaciones_historial,
+                                int(round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2)),
+                                config["escalar_nivel_ocupacion"] * escalar_celdas, LIMITE_TAREAS)
+    if dic["escalar_numero_skus"] > LIMITE_SKUS:
+        raise ValueError(f"Datos reales: hay {dic['escalar_numero_skus']} SKUs distintos, el máximo es {LIMITE_SKUS}.")
+    dic_resumen.update(skus=dic["escalar_numero_skus"], recuperaciones_historial=dic["escalar_tareas_historial"],
+                       skus_con_historial=int((np.asarray(dic["vector_demanda_sku"]) > 0).sum()), dia_inicio_operacion=dic["escalar_dia_inicio_operacion"],
+                       inventario_inicial=int(sum(dic["vector_inventario_inicial"] or [])), tareas_operacion=len(dic["secuencia_real"]))
+    escalar_almacenes = sum(1 for escalar_actividad, _ in dic["secuencia_real"] if escalar_actividad == 0)
+    dic["vector_prob_acum_AR"] = np.array([escalar_almacenes / len(dic["secuencia_real"]), 1.0])
+    dic["escalar_largo_secuencia"] = len(dic["secuencia_real"])
+    dic["dic_resumen_demanda"] = dic_resumen
+    dic["escalar_semilla_demanda"] = escalar_semilla
+    return dic
 
 
 def cargar_configuracion():
@@ -78,11 +140,16 @@ def cargar_configuracion():
 
         "vector_prob_acum_AR": np.array([0.5, 1]), # Vector de probabilidad acumulada, para el almacenamiento y recuperación
 
-        # Origen de la lista de tareas: 'generada' (con la demanda y la mezcla de arriba) o 'datos' (un CSV real con actividad y SKU de cada tarea)
+        # Origen de la lista de tareas: 'generada' (con la demanda y la mezcla de arriba), 'datos' (un CSV real con actividad y SKU de cada tarea, o solo
+        # la demanda con SKU y, opcionalmente, el día del modelo) o 'fuente' (una fuente de tesis/datos tratada en cada réplica con su semilla, capítulo 8)
         # Con datos reales la cantidad de SKUs, la demanda, la cantidad de tareas y la mezcla salen del archivo
         "texto_origen_tareas": "generada",
-        "texto_tareas_csv": "", # Contenido del CSV, con una tarea por fila: actividad (A o R) y SKU
-        "escalar_porcentaje_historial": 100 * DIAS_HISTORIAL / (DIAS_HORIZONTE + DIAS_HISTORIAL), # Con datos reales, porcentaje inicial de la lista que sirve de historial (llenado y clases) y no se evalúa: 30 días de 395 (7,59 %), como el calentamiento y la ventana de popularidad; las políticas no ven demanda posterior al momento actual
+        "texto_tareas_csv": "", # Contenido del CSV, con una tarea por fila: actividad (A o R) y SKU, o solo SKU (y Dia)
+        "texto_fuente_demanda": "", # Con origen 'fuente': 'ecommerce', 'calzado' o 'inventario_sintetico'. Cada réplica muestrea el surtido y rota el punto de inicio con su semilla
+        "texto_carpeta_datos": "", # Con origen 'fuente': carpeta con las fuentes (cada una con crudo/); vacío es ../tesis/datos
+        "texto_variabilidad": "ninguna", # Nivel de variabilidad de la Dirichlet (sección 8.2.4) para una demanda con días: 'ninguna' (la secuencia tratada tal cual), 'baja' (ω̂/2), 'real' (ω̂) o 'alta' ((1 + ω̂)/2)
+        "escalar_omega_fuente": None, # ω̂ de la fuente; None lo estima una vez por fuente (ec. 8.8) sobre su secuencia tratada y escalada con la semilla 0, o sobre el CSV
+        "escalar_porcentaje_historial": 100 * DIAS_HISTORIAL / (DIAS_HORIZONTE + DIAS_HISTORIAL), # Con datos reales sin días, porcentaje inicial de la lista que sirve de historial (llenado y clases) y no se evalúa: 30 días de 395 (7,59 %), como el calentamiento y la ventana de popularidad; las políticas no ven demanda posterior al momento actual
         "escalar_largo_secuencia": 1,  # Valor inicial, se ajustará en la inicialización
         "escalar_cantidad_replicas": 1, # una corrida larga, como en la instancia del capítulo 6; con más corridas la estadística resume el promedio y el intervalo de confianza. Corrida de la instancia: # la simulación se repetira según la cantidad de replicas
         "escalar_replicas_animadas": 1, # la carrera muestra una réplica; la estadística usa escalar_cantidad_replicas
@@ -228,38 +295,30 @@ def config_desde_json(diccionario):
                          "sube el techo o reduce la ocupación.")
 
     origen = datos["texto_origen_tareas"]
-    if origen not in ("generada", "datos"):
-        raise ValueError("Origen de las tareas: debe ser 'generada' o 'datos'.")
+    if origen not in ("generada", "datos", "fuente"):
+        raise ValueError("Origen de las tareas: debe ser 'generada', 'datos' o 'fuente'.")
     config["texto_origen_tareas"] = origen
     config["texto_tareas_csv"] = datos["texto_tareas_csv"] if isinstance(datos["texto_tareas_csv"], str) else ""
+    config["texto_fuente_demanda"] = datos["texto_fuente_demanda"] if isinstance(datos["texto_fuente_demanda"], str) else ""
+    config["texto_carpeta_datos"] = datos["texto_carpeta_datos"] if isinstance(datos["texto_carpeta_datos"], str) else ""
+    from asrs.generacion.variabilidad import NIVELES_VARIABILIDAD
+    if datos["texto_variabilidad"] not in NIVELES_VARIABILIDAD:
+        raise ValueError(f"Variabilidad: debe ser {', '.join(repr(n) for n in NIVELES_VARIABILIDAD)}.")
+    config["texto_variabilidad"] = datos["texto_variabilidad"]
+    config["escalar_omega_fuente"] = None if datos["escalar_omega_fuente"] in (None, "") else _numero(datos["escalar_omega_fuente"], "ω de la fuente", minimo=0, maximo=1)
+    if origen == "fuente" and not config["texto_fuente_demanda"]:
+        raise ValueError("Fuente de demanda: con origen 'fuente' indica 'texto_fuente_demanda'.")
     config["escalar_porcentaje_historial"] = _numero(datos["escalar_porcentaje_historial"], "Historial para planificar", minimo=0, minimo_estricto=True, maximo=100)
 
     # Demanda por SKU: curva de Hausman o una lista personalizada, siempre se normaliza para que sume 1
     personalizada = datos["vector_demanda_sku_personalizada"]
-    if origen == "datos":
-        # Con datos reales todo sale del archivo: la lista de tareas, los SKUs y la demanda que conocen las políticas
-        matriz_tareas = leer_tareas(config["texto_tareas_csv"], LIMITE_TAREAS)
-        matriz_secuencia, vector_demanda, vector_etiquetas = preparar_datos_reales(matriz_tareas, config["escalar_porcentaje_historial"])
-        # El historial es un tramo inicial anterior a lo que se evalúa: las políticas planifican con él y la lista que se ejecuta empieza después
-        # Así ninguna política conoce demanda posterior al momento actual
-        config["escalar_tareas_historial"] = tamano_historial(len(matriz_tareas), config["escalar_porcentaje_historial"])
-        if config["escalar_tareas_historial"] >= len(matriz_secuencia):
-            raise ValueError(f"Datos reales: el historial ({config['escalar_tareas_historial']} de {len(matriz_secuencia)} tareas) no deja tareas por evaluar; usa un porcentaje menor que 100.")
-        matriz_secuencia = matriz_secuencia[config["escalar_tareas_historial"]:]
-        config["vector_inventario_inicial"] = None
-        if es_solo_demanda(config["texto_tareas_csv"]):
-            # El archivo solo trae demanda: los almacenamientos se generan con la reposición por lotes EOQ del capítulo 8
-            matriz_secuencia, config["vector_inventario_inicial"] = reponer_con_lotes_eoq(
-                matriz_secuencia, vector_demanda, int(round(config["escalar_ciclos_por_hora"] * config["escalar_horas_por_dia"] / 2)),
-                config["escalar_nivel_ocupacion"] * escalar_celdas, LIMITE_TAREAS)
-        if len(vector_etiquetas) > LIMITE_SKUS:
-            raise ValueError(f"Datos reales: hay {len(vector_etiquetas)} SKUs distintos, el máximo es {LIMITE_SKUS}.")
-        config["escalar_numero_skus"] = len(vector_etiquetas)
+    if origen in ("datos", "fuente"):
+        # Con datos reales todo sale de la lista: las tareas, los SKUs y la demanda que conocen las políticas
+        # La lista de la primera réplica (semilla base) queda en la configuración; las demás réplicas rehacen la suya si su demanda varía
+        config["escalar_semilla"] = _numero(datos["escalar_semilla"], "Semilla", entero=True, minimo=0, maximo=2 ** 31 - 1)
+        config.update(lista_real_de_replica(config, config["escalar_semilla"]))
         config["escalar_sigma_hausman"] = _numero(datos["escalar_sigma_hausman"], "Sesgo de la demanda", minimo=0, minimo_estricto=True, maximo=1)
         config["vector_demanda_sku_personalizada"] = None
-        config["vector_demanda_sku"] = vector_demanda
-        config["secuencia_real"] = matriz_secuencia
-        config["etiquetas_sku"] = vector_etiquetas
     elif personalizada is not None and personalizada != [] and personalizada != "":
         if not isinstance(personalizada, (list, tuple)) or not 1 <= len(personalizada) <= LIMITE_SKUS:
             raise ValueError(f"Demanda de los SKUs: indica entre 1 y {LIMITE_SKUS} valores.")
@@ -294,10 +353,8 @@ def config_desde_json(diccionario):
     if escalar_clases_usadas > config["escalar_numero_skus"]:
         raise ValueError(f"Clases de la política: hay {escalar_clases_usadas} clases y solo {config['escalar_numero_skus']} SKUs.")
 
-    if origen == "datos":
-        # La mezcla de operaciones es la del archivo
-        escalar_almacenes = sum(1 for escalar_actividad, _ in config["secuencia_real"] if escalar_actividad == 0)
-        config["vector_prob_acum_AR"] = np.array([escalar_almacenes / len(config["secuencia_real"]), 1.0])
+    if origen in ("datos", "fuente"):
+        pass # La mezcla de operaciones es la de la lista (ver `lista_real_de_replica`)
     else:
         probabilidad = _vector(datos["vector_prob_acum_AR"], 2, "Mezcla de operaciones", minimo=0, maximo=1)
         if probabilidad[1] != 1:
@@ -308,7 +365,7 @@ def config_desde_json(diccionario):
     largo = diccionario.get("escalar_largo_secuencia")
     if largo is None or largo == "":
         largo = max(1, round(escalar_celdas * 0.1))
-    config["escalar_largo_secuencia"] = len(config["secuencia_real"]) if origen == "datos" else _numero(largo, "Cantidad de tareas", entero=True, minimo=1, maximo=LIMITE_TAREAS_GENERADAS)
+    config["escalar_largo_secuencia"] = len(config["secuencia_real"]) if origen in ("datos", "fuente") else _numero(largo, "Cantidad de tareas", entero=True, minimo=1, maximo=LIMITE_TAREAS_GENERADAS)
 
     config["escalar_semilla"] = _numero(datos["escalar_semilla"], "Semilla", entero=True, minimo=0, maximo=2 ** 31 - 1)
     config["escalar_replicas_animadas"] = 1      # ya no es un parámetro: la carrera anima siempre la primera réplica

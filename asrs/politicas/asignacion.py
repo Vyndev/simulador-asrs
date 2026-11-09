@@ -40,10 +40,10 @@ class PoliticaAsignacion:
     def demandaPlanificacion(self, escalar_dia=0):
         # Lo que las políticas con zonas saben para planificar: la popularidad móvil del día y qué SKU existen (el catálogo del almacén)
         # Devuelve (demanda, activos), ambos con un elemento por SKU: los SKU que no existen ese día no se planifican
-        # Sin escenario (datos reales) todos los SKU existen y se usa la demanda de la configuración
+        # Con datos reales (con o sin escenario de días) todos los SKU existen y se usa la demanda del historial de la configuración
         # Sin recuperaciones en la ventana (todo en cero, no se podría repartir) se reparte la misma demanda entre los SKU que existen
         instancia_escenario = self.config.get("escenario_demanda")
-        if instancia_escenario is None:
+        if instancia_escenario is None or self.config.get("texto_origen_tareas") in ("datos", "fuente"):
             vector_demanda = np.asarray(self.config["vector_demanda_sku"], dtype=float)
             return vector_demanda, np.ones(len(vector_demanda), dtype=bool)
         vector_popularidad = np.asarray(instancia_escenario.popularidad(escalar_dia), dtype=float)

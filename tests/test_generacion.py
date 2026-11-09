@@ -161,9 +161,11 @@ class PruebasDatosReales(unittest.TestCase):
         self.assertIsNone(simulacion.escenario_demanda)
         self.assertEqual(simulacion.argumentosOperacion(10), {})
         self.assertIsNone(simulacion.configPolitica()["escenario_demanda"])
-        # La réplica con datos reales solo informa la semilla y el controlador no cuenta retiros
+        # La réplica con datos reales sin días informa la semilla y el tamaño de su lista, y el controlador no cuenta retiros
         filas, dic_resumen = Simulacion.cargarReplicaConEscenario((simulacion.config, 1))
-        self.assertEqual(dic_resumen, {"semilla": 1})
+        self.assertEqual(dic_resumen["semilla"], 1)
+        self.assertEqual(dic_resumen["skus"], simulacion.config["escalar_numero_skus"])
+        self.assertNotIn("omega_fuente", dic_resumen)
         # Cant_RetirosFinCiclo es la cuarta columna desde el final de la fila
         self.assertTrue(all(fila[-4] == 0 for fila in filas))
 

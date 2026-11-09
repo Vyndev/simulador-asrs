@@ -1,4 +1,4 @@
-"""Núcleo común del tratamiento de fuentes: contrato del adaptador, ordenamiento estable, desagregación, reducción del surtido y escritura de la secuencia."""
+"""Núcleo común del tratamiento de fuentes: contrato del adaptador, ordenamiento estable, desagregación, ajuste del surtido, rotación, calendario, escalado y escritura de la secuencia."""
 import csv
 import io
 import zipfile
@@ -65,6 +65,9 @@ class ResultadoExtraccion:
     set_sin_copias: set = field(default_factory=set)   # SKU que se quedaron sin ninguna copia al escalar a la baja
     escalar_lineas: int = 0                            # líneas con demanda tras filtrar (antes de desagregar)
     vector_lineas_mayores: list = field(default_factory=list)   # las líneas de mayor cantidad: (cantidad, SKU original, tiempo)
+    vector_dias: list = None                           # día del modelo de cada recuperación (None si no se reescaló el calendario)
+    escalar_dias_fuente: object = None                 # L: días del calendario de la fuente, del primero al último con demanda
+    escalar_desplazamiento: object = None              # k: días de la rotación circular (None si no se rotó)
 
     @property
     def escalar_descartadas(self):
@@ -166,21 +169,45 @@ def ampliar_surtido(vector_lineas, escalar_max_skus, escalar_semilla=0):
     return [(t, p, k, q) for t, p, _, k, q in vector_todas], dic_estrato, {"skus": len(vector_orden), "agregados": escalar_faltan}
 
 
-def escalar_secuencia(vector_skus, escalar_total):
+def escalar_secuencia(vector_skus, escalar_total, vector_dias=None):
     """Escala la secuencia a exactamente `escalar_total` recuperaciones, sin azar. La recuperación j (de n) se copia c(j+1) - c(j) veces
     seguidas, con c(j) = (j * N + n // 2) // n en aritmética entera. El total es c(n) = N; con N < n cada recuperación aparece 0 o 1 veces
     (adelgazamiento uniforme) y con N > n, floor(N / n) o ceil(N / n) veces. Conserva el orden, las proporciones de cada SKU (hasta una
-    unidad de redondeo) y las rachas proporcionalmente."""
+    unidad de redondeo) y las rachas proporcionalmente.
+    Si se da `vector_dias` (el día de cada recuperación), cada copia hereda el día de su recuperación y se devuelve (skus, días)."""
     escalar_n = len(vector_skus)
     if escalar_n == 0:
         raise ValueError("No hay recuperaciones que escalar.")
-    vector_escalada, escalar_previo = [], 0
+    vector_escalada, vector_dias_escalada, escalar_previo = [], [], 0
     for escalar_j, txt_sku in enumerate(vector_skus):
         escalar_siguiente = ((escalar_j + 1) * escalar_total + escalar_n // 2) // escalar_n
         if escalar_siguiente > escalar_previo:
             vector_escalada.extend([txt_sku] * (escalar_siguiente - escalar_previo))
+            if vector_dias is not None:
+                vector_dias_escalada.extend([vector_dias[escalar_j]] * (escalar_siguiente - escalar_previo))
         escalar_previo = escalar_siguiente
-    return vector_escalada
+    return vector_escalada if vector_dias is None else (vector_escalada, vector_dias_escalada)
+
+
+def dia_de_calendario(tiempo, fecha_primera):
+    """Días desde `fecha_primera` hasta la fecha de `tiempo` (un `datetime` o un `date`): el día del calendario de la fuente, empezando en 0."""
+    return ((tiempo.date() if isinstance(tiempo, datetime) else tiempo) - fecha_primera).days
+
+
+def rotar_calendario(vector_dias_fuente, escalar_dias_fuente, escalar_semilla):
+    """Rota circularmente la secuencia un desplazamiento aleatorio de días, de modo que cada réplica empiece en otro tramo de la fuente (sección 8.2.3).
+    El día r pasa a (r - k) mod L, con k uniforme entre 0 y L - 1 sorteado con `numpy.random.default_rng([semilla, 1])`, un flujo distinto del
+    muestreo del surtido. El corte cae entre dos días, de modo que el orden dentro de cada día se conserva.
+    Devuelve el orden de las recuperaciones rotadas (índices de la secuencia original), sus días rotados y k."""
+    escalar_k = int(np.random.default_rng([escalar_semilla, 1]).integers(0, escalar_dias_fuente))
+    vector_rotados = (np.asarray(vector_dias_fuente, dtype=np.int64) - escalar_k) % escalar_dias_fuente
+    vector_orden = np.argsort(vector_rotados, kind="stable")
+    return vector_orden, vector_rotados[vector_orden], escalar_k
+
+
+def reescalar_calendario(vector_dias_fuente, escalar_dias_fuente, escalar_dias_modelo):
+    """Lleva el día r del calendario de la fuente (0 a L - 1) al día floor(r / L * D) del modelo, con D = Y + B días (paso 6 de la sección 8.2.1)."""
+    return [escalar_r * escalar_dias_modelo // escalar_dias_fuente for escalar_r in vector_dias_fuente]
 
 
 def codificar_skus(vector_skus):
@@ -195,12 +222,10 @@ def codificar_skus(vector_skus):
     return [dic_codigo[txt_sku] for txt_sku in vector_skus], dic_codigo
 
 
-def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar_semilla=0, bool_codificar=False, escalar_tareas=None):
-    """Lee la fuente con el adaptador y devuelve la secuencia de SKU ordenada por tiempo.
-    El orden es estable: las filas con el mismo tiempo conservan el orden que tenían en el archivo original.
-    Si hay un máximo de SKU (por defecto el del adaptador; None lo desactiva) el surtido se reduce con muestreo ponderado por la demanda después de
-    filtrar, ordenar y desagregar (ver `muestrear_surtido`); `escalar_semilla` es la semilla del muestreo. Si se da `escalar_tareas`, después se escala el volumen a exactamente esa cantidad de
-    recuperaciones (ver `escalar_secuencia`) y por último se codifica."""
+def leer_lineas(adaptador, txt_ruta):
+    """Lee la fuente con el adaptador, filtra y ordena (pasos 1 a 3 de la sección 8.2.1).
+    Devuelve las líneas válidas `(tiempo, posición, SKU, cantidad)` en orden de tiempo, el conteo de descartes por motivo y las filas leídas.
+    El orden es estable: las filas con el mismo tiempo conservan el orden que tenían en el archivo original."""
     vector_validas, cuenta_motivos, escalar_leidas = [], Counter(), 0
     for escalar_posicion, fila in enumerate(adaptador.filas(txt_ruta)):
         escalar_leidas += 1
@@ -210,9 +235,31 @@ def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar
         else:
             vector_validas.append((registro.tiempo, escalar_posicion, registro.txt_sku, registro.escalar_cantidad))
     vector_validas.sort(key=lambda t: (t[0], t[1]))
+    return vector_validas, dict(cuenta_motivos), escalar_leidas
+
+
+def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar_semilla=0, bool_codificar=False, escalar_tareas=None,
+                      escalar_dias_modelo=None, bool_rotar=False, lineas=None):
+    """Lee la fuente con el adaptador y devuelve la secuencia de SKU ordenada por tiempo.
+    El orden es estable: las filas con el mismo tiempo conservan el orden que tenían en el archivo original.
+    Si hay un máximo de SKU (por defecto el del adaptador; None lo desactiva) el surtido se reduce con muestreo ponderado por la demanda después de
+    filtrar, ordenar y desagregar (ver `muestrear_surtido`); `escalar_semilla` es la semilla del muestreo, de la ampliación y de la rotación.
+    Con `bool_rotar` la secuencia se rota circularmente un desplazamiento aleatorio de días (ver `rotar_calendario`).
+    Con `escalar_dias_modelo` (D = Y + B) el calendario de la fuente se reescala a D días y cada recuperación lleva su día del modelo en `vector_dias`
+    (ver `reescalar_calendario`); la rotación y el calendario exigen que el tiempo sea un `datetime` o un `date`.
+    Si se da `escalar_tareas`, después se escala el volumen a exactamente esa cantidad de recuperaciones (ver `escalar_secuencia`), cada copia con el
+    día de su recuperación, y por último se codifica. `lineas` permite pasar el resultado de `leer_lineas` ya calculado (no se vuelve a leer el archivo)."""
+    vector_validas, dic_motivos, escalar_leidas = leer_lineas(adaptador, txt_ruta) if lineas is None else lineas
+    vector_validas = list(vector_validas)
     vector_mayores = [(q, txt_sku, tiempo) for tiempo, _, txt_sku, q in sorted(vector_validas, key=lambda t: (-t[3], t[0], t[1]))[:10]]
     escalar_lineas = len(vector_validas)       # líneas de la fuente, antes de agregar SKU
     escalar_antes = sum(t[3] for t in vector_validas)       # recuperaciones de la fuente, antes de reducir o agregar SKU
+    bool_calendario = escalar_dias_modelo is not None or bool_rotar
+    escalar_dias_fuente, fecha_primera = None, None
+    if bool_calendario and vector_validas:
+        # Calendario de la fuente: del primer día con demanda (t0) al último, L días; se mide antes de ajustar el surtido
+        fecha_primera = vector_validas[0][0].date() if isinstance(vector_validas[0][0], datetime) else vector_validas[0][0]
+        escalar_dias_fuente = dia_de_calendario(vector_validas[-1][0], fecha_primera) + 1
     if escalar_max_skus == "adaptador":
         escalar_max_skus = adaptador.escalar_max_skus
     dic_estratos, dic_muestreo, bool_ampliado = None, None, False
@@ -221,34 +268,57 @@ def extraer_secuencia(adaptador, txt_ruta, escalar_max_skus="adaptador", escalar
         bool_ampliado = True
     # Desagregación completa: una línea de cantidad q son q recuperaciones seguidas del SKU, en la posición de su línea
     vector_skus = [txt_sku for _, _, txt_sku, escalar_q in vector_validas for _ in range(escalar_q)]
+    vector_dias = None
+    if bool_calendario:
+        vector_dias = [dia_de_calendario(tiempo, fecha_primera) for tiempo, _, _, escalar_q in vector_validas for _ in range(escalar_q)]
     if bool_ampliado:
         pass
     elif escalar_max_skus is not None:
-        vector_skus, dic_estratos, dic_muestreo = muestrear_surtido(vector_skus, escalar_max_skus, escalar_semilla)
+        vector_reducida, dic_estratos, dic_muestreo = muestrear_surtido(vector_skus, escalar_max_skus, escalar_semilla)
+        if vector_dias is not None:
+            vector_dias = [escalar_d for txt_sku, escalar_d in zip(vector_skus, vector_dias) if dic_estratos[txt_sku] != "descartado"]
+        vector_skus = vector_reducida
     else:
         dic_estratos = {t: "muestra" for t in set(vector_skus)}
         dic_muestreo = {"skus": len(dic_estratos), "muestreados": len(dic_estratos)}
+    escalar_desplazamiento = None
+    if bool_rotar and vector_skus:
+        vector_orden, vector_rotados, escalar_desplazamiento = rotar_calendario(vector_dias, escalar_dias_fuente, escalar_semilla)
+        vector_skus = [vector_skus[i] for i in vector_orden.tolist()]
+        vector_dias = vector_rotados.tolist()
+    if escalar_dias_modelo is not None and vector_skus:
+        vector_dias = reescalar_calendario(vector_dias, escalar_dias_fuente, escalar_dias_modelo)
     escalar_muestreadas, set_sin_copias = len(vector_skus), set()
     if escalar_tareas is not None:
-        vector_skus = escalar_secuencia(vector_skus, escalar_tareas)
+        if vector_dias is None:
+            vector_skus = escalar_secuencia(vector_skus, escalar_tareas)
+        else:
+            vector_skus, vector_dias = escalar_secuencia(vector_skus, escalar_tareas, vector_dias)
         set_sin_copias = set(dic_estratos) - set(vector_skus) - {t for t, e in dic_estratos.items() if e == "descartado"}
     dic_codigos = {}
     if bool_codificar:
         vector_skus, dic_codigo = codificar_skus(vector_skus)
         dic_codigos = dict(dic_codigo)       # los SKU originales que quedan son sus propias etiquetas
-    return ResultadoExtraccion(vector_skus, escalar_leidas, dict(cuenta_motivos), dic_estratos, dic_codigos, dic_muestreo,
+    return ResultadoExtraccion(vector_skus, escalar_leidas, dict(dic_motivos), dic_estratos, dic_codigos, dic_muestreo,
                                escalar_recuperaciones_antes=escalar_antes, escalar_recuperaciones_muestreadas=escalar_muestreadas,
                                escalar_total=escalar_tareas, set_sin_copias=set_sin_copias, escalar_lineas=escalar_lineas,
-                               vector_lineas_mayores=vector_mayores)
+                               vector_lineas_mayores=vector_mayores,
+                               vector_dias=vector_dias if escalar_dias_modelo is not None else None,
+                               escalar_dias_fuente=escalar_dias_fuente, escalar_desplazamiento=escalar_desplazamiento)
 
 
-def escribir_secuencia(vector_skus, txt_ruta):
-    """Escribe la secuencia como CSV de una columna con encabezado `SKU`. `leer_tareas` lo lee como una lista de recuperaciones."""
+def escribir_secuencia(vector_skus, txt_ruta, vector_dias=None):
+    """Escribe la secuencia como CSV con encabezado `SKU` y, si se da `vector_dias`, una segunda columna `Dia` con el día del modelo de cada
+    recuperación. `leer_tareas` lo lee como una lista de recuperaciones y `leer_dias` recupera los días."""
     with open(txt_ruta, "w", newline="", encoding="utf-8") as archivo:
         escritor = csv.writer(archivo, lineterminator="\n")
-        escritor.writerow(["SKU"])
-        for txt_sku in vector_skus:
-            escritor.writerow([txt_sku])
+        escritor.writerow(["SKU"] if vector_dias is None else ["SKU", "Dia"])
+        if vector_dias is None:
+            for txt_sku in vector_skus:
+                escritor.writerow([txt_sku])
+        else:
+            for txt_sku, escalar_dia in zip(vector_skus, vector_dias):
+                escritor.writerow([txt_sku, int(escalar_dia)])
 
 
 def escribir_codigos(dic_estratos, dic_codigos, txt_ruta, set_sin_copias=frozenset()):

@@ -85,7 +85,7 @@ def generar_datos(config, vector_semillas, al_avanzar=None):
 
     for escalar_semilla in vector_semillas:
         rnd.seed(escalar_semilla)
-        SA, S = instancia_simulacion.generarSecuencias()
+        SA, S = instancia_simulacion.generarSecuencias(escalar_semilla)
 
         vector_politicas = []
         for _, txt_clave_politica, txt_clave_recuperacion in Simulacion.escenarios(config):

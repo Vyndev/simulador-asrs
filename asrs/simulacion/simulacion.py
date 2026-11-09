@@ -4,12 +4,13 @@ import random as rnd
 
 import numpy as np
 
-from asrs.config import cargar_configuracion
+from asrs.config import cargar_configuracion, demanda_varia_por_replica, lista_real_de_replica
 from asrs.control.controlador_grua import ControladorGrua
 from asrs.dominio.estanteria import Estanteria
 from asrs.dominio.grua import Grua
 from asrs.dominio.item import Item
 from asrs.dominio.punto_es import PuntoES
+from asrs.generacion.datos_reales import escenario_datos_reales
 from asrs.generacion.probabilidades import perfil_inventario
 from asrs.generacion.reposicion import generar_escenario
 from asrs.generacion.secuencia import GeneradorSecuencia
@@ -59,12 +60,16 @@ class Simulacion:
 
         return E, G, P
 
-    def generarSecuencias(self):
+    def generarSecuencias(self, escalar_semilla = None):
         # Se generan la secuencia de llenado y la secuencia de operación, comunes a todas las políticas de la réplica
+        # escalar_semilla: la de la réplica. Con una lista real cuya demanda varía por réplica (origen 'fuente' o un nivel de variabilidad),
+        # la réplica rehace su lista con ella; la de la semilla base ya está en la configuración
         cfg = self.config
 
-        if cfg.get("texto_origen_tareas") == "datos":
-            # Lista real: es la misma en todas las réplicas, solo cambia el llenado inicial
+        if cfg.get("texto_origen_tareas") in ("datos", "fuente"):
+            if escalar_semilla is not None and demanda_varia_por_replica(cfg) and escalar_semilla != cfg.get("escalar_semilla_demanda"):
+                self.config = cfg = dict(cfg, **lista_real_de_replica(cfg, escalar_semilla))
+            # Sin variación por réplica la lista real es la misma en todas las réplicas y solo cambia el llenado inicial
             self.escenario_demanda = None
 
             # El llenado inicial sigue el perfil de inventario: cuántas unidades de cada SKU hay guardadas (no cuántas veces se piden)
@@ -81,6 +86,8 @@ class Simulacion:
                 SA = [(0, escalar_sku + 1) for escalar_sku, escalar_unidades in enumerate(cfg["vector_inventario_inicial"]) for _ in range(escalar_unidades)]
                 rnd.shuffle(SA)
             S = [(int(escalar_actividad), int(escalar_sku)) for escalar_actividad, escalar_sku in cfg["secuencia_real"]]
+            # Con días, el escenario lleva la popularidad móvil de cada día, el día de cada tarea y el registro de la demanda pasada
+            self.escenario_demanda = escenario_datos_reales(cfg, SA)
             return SA, S
 
         # Lista generada: el modelo de suministro y demanda entrega el llenado (inventario al final del calentamiento) y la operación
@@ -145,7 +152,7 @@ class Simulacion:
         instancia_simulacion = Simulacion(config)
 
         rnd.seed(escalar_semilla)
-        SA, S = instancia_simulacion.generarSecuencias()
+        SA, S = instancia_simulacion.generarSecuencias(escalar_semilla)
 
         vector_resultados_replica = []
         for _, txt_clave_politica, txt_clave_recuperacion in Simulacion.escenarios(config):
@@ -156,6 +163,8 @@ class Simulacion:
         dic_resumen = {"semilla": escalar_semilla}
         if instancia_simulacion.escenario_demanda is not None:
             dic_resumen.update(instancia_simulacion.escenario_demanda.resumen)
+        elif instancia_simulacion.config.get("dic_resumen_demanda"):
+            dic_resumen.update(instancia_simulacion.config["dic_resumen_demanda"])
         return vector_resultados_replica, dic_resumen
 
     @staticmethod
