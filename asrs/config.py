@@ -148,7 +148,7 @@ def cargar_configuracion():
         "texto_fuente_demanda": "", # Con origen 'fuente': 'ecommerce', 'calzado' o 'inventario_sintetico'. Cada réplica muestrea el surtido y rota el punto de inicio con su semilla
         "texto_carpeta_datos": "", # Con origen 'fuente': carpeta con las fuentes (cada una con crudo/); vacío es ../tesis/datos
         "texto_variabilidad": "ninguna", # Nivel de variabilidad de la Dirichlet (sección 8.2.4) para una demanda con días: 'ninguna' (la secuencia tratada tal cual), 'baja' (ω̂/2), 'real' (ω̂) o 'alta' ((1 + ω̂)/2)
-        "escalar_omega_fuente": None, # ω̂ de la fuente; None lo estima una vez por fuente (ec. 8.8) sobre su secuencia tratada y escalada con la semilla 0, o sobre el CSV
+        "escalar_omega_fuente": None, # ω̂ de la fuente; None lo estima una vez por fuente (ec. 8.8) sobre su secuencia tratada y escalada con la semilla 0 sin rotar, o sobre el CSV
         "escalar_porcentaje_historial": 100 * DIAS_HISTORIAL / (DIAS_HORIZONTE + DIAS_HISTORIAL), # Con datos reales sin días, porcentaje inicial de la lista que sirve de historial (llenado y clases) y no se evalúa: 30 días de 395 (7,59 %), como el calentamiento y la ventana de popularidad; las políticas no ven demanda posterior al momento actual
         "escalar_largo_secuencia": 1,  # Valor inicial, se ajustará en la inicialización
         "escalar_cantidad_replicas": 1, # una corrida larga, como en la instancia del capítulo 6; con más corridas la estadística resume el promedio y el intervalo de confianza. Corrida de la instancia: # la simulación se repetira según la cantidad de replicas

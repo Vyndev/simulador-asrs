@@ -55,7 +55,7 @@ if __name__ == "__main__":
                   + (f", rotado {resultado.escalar_desplazamiento} días" if resultado.escalar_desplazamiento is not None else "")
                   + f"; ω de esta secuencia {escalar_omega_csv:.4f}")
             if not opciones:
-                # ω̂ de la fuente que usa la simulación: el de su tratamiento de referencia (semilla 0, con rotación), igual para todas las réplicas
+                # ω̂ de la fuente que usa la simulación: el de su tratamiento de referencia (semilla 0, sin rotar), igual para todas las réplicas
                 escalar_omega = omega_de_fuente(txt_fuente, os.path.abspath(argumentos.datos), escalar_tareas or recuperaciones_con_historial(cargar_configuracion()),
                                                 dias_lista_real(cargar_configuracion()), escalar_ventana)
                 print(f"    ω̂ de la fuente = {escalar_omega:.4f} (niveles: baja {escalar_omega / 2:.4f}, real {escalar_omega:.4f}, alta {(1 + escalar_omega) / 2:.4f})")

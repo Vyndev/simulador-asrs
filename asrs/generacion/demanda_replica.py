@@ -30,26 +30,27 @@ def _lineas_en_cache(txt_fuente, txt_ruta, escalar_modificado):
     return leer_lineas(crear_adaptador(txt_fuente), txt_ruta)
 
 
-def secuencia_de_fuente(txt_fuente, txt_carpeta_datos, escalar_semilla, escalar_recuperaciones, escalar_dias_modelo):
-    """Trata la fuente con la semilla de la réplica: muestreo ponderado del surtido, rotación circular, calendario reescalado a D días y volumen
-    escalado a N recuperaciones. Devuelve el `ResultadoExtraccion`, con el día del modelo de cada recuperación en `vector_dias`."""
+def secuencia_de_fuente(txt_fuente, txt_carpeta_datos, escalar_semilla, escalar_recuperaciones, escalar_dias_modelo, bool_rotar=True):
+    """Trata la fuente con la semilla de la réplica: muestreo ponderado del surtido, rotación circular (si `bool_rotar`), calendario reescalado a
+    D días y volumen escalado a N recuperaciones. Devuelve el `ResultadoExtraccion`, con el día del modelo de cada recuperación en `vector_dias`."""
     txt_ruta = ruta_fuente(txt_fuente, txt_carpeta_datos)
     if not os.path.isfile(txt_ruta):
         raise ValueError(f"Fuente de demanda '{txt_fuente}': no encuentro el archivo crudo {txt_ruta}. Los datos no se versionan; "
                          "cópialos a esa carpeta o indica otra en 'texto_carpeta_datos'.")
     lineas = _lineas_en_cache(txt_fuente, txt_ruta, os.path.getmtime(txt_ruta))
     return extraer_secuencia(crear_adaptador(txt_fuente), txt_ruta, "adaptador", escalar_semilla, True, escalar_recuperaciones,
-                             escalar_dias_modelo, True, lineas=lineas)
+                             escalar_dias_modelo, bool_rotar, lineas=lineas)
 
 
-SEMILLA_OMEGA = 0 # Semilla del tratamiento de referencia con que se estima el ω̂ de una fuente: el mismo para todas las réplicas
+SEMILLA_OMEGA = 0 # Semilla del tratamiento de referencia (sin rotar, como `scripts/extraer_demanda.py` y el apéndice B) con que se estima el ω̂ de una fuente
 
 
 @lru_cache(maxsize=8)
 def omega_de_fuente(txt_fuente, txt_carpeta_datos, escalar_recuperaciones, escalar_dias_modelo, escalar_ventana):
-    """ω̂ de una fuente (ec. 8.8), estimado sobre su secuencia tratada y escalada con la semilla de referencia `SEMILLA_OMEGA`.
+    """ω̂ de una fuente (ec. 8.8), estimado sobre su secuencia de referencia: tratada y escalada con la semilla `SEMILLA_OMEGA` y sin rotar, que
+    empieza donde empieza la fuente.
     Es un valor por fuente: todas las réplicas usan el mismo, de modo que cada nivel del factor de variabilidad es idéntico entre réplicas."""
-    resultado = secuencia_de_fuente(txt_fuente, txt_carpeta_datos, SEMILLA_OMEGA, escalar_recuperaciones, escalar_dias_modelo)
+    resultado = secuencia_de_fuente(txt_fuente, txt_carpeta_datos, SEMILLA_OMEGA, escalar_recuperaciones, escalar_dias_modelo, bool_rotar=False)
     return estimar_omega(recuperaciones_por_dia(resultado.vector_skus, resultado.vector_dias)[0], escalar_ventana)
 
 
