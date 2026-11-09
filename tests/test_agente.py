@@ -156,36 +156,47 @@ class PruebasCandidatas(unittest.TestCase):
     def tiempos(self, E):
         return np.arange(E.matriz_contenedor_items.size, dtype=float).reshape(E.matriz_contenedor_items.shape)
 
-    def test_estanteria_vacia_ofrece_el_fondo_y_el_frente_de_cada_canal(self):
+    def test_estanteria_vacia_ofrece_solo_los_fondos(self):
+        # Regla de minimización de varianza: con fondos libres no se ofrece ningún frente
         E, _ = estanteria_con({})
-        self.assertEqual(int(mascara_candidatas(E).sum()), 12)    # 6 canales, el fondo y el frente de cada uno
-
-    def test_canal_con_el_fondo_ocupado_ofrece_el_frente(self):
-        E, _ = estanteria_con({(0, 0, 0): 5})
         matriz = mascara_candidatas(E)
-        self.assertTrue(matriz[0, 0, 1])
-        self.assertFalse(matriz[0, 0, 0])
+        self.assertEqual(int(matriz.sum()), 6)
+        self.assertTrue(matriz[:, :, 0].all() and not matriz[:, :, 1].any())
+
+    def test_frentes_solo_con_todos_los_fondos_ocupados(self):
+        E, _ = estanteria_con({(0, 0, 0): 5})
+        self.assertEqual(int(mascara_candidatas(E)[:, :, 1].sum()), 0)        # quedan 5 fondos libres
+        E, _ = estanteria_con({(f, c, 0): 5 for f in range(3) for c in range(2)})
+        matriz = mascara_candidatas(E)
+        self.assertEqual(int(matriz.sum()), 6)
+        self.assertTrue(matriz[:, :, 1].all())
 
     def test_canal_con_el_frente_ocupado_no_ofrece_nada(self):
         E, _ = estanteria_con({(1, 1, 1): 7})        # el frente ocupado bloquea el fondo libre
         self.assertFalse(mascara_candidatas(E)[1, 1].any())
 
+    def test_la_regla_se_aplica_despues_de_la_restriccion(self):
+        # Al reubicar se excluye el canal que se despeja; si es el único con fondo libre, se ofrecen los frentes
+        E, _ = estanteria_con({(f, c, 0): 5 for f in range(3) for c in range(2) if (f, c) != (2, 1)})
+        matriz_extra = np.ones(E.matriz_contenedor_items.shape, dtype=bool)
+        matriz_extra[2, 1, :] = False
+        self.assertTrue(mascara_candidatas(E)[2, 1, 0] and int(mascara_candidatas(E).sum()) == 1)
+        matriz = mascara_candidatas(E, matriz_extra)
+        self.assertEqual(int(matriz.sum()), 5)
+        self.assertFalse(matriz[:, :, 0].any() or matriz[2, 1].any())
+
     def test_caracteristicas(self):
-        E, _ = estanteria_con({(0, 0, 0): 2})
+        E, _ = estanteria_con({(f, c, 0): 1 + (f + c) % 2 for f in range(3) for c in range(2)})   # fondos llenos con los SKU 1 y 2
         matriz_perfil = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]])        # SKU 1 y SKU 2
         matriz_indices, matriz_caracteristicas = celdas_candidatas(E, self.tiempos(E), matriz_perfil)
-        self.assertEqual(matriz_caracteristicas.shape, (len(matriz_indices), 8))
-        fila_frente_ocupado_atras = [i for i, t in enumerate(map(tuple, matriz_indices)) if t == (0, 0, 1)][0]
-        self.assertEqual(matriz_caracteristicas[fila_frente_ocupado_atras, 3:5].tolist(), [0.0, 1.0])    # atrás ocupado: lo bloquearía
-        self.assertEqual(matriz_caracteristicas[fila_frente_ocupado_atras, 5:].tolist(), [0.4, 0.5, 0.6])  # perfil del SKU 2
-        fila_canal_vacio_frente = [i for i, t in enumerate(map(tuple, matriz_indices)) if t == (1, 0, 1)][0]
-        self.assertEqual(matriz_caracteristicas[fila_canal_vacio_frente, 3:5].tolist(), [1.0, 0.0])       # atrás libre: quedaría inaccesible
-        self.assertEqual(matriz_caracteristicas[fila_canal_vacio_frente, 5:].tolist(), [0.0, 0.0, 0.0])
-        fila_fondo = [i for i, t in enumerate(map(tuple, matriz_indices)) if t == (1, 0, 0)][0]
-        self.assertEqual(matriz_caracteristicas[fila_fondo, 1], 0.0)      # capa más profunda
-        self.assertEqual(matriz_caracteristicas[fila_canal_vacio_frente, 1], 1.0)
+        self.assertEqual(matriz_caracteristicas.shape, (6, 5))
+        fila = [i for i, t in enumerate(map(tuple, matriz_indices)) if t == (0, 1, 1)][0]
+        self.assertEqual(matriz_caracteristicas[fila, 1], 1.0)                                       # capa delantera
+        self.assertEqual(matriz_caracteristicas[fila, 2:].tolist(), [0.4, 0.5, 0.6])                 # perfil del SKU 2, el de atrás
         self.assertTrue(np.all((matriz_caracteristicas[:, 0] >= 0) & (matriz_caracteristicas[:, 0] <= 1)))
-        self.assertAlmostEqual(matriz_caracteristicas[fila_frente_ocupado_atras, 2], 0.5)                  # 1 de 2 celdas libres
+        E, _ = estanteria_con({})
+        matriz_indices, matriz_caracteristicas = celdas_candidatas(E, self.tiempos(E), matriz_perfil)
+        self.assertTrue(np.all(matriz_caracteristicas[:, 1:] == 0))                                 # fondos: capa 0 y nadie atrás
 
     def test_estanteria_llena_no_tiene_candidatas(self):
         E, _ = estanteria_con({(f, c, k): 1 for f in range(3) for c in range(2) for k in range(2)})

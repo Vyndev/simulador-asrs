@@ -3,10 +3,10 @@
 Una política de asignación decide en qué celda libre se coloca un ítem. Se usa tanto para almacenar
 como para reubicar: reubicar es almacenar un ítem que ya está en la estantería, desde la posición actual de la grúa.
 
-Las políticas clásicas aplican siempre la regla de minimización de varianza (Lehmann y Hußmann, 2023), que minimiza la varianza
+Todas las políticas, las clásicas y el agente, aplican siempre la regla de minimización de varianza (Lehmann y Hußmann, 2023), que minimiza la varianza
 del llenado de los canales: primero se ocupa la capa libre más profunda de todos los canales candidatos y solo después las
 capas de adelante (Lerher et al., 2010: se llena primero la segunda profundidad). La cercanía de la política desempata dentro de la capa.
-Es una decisión interna del simulador y no se configura. El agente, en cambio, puede elegir cualquier celda libre y accesible.
+Es una decisión interna del simulador y no se configura. El agente la aplica en `asrs/agente/candidatos.py` y aprende el criterio dentro de la capa.
 """
 import random as rnd
 

@@ -33,7 +33,7 @@ Dependencias solo hacia abajo: `simulacion` → `control` → `politicas` → `d
 ## Reglas del modelo que no son evidentes
 
 - **Comparación pareada:** en cada réplica todas las políticas procesan la misma secuencia de llenado y de operación; cada política tiene semilla derivada de su posición en el registro, no de su posición en la lista de políticas evaluadas. No rompas esto al tocar semillas.
-- **Minimización de varianza** es fija en las políticas clásicas (primero la capa libre más profunda entre todas las candidatas, luego el criterio de la política y por último azar; llena los fondos de todos los canales antes que los frentes). El agente **no** está sujeto a ella: es libre de elegir cualquier celda libre y accesible.
+- **Minimización de varianza** es fija en todas las políticas, también en el agente (primero la capa libre más profunda entre todas las candidatas, luego el criterio de la política y por último azar; llena los fondos de todos los canales antes que los frentes). El agente aprende el criterio dentro de esa capa (`mascara_candidatas`). Sin la regla, un agente libre deja fondos inaccesibles, descarta almacenamientos y "gana" haciendo menos operaciones.
 - La cercanía entre celdas es tiempo Chebyshev en el plano xy y ignora la profundidad.
 - Con la configuración por defecto, los resultados deben coincidir exactamente con corridas previas; cambios que alteren números requieren una entrada en `docs/decisiones.md`.
 
